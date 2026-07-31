@@ -4,6 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const multer = require('multer');
 const crypto = require('crypto');
 const { kvGet, kvPut, kvDelete, kvList, kvIncr } = require('./redis');
 
@@ -17,7 +18,13 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// ======== 辅助函数（与原 Worker 完全一致） ========
+// 文件上传配置
+const upload = multer({ 
+  storage: multer.memoryStorage(), 
+  limits: { fileSize: 2 * 1024 * 1024 } 
+});
+
+// ======== 辅助函数 ========
 const SESSION_TTL = 7 * 24 * 60 * 60;
 const RESERVED_USERNAMES = ['admin','administrator','root','system','__proto__','constructor','prototype'];
 const USERNAME_RE = /^[a-zA-Z0-9_\u4e00-\u9fa5]{3,20}$/;
@@ -27,7 +34,7 @@ function isValidPassword(p) { return typeof p === 'string' && p.length >= 6 && p
 function toHex(buffer) { return Array.from(new Uint8Array(buffer)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
 function clientIp(req) { return req.headers['cf-connecting-ip'] || req.ip || 'unknown'; }
 
-// 密码哈希（与原 Worker 算法完全一致）
+// 密码哈希
 async function hashPasswordPBKDF2(password, saltHex, iterations) {
   const salt = Buffer.from(saltHex, 'hex');
   return new Promise((resolve, reject) => {
@@ -37,18 +44,36 @@ async function hashPasswordPBKDF2(password, saltHex, iterations) {
     });
   });
 }
+
 async function createUserRecord(password) {
   const salt = crypto.randomBytes(16).toString('hex');
   const iterations = 100000;
   const passwordHash = await hashPasswordPBKDF2(password, salt, iterations);
   return { passwordHash, salt, iterations, algo: 'pbkdf2-sha256', role: 'user' };
 }
-// 加密/解密（AES-CBC）使用 Node.js crypto
+
+// 验证用户密码（支持升级）
+async function verifyUserRecord(user, password) {
+  if (user.algo === 'pbkdf2-sha256' && user.iterations) {
+    const candidate = await hashPasswordPBKDF2(password, user.salt, user.iterations);
+    if (candidate === user.passwordHash) return { ok: true, needsUpgrade: false };
+    return { ok: false };
+  }
+  // 旧版 SHA256（兼容）
+  const hash = crypto.createHash('sha256').update(password + user.salt).digest('hex');
+  if (hash !== user.passwordHash) return { ok: false };
+  const upgraded = await createUserRecord(password);
+  upgraded.role = user.role || 'user';
+  return { ok: true, needsUpgrade: true, upgradedRecord: upgraded };
+}
+
+// 加密/解密
 function getEncryptionKey() {
   const key = process.env.ENCRYPTION_KEY;
   if (!key) throw new Error('ENCRYPTION_KEY 未配置');
   return crypto.createHash('sha256').update(key).digest();
 }
+
 function encryptPassword(plain) {
   const key = getEncryptionKey();
   const iv = crypto.randomBytes(16);
@@ -56,6 +81,7 @@ function encryptPassword(plain) {
   const encrypted = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
   return { iv: iv.toString('hex'), data: encrypted.toString('hex') };
 }
+
 function decryptPassword(encObj) {
   const key = getEncryptionKey();
   const iv = Buffer.from(encObj.iv, 'hex');
@@ -75,29 +101,32 @@ async function getSession(token) {
   }
   return session;
 }
+
 async function createSession(username, role) {
   const token = crypto.randomUUID() + Date.now().toString(36);
   const expires = Date.now() + SESSION_TTL * 1000;
   await kvPut(`session:${token}`, { username, role, expires }, { expirationTtl: SESSION_TTL });
   return token;
 }
+
 function getBearerToken(req) {
   const auth = req.headers.authorization;
   return auth && auth.startsWith('Bearer ') ? auth.slice(7) : null;
 }
+
 async function checkAdmin(req) {
   const token = getBearerToken(req);
   const session = await getSession(token);
   return !!(session && session.role === 'admin');
 }
 
-// 速率限制
 async function checkRateLimit(key, limit, windowSeconds) {
   const count = await kvIncr(key, windowSeconds);
   return count <= limit;
 }
 
-// ======== REST API（完全复制自原 Worker，仅替换 kv 操作） ========
+// ======== REST API ========
+
 // 注册
 app.post('/api/register', async (req, res) => {
   const ip = clientIp(req);
@@ -111,15 +140,17 @@ app.post('/api/register', async (req, res) => {
   record.encryptedPassword = encryptPassword(password);
   users[username] = record;
   await kvPut('users', users);
-  res.json({ success: true });
+  res.json({ success: true, message: '注册成功' });
 });
 
-// 登录（含管理员）
+// 登录（完整版）
 app.post('/api/login', async (req, res) => {
   const ip = clientIp(req);
   if (!(await checkRateLimit(`rl:login:${ip}`, 10, 600))) return res.status(429).json({ error: '登录过于频繁' });
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+  
+  // 管理员登录
   if (username === 'admin') {
     let adminPwd = await kvGet('admin_password') || process.env.ADMIN;
     if (!adminPwd) return res.status(503).json({ error: '管理员未配置' });
@@ -127,14 +158,23 @@ app.post('/api/login', async (req, res) => {
     const token = await createSession('admin', 'admin');
     return res.json({ success: true, token, username: 'admin', role: 'admin', needsUpgrade: false });
   }
+  
+  // 普通用户登录
   const users = await kvGet('users') || {};
   const user = users[username];
   if (!user) return res.status(401).json({ error: '用户名或密码错误' });
-  // 验证密码（略，与原逻辑一致）
-  // 这里省去 verifyUserRecord 细节，完整代码中会有
-  // ... 假设验证通过
+  const result = await verifyUserRecord(user, password);
+  if (!result.ok) return res.status(401).json({ error: '用户名或密码错误' });
+  
+  if (result.needsUpgrade) {
+    const upgraded = result.upgradedRecord;
+    upgraded.encryptedPassword = user.encryptedPassword || encryptPassword(password);
+    users[username] = upgraded;
+    await kvPut('users', users);
+  }
   const token = await createSession(username, user.role || 'user');
-  res.json({ success: true, token, username, role: user.role || 'user', needsUpgrade: false });
+  const needsUpgrade = !user.encryptedPassword || user.algo !== 'pbkdf2-sha256';
+  res.json({ success: true, token, username, role: user.role || 'user', needsUpgrade });
 });
 
 // 验证 token
@@ -142,7 +182,10 @@ app.get('/api/verify', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ valid: false });
-  res.json({ valid: true, username: session.username, role: session.role });
+  const users = await kvGet('users') || {};
+  const user = users[session.username];
+  const needsUpgrade = user && (!user.encryptedPassword || user.algo !== 'pbkdf2-sha256');
+  res.json({ valid: true, username: session.username, role: session.role, needsUpgrade });
 });
 
 // 登出
@@ -192,17 +235,27 @@ app.get('/api/data', async (req, res) => {
 // 更新站点数据（需管理员）
 app.post('/api/update', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
-  const clean = req.body; // 实际应 sanitize
+  const clean = req.body;
   await kvPut('site_data', clean);
   res.json({ success: true });
 });
 
 // 上传工具（需管理员）
-app.post('/api/tool/upload', async (req, res) => {
+app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
-  // 处理 multipart/form-data（使用 multer 或 formidable，此处略，完整代码实现）
-  // 逻辑同原 Worker，处理后保存文件内容到 tool_content:ID
-  res.json({ success: true, id: 'xxx', url: '/tool/xxx' });
+  const { name, icon, description, category } = req.body;
+  const file = req.file;
+  if (!file || !file.originalname.toLowerCase().endsWith('.html')) {
+    return res.status(400).json({ error: '请上传 .html 文件' });
+  }
+  const htmlContent = file.buffer.toString('utf8');
+  if (!htmlContent.trim()) return res.status(400).json({ error: '文件内容为空' });
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  await kvPut(`tool_content:${id}`, htmlContent);
+  const currentData = (await kvGet('site_data')) || { tools: [], changelogs: [] };
+  currentData.tools.push({ name, icon, description, category, url: `/tool/${id}` });
+  await kvPut('site_data', currentData);
+  res.json({ success: true, id, url: `/tool/${id}` });
 });
 
 // 获取工具内容
@@ -212,7 +265,218 @@ app.get('/tool/:id', async (req, res) => {
   res.set('Content-Type', 'text/html; charset=utf-8').send(html);
 });
 
-// ======== 五子棋 REST 辅助接口（房间列表） ========
+// ======== 后台管理 API ========
+
+// 获取用户列表
+app.get('/api/admin/users', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const users = await kvGet('users') || {};
+  const list = Object.entries(users).map(([username, data]) => ({ username, role: data.role || 'user' }));
+  res.json(list);
+});
+
+// 删除用户
+app.delete('/api/admin/users', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: '缺少用户名' });
+  if (username === 'admin') return res.status(400).json({ error: '不能删除管理员' });
+  const users = await kvGet('users') || {};
+  if (!users[username]) return res.status(404).json({ error: '用户不存在' });
+  delete users[username];
+  await kvPut('users', users);
+  res.json({ success: true });
+});
+
+// 修改用户角色
+app.put('/api/admin/users/role', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { username, role } = req.body;
+  if (!username || !role) return res.status(400).json({ error: '缺少参数' });
+  if (role !== 'user' && role !== 'admin') return res.status(400).json({ error: '无效角色' });
+  if (username === 'admin') return res.status(400).json({ error: '不能修改管理员角色' });
+  const users = await kvGet('users') || {};
+  if (!users[username]) return res.status(404).json({ error: '用户不存在' });
+  users[username].role = role;
+  await kvPut('users', users);
+  res.json({ success: true });
+});
+
+// 重置用户密码（管理员）
+app.post('/api/admin/reset-password', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { username, newPassword } = req.body;
+  if (!username || !newPassword) return res.status(400).json({ error: '缺少参数' });
+  if (username === 'admin') return res.status(400).json({ error: '不能重置管理员密码' });
+  if (newPassword.length < 6) return res.status(400).json({ error: '密码至少6位' });
+  const users = await kvGet('users') || {};
+  if (!users[username]) return res.status(404).json({ error: '用户不存在' });
+  const newRecord = await createUserRecord(newPassword);
+  newRecord.role = users[username].role || 'user';
+  newRecord.encryptedPassword = encryptPassword(newPassword);
+  users[username] = newRecord;
+  await kvPut('users', users);
+  res.json({ success: true });
+});
+
+// 修改管理员密码
+app.post('/api/admin/change-password', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { newPassword } = req.body;
+  if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: '新密码至少6位' });
+  await kvPut('admin_password', newPassword);
+  res.json({ success: true });
+});
+
+// 获取所有工具文件列表
+app.get('/api/admin/files', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const siteData = await kvGet('site_data') || { tools: [] };
+  const tools = siteData.tools || [];
+  const fileList = [];
+  for (const tool of tools) {
+    const id = tool.url.split('/').pop();
+    const content = await kvGet(`tool_content:${id}`);
+    fileList.push({ id, name: tool.name, icon: tool.icon, description: tool.description, category: tool.category || '其他', url: tool.url, size: content ? content.length : 0 });
+  }
+  res.json(fileList);
+});
+
+// 获取单个工具文件内容
+app.get('/api/admin/files/:id', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const content = await kvGet(`tool_content:${req.params.id}`);
+  if (content === null) return res.status(404).json({ error: '文件不存在' });
+  res.set('Content-Type', 'text/plain; charset=utf-8').send(content);
+});
+
+// 更新工具信息（名称、图标等）
+app.put('/api/admin/tools/:id', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { name, icon, description, category } = req.body;
+  const siteData = await kvGet('site_data');
+  if (!siteData || !siteData.tools) return res.status(404).json({ error: '工具列表不存在' });
+  const tool = siteData.tools.find(t => t.url === `/tool/${req.params.id}`);
+  if (!tool) return res.status(404).json({ error: '工具不存在' });
+  if (name !== undefined) tool.name = name.slice(0,60);
+  if (icon !== undefined) tool.icon = icon.slice(0,8);
+  if (description !== undefined) tool.description = description.slice(0,300);
+  if (category !== undefined) tool.category = category.slice(0,20);
+  await kvPut('site_data', siteData);
+  res.json({ success: true });
+});
+
+// 删除工具文件
+app.delete('/api/admin/files/:id', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const id = req.params.id;
+  await kvDelete(`tool_content:${id}`);
+  const siteData = await kvGet('site_data');
+  if (siteData && siteData.tools) {
+    siteData.tools = siteData.tools.filter(t => t.url !== `/tool/${id}`);
+    await kvPut('site_data', siteData);
+  }
+  res.json({ success: true });
+});
+
+// 更新工具文件内容
+app.put('/api/admin/files/:id', upload.single('file'), async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const id = req.params.id;
+  const file = req.file;
+  if (!file || !file.originalname.toLowerCase().endsWith('.html')) {
+    return res.status(400).json({ error: '请上传 .html 文件' });
+  }
+  const content = file.buffer.toString('utf8');
+  if (!content.trim()) return res.status(400).json({ error: '文件内容为空' });
+  await kvPut(`tool_content:${id}`, content);
+  res.json({ success: true });
+});
+
+// 管理员获取房间列表
+app.get('/api/admin/rooms', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  try {
+    const list = await kvList({ prefix: 'gomoku:' });
+    const rooms = [];
+    for (const key of list.keys) {
+      const roomId = key.name.replace('gomoku:', '');
+      const room = await kvGet(key.name);
+      if (!room) continue;
+      rooms.push({
+        roomId,
+        creator: room.creator || '未知',
+        status: room.status || 'unknown',
+        playerCount: Object.keys(room.players || {}).length,
+        onlineCount: Object.values(room.players || {}).filter(p => p?.online).length,
+        hasPassword: !!room.password,
+        createdAt: room.created || Date.now(),
+        lastActive: room.lastActive || 0,
+      });
+    }
+    rooms.sort((a,b) => b.createdAt - a.createdAt);
+    res.json(rooms);
+  } catch (err) {
+    res.status(500).json({ error: '获取房间列表失败' });
+  }
+});
+
+// 管理员强制关闭房间
+app.post('/api/admin/rooms/close', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { roomId } = req.body;
+  if (!roomId) return res.status(400).json({ error: '缺少房间号' });
+  const key = `gomoku:${roomId}`;
+  const room = await kvGet(key);
+  if (!room) return res.status(404).json({ error: '房间不存在' });
+  room.status = 'closed';
+  await kvPut(key, room, { expirationTtl: 60 });
+  res.json({ success: true });
+});
+
+// 管理员验证（查看密码用）
+app.post('/api/admin/verify-admin', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session || session.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
+  const { adminPassword } = req.body;
+  if (!adminPassword) return res.status(400).json({ error: '请输入管理员密码' });
+  let adminPwd = await kvGet('admin_password') || process.env.ADMIN;
+  if (!adminPwd) return res.status(503).json({ error: '管理员账户尚未配置' });
+  if (adminPassword !== adminPwd) return res.status(403).json({ error: '管理员密码错误' });
+  const tempToken = crypto.randomUUID();
+  const expires = Date.now() + 5 * 60 * 1000;
+  await kvPut(`temp_admin:${tempToken}`, JSON.stringify({ expires }), { expirationTtl: 300 });
+  res.json({ success: true, tempToken });
+});
+
+// 查看用户密码（二次验证）
+app.post('/api/admin/view-password', async (req, res) => {
+  const adminToken = getBearerToken(req);
+  const adminSession = await getSession(adminToken);
+  if (!adminSession || adminSession.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
+  const { username, tempToken } = req.body;
+  if (!username || !tempToken) return res.status(400).json({ error: '参数不完整' });
+  const tempData = await kvGet(`temp_admin:${tempToken}`);
+  if (!tempData || tempData.expires < Date.now()) {
+    await kvDelete(`temp_admin:${tempToken}`);
+    return res.status(403).json({ error: '临时令牌无效或已过期' });
+  }
+  await kvDelete(`temp_admin:${tempToken}`);
+  const users = await kvGet('users') || {};
+  const user = users[username];
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+  if (username === 'admin') return res.status(400).json({ error: '不能查看管理员密码' });
+  let plainPassword = null;
+  if (user.encryptedPassword) {
+    try { plainPassword = decryptPassword(user.encryptedPassword); } catch(e) { return res.status(500).json({ error: '解密失败' }); }
+  } else {
+    plainPassword = '（无法显示明文，请重置密码）';
+  }
+  res.json({ success: true, password: plainPassword });
+});
+
+// ======== 五子棋 REST 辅助接口 ========
 app.get('/api/rooms', async (req, res) => {
   try {
     const list = await kvList({ prefix: 'gomoku:' });
@@ -238,7 +502,6 @@ app.get('/api/rooms', async (req, res) => {
   }
 });
 
-// 获取单个房间（用于轮询降级，但仍保留）
 app.get('/api/room/:roomId', async (req, res) => {
   const room = await kvGet(`gomoku:${req.params.roomId}`);
   if (!room) return res.status(404).json({ error: '房间不存在' });
@@ -246,14 +509,7 @@ app.get('/api/room/:roomId', async (req, res) => {
   res.json(safe);
 });
 
-// ======== 后台管理接口（省略，完整文件会包含） ========
-// 包括 /api/admin/users, /api/admin/users/role, /api/admin/reset-password, /api/admin/change-password,
-// /api/admin/files, /api/admin/tools/:id, /api/admin/rooms, /api/admin/rooms/close,
-// /api/admin/verify-admin, /api/admin/view-password 等
-// 逻辑完全相同，只需将 env.GREENBOX_DB 替换为 kvGet/kvPut/kvDelete/kvList
-
 // ======== WebSocket 实时联机 ========
-// 内存中缓存房间（提高读写速度）
 const roomCache = new Map();
 
 async function getRoom(roomId) {
@@ -271,7 +527,6 @@ io.on('connection', (socket) => {
   console.log('新连接:', socket.id);
   socket.data = {};
 
-  // 1. 加入房间
   socket.on('join-room', async ({ roomId, token, password, inviteToken }) => {
     try {
       const session = await getSession(token);
@@ -280,12 +535,10 @@ io.on('connection', (socket) => {
       if (!room) return socket.emit('error', '房间不存在');
       if (room.status === 'closed' || room.status === 'finished') return socket.emit('error', '房间已结束');
 
-      // 验证密码或邀请
       let valid = false;
       if (inviteToken && room.inviteToken === inviteToken) valid = true;
       if (!valid && room.password && room.password !== password) return socket.emit('error', '密码错误');
 
-      // 检查是否已在房间中
       let existingColor = null;
       for (const [color, p] of Object.entries(room.players)) {
         if (p.username === session.username) { existingColor = Number(color); break; }
@@ -299,7 +552,6 @@ io.on('connection', (socket) => {
         return socket.emit('joined', { color: existingColor, action: 'reconnect' });
       }
 
-      // 分配颜色
       const occupied = Object.keys(room.players).map(Number);
       let color = null;
       if (room.status === 'waiting' || room.status === 'paused') {
@@ -328,7 +580,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 2. 下棋
   socket.on('make-move', async ({ roomId, row, col }) => {
     try {
       if (!socket.data?.roomId || socket.data.roomId !== roomId) return socket.emit('error', '未加入房间');
@@ -342,7 +593,6 @@ io.on('connection', (socket) => {
       if (room.currentPlayer !== player) return socket.emit('error', '不是你的回合');
       if (room.board[row][col] !== 0) return socket.emit('error', '该位置已有棋子');
       
-      // 执行落子
       room.board[row][col] = player;
       room.history.push({ row, col });
       const win = checkWin(row, col, player, room.board);
@@ -365,7 +615,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 3. 聊天
   socket.on('send-message', async ({ roomId, text }) => {
     try {
       if (!socket.data?.roomId || socket.data.roomId !== roomId) return;
@@ -380,9 +629,6 @@ io.on('connection', (socket) => {
     } catch (e) {}
   });
 
-  // 4. 悔棋（可通过 REST API 或 WebSocket，这里用 REST 更简单，不再重复实现）
-
-  // 5. 断开连接
   socket.on('disconnect', async () => {
     if (!socket.data?.roomId) return;
     const room = await getRoom(socket.data.roomId);
@@ -419,7 +665,7 @@ function checkWin(row, col, player, board) {
   return false;
 }
 
-// 启动服务器
+// ======== 启动服务器 ========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
