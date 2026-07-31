@@ -178,7 +178,7 @@
         <div class="username">${user.username}</div>
         <span class="role-badge ${roleClass}">${roleLabel}</span>
         <div class="profile-actions">
-          ${isAdmin ? `<a href="/admin" class="btn-link btn-admin">⚙️ 管理界面</a>` : ''}
+          ${isAdmin ? `<a href="/admin.html" class="btn-link btn-admin">⚙️ 管理界面</a>` : ''}
           <button class="btn-logout" onclick="handleLogout()">🚪 退出登录</button>
           ${!isAdmin ? `<button class="btn-delete" onclick="handleDeleteAccount()">🗑️ 注销账号</button>` : ''}
           <button class="btn-back" onclick="window.location.href='/'">← 返回首页</button>
