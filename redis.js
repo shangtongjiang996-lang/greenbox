@@ -1,6 +1,7 @@
 const Redis = require('ioredis');
 const client = new Redis(process.env.REDIS_URL);
-
+client.on('connect', () => console.log('✅ Redis 连接成功'));
+client.on('error', (err) => console.error('❌ Redis 错误:', err));
 // 与 Cloudflare KV 完全相同的接口
 async function kvGet(key) {
   const val = await client.get(key);

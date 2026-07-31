@@ -421,7 +421,7 @@ function checkWin(row, col, player, board) {
 
 // 启动服务器
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`✅ GreenBox 服务运行在 http://localhost:${PORT}`);
-  console.log('🔌 WebSocket 已就绪');
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
+  console.log(`🔌 WebSocket 已就绪`);
 });
