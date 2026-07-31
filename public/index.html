@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GreenBox · 工具箱</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* 移动端优化 */
+    @media (max-width: 700px) {
+      .navbar .container { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+      .logo { font-size: 1.2rem; }
+      .nav-links { gap: 0.6rem; }
+      .nav-links a { font-size: 0.85rem; padding: 0.2rem 0.5rem; }
+      .user-area .btn-primary-sm, .user-area .btn-outline { padding: 0.2rem 0.7rem; font-size: 0.8rem; height: 1.8rem; }
+      #theme-toggle { padding: 0.2rem 0.5rem; font-size: 0.9rem; }
+      .hero { padding: 2rem 0 1rem; }
+      .hero h1 { font-size: 1.8rem; }
+      .tool-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+      .tool-card { padding: 1rem; }
+      .tool-icon { font-size: 2rem; }
+      .online-rooms .room-item { flex-wrap: wrap; }
+    }
+    @media (max-width: 480px) {
+      .navbar .container { flex-direction: column; align-items: stretch; }
+      .nav-links { justify-content: center; }
+    }
+    /* 房间列表样式 */
+    .online-rooms { margin: 2rem 0; }
+    .online-rooms .room-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .online-rooms .room-item .info { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .online-rooms .room-item .info span { font-size: 0.95rem; }
+    .online-rooms .room-item .btn-primary-sm { padding: 0.2rem 1rem; font-size: 0.85rem; }
+
+    /* 密码升级弹窗 */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(15,23,42,0.6);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    .modal-card {
+      background: white;
+      border-radius: 24px;
+      padding: 2.5rem;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 30px 50px rgba(0,0,0,0.2);
+      animation: modalFadeIn 0.2s ease-out;
+    }
+    @keyframes modalFadeIn { 
+      from { opacity: 0; transform: scale(0.95); } 
+      to { opacity: 1; transform: scale(1); } 
+    }
+    .modal-title { 
+      font-size: 1.3rem; 
+      font-weight: 600; 
+      margin-bottom: 1.5rem; 
+      color: #0f172a; 
+    }
+    .modal-input {
+      width: 100%;
+      padding: 0.8rem;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      outline: none;
+      transition: border 0.2s;
+    }
+    .modal-input:focus {
+      border-color: #16a34a;
+      box-shadow: 0 0 0 3px rgba(22,163,74,0.15);
+    }
+    .modal-actions { 
+      display: flex; 
+      justify-content: flex-end; 
+      gap: 0.8rem; 
+    }
+    .btn { 
+      padding: 0.5rem 1.5rem; 
+      border-radius: 30px; 
+      font-weight: 500; 
+      border: none; 
+      cursor: pointer; 
+      transition: background 0.2s;
+    }
+    .btn-primary { background: #16a34a; color: white; }
+    .btn-primary:hover { background: #15803d; }
+    .btn-ghost { background: #f1f5f9; color: #1e293b; }
+    .btn-ghost:hover { background: #e2e8f0; }
+    .error-text { color: #ef4444; font-size: 0.9rem; margin-bottom: 0.8rem; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="logo">🌱 GreenBox</a>
+      <ul class="nav-links">
+        <li><a href="index.html" class="active">首页</a></li>
+        <li><a href="tools.html">工具</a></li>
+        <li><a href="changelog.html">更新日志</a></li>
+        <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
+      </ul>
+      <div class="navbar-right">
+        <button id="theme-toggle" aria-label="切换主题">🌙</button>
+        <div class="user-area" id="userArea"></div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <section class="hero">
+      <h1>让工具更简单 🌟</h1>
+      <p>GreenBox 汇集了日常实用小工具，全部免费、在线即用。</p>
+      <a href="tools.html" class="btn-primary">浏览所有工具 →</a>
+    </section>
+
+    <section class="featured-tools">
+      <h2>🔧 热门工具</h2>
+      <div id="tool-list" class="tool-grid"></div>
+    </section>
+
+    <!-- 在线五子棋房间列表 -->
+    <section class="online-rooms">
+      <h2>🀄 在线五子棋房间</h2>
+      <div id="roomList" style="margin:1rem 0;"></div>
+      <a href="/gomoku-online.html" class="btn-outline">进入五子棋大厅 →</a>
+    </section>
+
+    <section class="latest-changelog">
+      <h2>📝 最新更新</h2>
+      <div id="latest-changelog"></div>
+      <a href="changelog.html" class="btn-outline">查看完整日志</a>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 GreenBox · 用心制作</p>
+    </div>
+  </footer>
+
+  <!-- 密码升级弹窗 -->
+  <div id="passwordModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-title">🔐 安全升级</div>
+      <p style="color:#475569; margin-bottom:1rem;">为了增强账户安全性，请设置一个新密码。</p>
+      <input type="password" id="newPassword" class="modal-input" placeholder="新密码（至少6位）" autocomplete="new-password">
+      <input type="password" id="confirmPassword" class="modal-input" placeholder="确认密码">
+      <div class="error-text" id="modalError" style="display:none;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="skipUpgrade()">稍后再说</button>
+        <button class="btn btn-primary" onclick="submitPasswordUpgrade()">更新密码</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    // ---------- 用户认证 ----------
+    async function checkAuth() {
+      const token = localStorage.getItem('greenbox_token');
+      if (!token) return null;
+      try {
+        const res = await fetch('/api/verify', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.valid) {
+          if (data.needsUpgrade) {
+            showPasswordUpgradeModal();
+          }
+          return data;
+        } else {
+          localStorage.removeItem('greenbox_token');
+          localStorage.removeItem('greenbox_user');
+          return null;
+        }
+      } catch(e) {
+        return null;
+      }
+    }
+
+    async function renderUserArea() {
+      const userArea = document.getElementById('userArea');
+      const profileNav = document.getElementById('profile-nav');
+      const user = await checkAuth();
+      if (user) {
+        userArea.innerHTML = `
+          <span class="user-name">${user.username}</span>
+          <button onclick="logout()" class="btn-outline">退出</button>
+        `;
+        if (profileNav) profileNav.style.display = 'list-item';
+      } else {
+        userArea.innerHTML = `
+          <a href="/login.html" class="btn-primary-sm">登录</a>
+          <a href="/register.html" class="btn-outline">注册</a>
+        `;
+        if (profileNav) profileNav.style.display = 'none';
+      }
+    }
+
+    window.logout = function() {
+      const token = localStorage.getItem('greenbox_token');
+      if (token) {
+        fetch('/api/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      }
+      localStorage.removeItem('greenbox_token');
+      localStorage.removeItem('greenbox_user');
+      location.reload();
+    };
+
+    // ---------- 密码升级弹窗 ----------
+    function showPasswordUpgradeModal() {
+      document.getElementById('passwordModal').classList.remove('hidden');
+    }
+
+    window.skipUpgrade = function() {
+      document.getElementById('passwordModal').classList.add('hidden');
+    };
+
+    window.submitPasswordUpgrade = async function() {
+      const newPwd = document.getElementById('newPassword').value;
+      const confirmPwd = document.getElementById('confirmPassword').value;
+      const errorEl = document.getElementById('modalError');
+      errorEl.style.display = 'none';
+      if (!newPwd || newPwd.length < 6) {
+        errorEl.textContent = '密码至少6位';
+        errorEl.style.display = 'block';
+        return;
+      }
+      if (newPwd !== confirmPwd) {
+        errorEl.textContent = '两次密码不一致';
+        errorEl.style.display = 'block';
+        return;
+      }
+      try {
+        const token = localStorage.getItem('greenbox_token');
+        const res = await fetch('/api/change-my-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ newPassword: newPwd })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('passwordModal').classList.add('hidden');
+          alert('密码升级成功！');
+        } else {
+          errorEl.textContent = data.error || '操作失败';
+          errorEl.style.display = 'block';
+        }
+      } catch (e) {
+        errorEl.textContent = '网络错误，请稍后重试';
+        errorEl.style.display = 'block';
+      }
+    };
+
+    // ---------- 首页数据加载 ----------
+    (async function() {
+      try {
+        const res = await fetch('/api/data');
+        const data = await res.json();
+
+        const toolContainer = document.getElementById('tool-list');
+        const tools = (data.tools || []).slice(0, 3);
+        toolContainer.innerHTML = tools.map(t => `
+          <a href="${t.url}" class="tool-card" target="_blank" rel="noopener">
+            <span class="tool-icon">${t.icon}</span>
+            <h3>${t.name}</h3>
+            <p>${t.description}</p>
+          </a>
+        `).join('');
+
+        const changelogDiv = document.getElementById('latest-changelog');
+        const latest = (data.changelogs || [])[0];
+        if (latest) {
+          changelogDiv.innerHTML = `
+            <div class="changelog-item">
+              <div class="changelog-header">
+                <span class="version">${latest.version}</span>
+                <span class="date">${latest.date}</span>
+              </div>
+              <ul>
+                ${latest.changes.map(c => `<li>${c}</li>`).join('')}
+              </ul>
+            </div>
+          `;
+        }
+      } catch (err) {
+        console.error('加载数据失败:', err);
+        document.getElementById('tool-list').innerHTML = '<p style="text-align:center;color:#94a3b8;">加载数据失败，请检查网络</p>';
+      }
+    })();
+
+    // ---------- 加载在线房间列表（修复版） ----------
+    async function loadRoomList() {
+      const container = document.getElementById('roomList');
+      container.innerHTML = '<p style="color:#94a3b8;">⏳ 加载中...</p>';
+
+      try {
+        const res = await fetch('/api/rooms');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rooms = await res.json();
+
+        if (rooms.length === 0) {
+          container.innerHTML = '<p style="color:#94a3b8;">🏠 暂无在线房间</p>';
+          return;
+        }
+
+        const list = rooms.slice(0, 5);
+        container.innerHTML = list.map(r => `
+          <div class="room-item">
+            <div class="info">
+              <span>🏠 ${r.roomId}</span>
+              <span>创建者：${r.creator}</span>
+              <span>👥 ${r.onlineCount}/${r.playerCount}</span>
+              ${r.hasPassword ? '<span>🔒</span>' : ''}
+            </div>
+            <a href="/gomoku-online.html" class="btn-primary-sm">加入</a>
+          </div>
+        `).join('');
+        if (rooms.length > 5) {
+          container.innerHTML += `<p style="text-align:right;font-size:0.9rem;color:var(--muted);margin-top:0.5rem;">还有 ${rooms.length-5} 个房间，点击下方进入大厅查看</p>`;
+        }
+      } catch (err) {
+        container.innerHTML = `<p style="color:#ef4444;">❌ 加载失败：${err.message}</p>`;
+        console.error('房间列表加载错误:', err);
+      }
+    }
+
+    // 初始化
+    renderUserArea();
+    loadRoomList();
+    setInterval(loadRoomList, 30000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>五子棋 · 联机版</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at top, #f3e2b8 0%, #d9b878 55%, #c39c5c 100%);
+      font-family: "Microsoft YaHei", sans-serif; padding: 20px;
+    }
+    .app { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 700px; }
+    .card {
+      background: #fffaf0; border-radius: 18px;
+      box-shadow: 0 12px 30px rgba(74,56,38,0.25); padding: 32px 36px; width: 100%;
+    }
+    h1 { color: #4a3826; font-size: 30px; letter-spacing: 4px; margin: 0 0 4px; }
+    .subtitle { color: #8a6d47; margin: 0 0 26px; font-size: 14px; }
+
+    .room-list { margin: 16px 0; max-height: 300px; overflow-y: auto; }
+    .room-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px; border-bottom: 1px solid #e4cf9d;
+    }
+    .room-item .info { display: flex; gap: 12px; flex-wrap: wrap; font-size: 14px; color: #4a3826; }
+    .room-item .btn-join { background: #7a5230; color: #fff8ea; border: none; border-radius: 20px; padding: 4px 14px; cursor: pointer; }
+
+    .input-group { margin-bottom: 16px; }
+    .input-group label { display: block; font-size: 13px; color: #8a6d47; margin-bottom: 6px; }
+    .input-group input, .input-group select {
+      width: 100%; padding: 10px; border: 2px solid #e4cf9d; border-radius: 8px;
+      font-size: 14px; background: #fffdf8;
+    }
+
+    .btn-group { display: flex; gap: 10px; }
+    .choice-btn {
+      flex: 1; padding: 12px; border: 2px solid #e4cf9d; border-radius: 10px;
+      background: #fffdf8; color: #7a5230; cursor: pointer;
+    }
+    .choice-btn.active { background: #7a5230; border-color: #7a5230; color: #fff8ea; font-weight: bold; }
+
+    .start-btn {
+      width: 100%; padding: 14px; margin-top: 6px;
+      background: linear-gradient(180deg,#8a5f38,#6b4526);
+      color: #fff8ea; border: none; border-radius: 10px;
+      font-size: 17px; letter-spacing: 3px; cursor: pointer;
+    }
+
+    #gameScreen { display: none; flex-direction: column; align-items: center; width: 100%; }
+    .top-bar { display: flex; justify-content: space-between; width: 100%; margin-bottom: 12px; }
+    .top-bar-left { display: flex; align-items: center; gap: 8px; }
+    .mode-tag { font-size: 13px; color: #8a6d47; background: #f3e2b8; padding: 6px 14px; border-radius: 20px; }
+    .move-tag { font-size: 13px; color: #8a6d47; padding: 6px 10px; }
+    .status-pill {
+      display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: bold;
+      color: #4a3826; background: #fffaf0; padding: 6px 16px; border-radius: 20px;
+      box-shadow: inset 0 0 0 1px #e4cf9d;
+    }
+    .status-dot { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 2px #7a5230 inset; }
+    .status-dot.black { background: #1a1a1a; }
+    .status-dot.white { background: #f5f5f5; }
+    .status-dot.thinking { background: #d99933; animation: pulse 0.8s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.35;} }
+    canvas {
+      display: block; width: 100%; height: auto;
+      background: linear-gradient(135deg, #e7c581, #cf9e56);
+      border: 6px solid #6b4526; border-radius: 8px; cursor: pointer;
+    }
+    .overlay { position: absolute; inset: 6px; border-radius: 4px; display: none; align-items: center; justify-content: center; flex-direction: column; background: rgba(30,22,14,0.55); color: #fff8ea; }
+    .overlay.show { display: flex; }
+    .overlay .result-title { font-size: 26px; margin-bottom: 20px; }
+    .overlay button { padding: 10px 22px; font-size: 14px; background: #fff8ea; color: #6b4526; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    #controls { margin: 18px 0; display: flex; gap: 10px; }
+    button.ctrl { padding: 10px 22px; font-size: 14px; background: #7a5230; color: #fff8ea; border: none; border-radius: 8px; cursor: pointer; }
+    button.ctrl:disabled { background: #cbb691; cursor: not-allowed; }
+    button.ctrl.secondary { background: #e4cf9d; color: #6b4526; }
+
+    /* 聊天小窗口 */
+    .chat-widget {
+      position: fixed; bottom: 20px; right: 20px; z-index: 500;
+      font-family: inherit;
+    }
+    .chat-toggle-btn {
+      background: #7a5230; color: white; border: none; border-radius: 50%;
+      width: 48px; height: 48px; font-size: 20px; cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .chat-unread-badge {
+      position: absolute; top: -4px; right: -4px;
+      background: #ef4444; color: white; border-radius: 10px;
+      min-width: 20px; height: 20px; font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 4px;
+    }
+    .chat-panel {
+      display: none; width: 280px; max-height: 400px;
+      background: #fffaf0; border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      flex-direction: column; overflow: hidden;
+      margin-top: 8px;
+    }
+    .chat-panel.open { display: flex; }
+    .chat-header {
+      background: #7a5230; color: white; padding: 8px 12px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 8px;
+      font-size: 13px; max-height: 200px;
+    }
+    .chat-input-area { display: flex; padding: 8px; gap: 4px; border-top: 1px solid #e4cf9d; }
+    .chat-input { flex: 1; padding: 6px; border: 1px solid #e4cf9d; border-radius: 6px; font-size: 13px; }
+    .chat-send-btn { background: #7a5230; color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+    .status-msg { color: #8a6d47; font-size: 14px; text-align: center; margin: 12px 0; min-height: 24px; }
+    .invite-link-box { margin-top: 10px; display: none; }
+    .invite-link-box input { width: 100%; padding: 8px; border: 1px solid #e4cf9d; border-radius: 8px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div id="startScreen" class="card">
+    <h1>五 子 棋</h1>
+    <p class="subtitle">联机对战 · 即时同步</p>
+    <div class="input-group">
+      <label>在线房间</label>
+      <div id="roomList" class="room-list"></div>
+      <button onclick="refreshRoomList()" style="margin-top:8px;">🔄 刷新列表</button>
+    </div>
+    <hr style="margin:20px 0;border-color:#e4cf9d;">
+    <div class="btn-group">
+      <button class="choice-btn active" id="createTab">创建房间</button>
+      <button class="choice-btn" id="joinTab">加入房间</button>
+    </div>
+    <div id="createPanel">
+      <div class="input-group">
+        <label>执子颜色</label>
+        <select id="createColor"><option value="1">黑子（先手）</option><option value="2">白子（后手）</option></select>
+      </div>
+      <div class="input-group">
+        <label>房间密码（可选）</label>
+        <input type="text" id="createPassword" placeholder="留空无密码" maxlength="20">
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <input type="checkbox" id="createInvite"> 生成邀请链接（无需密码加入）
+      </label>
+      <button class="start-btn" id="createRoomBtn">创建房间</button>
+      <div class="invite-link-box" id="inviteLinkBox">
+        <label>邀请链接：</label>
+        <input type="text" id="inviteLinkInput" readonly>
+        <button onclick="copyInviteLink()" style="margin-top:4px;">📋 复制链接</button>
+      </div>
+    </div>
+    <div id="joinPanel" style="display:none;">
+      <div class="input-group">
+        <label>房间号</label>
+        <input type="text" id="joinRoomId" placeholder="例如：A1B2C3">
+      </div>
+      <div class="input-group">
+        <label>房间密码（如有）</label>
+        <input type="text" id="joinPassword" placeholder="输入密码">
+      </div>
+      <input type="hidden" id="joinInviteToken">
+      <button class="start-btn" id="joinRoomBtn">加入房间</button>
+    </div>
+    <div id="statusMsg" class="status-msg">请登录后使用</div>
+  </div>
+
+  <div id="gameScreen">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <span class="mode-tag">房间 <span id="roomDisplay">---</span></span>
+        <span class="move-tag" id="moveTag">第 1 手</span>
+      </div>
+      <div class="status-pill">
+        <span class="status-dot black" id="statusDot"></span>
+        <span id="statusText">等待对手...</span>
+      </div>
+    </div>
+    <div id="boardWrapper" style="position:relative;">
+      <canvas id="board" width="600" height="600"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="result-title" id="resultTitle"></div>
+        <div class="overlay-btns">
+          <button id="playAgainBtn">再来一局</button>
+          <button id="menuFromOverlayBtn">返回菜单</button>
+        </div>
+      </div>
+    </div>
+    <div id="controls">
+      <button class="ctrl" id="undoBtn" disabled>悔棋</button>
+      <button class="ctrl" id="restartBtn" disabled>重新开始</button>
+      <button class="ctrl secondary" id="menuBtn">返回菜单</button>
+    </div>
+  </div>
+
+  <!-- 聊天小窗口（右下角） -->
+  <div class="chat-widget" id="chatWidget">
+    <button class="chat-toggle-btn" id="chatToggle">
+      💬
+      <span class="chat-unread-badge" id="chatUnreadBadge" style="display:none;">0</span>
+    </button>
+    <div class="chat-panel" id="chatPanel">
+      <div class="chat-header">
+        <span>房间聊天</span>
+        <button style="background:none;border:none;color:white;font-size:16px;cursor:pointer;" id="chatCloseBtn">✕</button>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" id="chatInput" placeholder="输入消息..." maxlength="200">
+        <button class="chat-send-btn" onclick="sendChat()">发送</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SIZE = 15, CELL = 40, MARGIN = 20, STONE_R = 17;
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const resultTitle = document.getElementById('resultTitle');
+const statusText = document.getElementById('statusText');
+const statusDot = document.getElementById('statusDot');
+const moveTag = document.getElementById('moveTag');
+const roomDisplay = document.getElementById('roomDisplay');
+const undoBtn = document.getElementById('undoBtn');
+const restartBtn = document.getElementById('restartBtn');
+const startScreen = document.getElementById('startScreen');
+const gameScreen = document.getElementById('gameScreen');
+const roomList = document.getElementById('roomList');
+const statusMsg = document.getElementById('statusMsg');
+const createTab = document.getElementById('createTab');
+const joinTab = document.getElementById('joinTab');
+const createPanel = document.getElementById('createPanel');
+const joinPanel = document.getElementById('joinPanel');
+const createRoomBtn = document.getElementById('createRoomBtn');
+const joinRoomBtn = document.getElementById('joinRoomBtn');
+const createColor = document.getElementById('createColor');
+const createPassword = document.getElementById('createPassword');
+const createInvite = document.getElementById('createInvite');
+const inviteLinkBox = document.getElementById('inviteLinkBox');
+const inviteLinkInput = document.getElementById('inviteLinkInput');
+const joinRoomId = document.getElementById('joinRoomId');
+const joinPassword = document.getElementById('joinPassword');
+const joinInviteToken = document.getElementById('joinInviteToken');
+
+let board = [], currentPlayer = 1, gameOver = false, history = [], winningCells = null, hoverCell = null;
+let myColor = 1, roomId = '', isPlacingMove = false;
+let token = localStorage.getItem('greenbox_token'), username = '';
+let currentRoom = null;
+let pollingInterval = null, heartbeatInterval = null;
+
+// 聊天状态
+let chatOpen = false;
+let lastSeenMessageCount = 0;
+let unreadCount = 0;
+let messageInitialized = false;
+
+// 检查登录
+async function checkLogin() {
+  if (!token) { statusMsg.innerHTML = '⚠️ 请先登录 (<a href="/login.html">去登录</a>)'; return; }
+  try {
+    const res = await fetch('/api/verify', { headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    if (data.valid) {
+      username = data.username;
+      statusMsg.textContent = `✅ 已登录：${username}`;
+      refreshRoomList();
+      setInterval(refreshRoomList, 15000);
+    } else {
+      localStorage.removeItem('greenbox_token'); token = null;
+      statusMsg.innerHTML = '⚠️ 登录过期 (<a href="/login.html">重新登录</a>)';
+    }
+  } catch (e) {
+    statusMsg.innerHTML = '⚠️ 网络错误，请刷新重试';
+  }
+}
+
+// 刷新房间列表（修复版）
+async function refreshRoomList() {
+  const roomListEl = document.getElementById('roomList');
+  // 显示加载状态
+  roomListEl.innerHTML = '<p style="color:#94a3b8;">⏳ 加载房间列表...</p>';
+
+  if (!token) {
+    roomListEl.innerHTML = '<p style="color:#94a3b8;">请先登录后查看房间</p>';
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/rooms');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rooms = await res.json();
+
+    if (rooms.length === 0) {
+      roomListEl.innerHTML = '<p style="color:#94a3b8;">🏠 暂无在线房间，快去创建吧</p>';
+      return;
+    }
+
+    roomListEl.innerHTML = rooms.map(r => `
+      <div class="room-item">
+        <div class="info">
+          <span>🏠 ${r.roomId}</span>
+          <span>创建者：${r.creator}</span>
+          <span>👥 ${r.onlineCount}/${r.playerCount}</span>
+          ${r.hasPassword ? '<span>🔒</span>' : ''}
+        </div>
+        <button class="btn-join" onclick="quickJoin('${r.roomId}')">加入</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    roomListEl.innerHTML = `<p style="color:#ef4444;">❌ 加载失败：${err.message}</p>`;
+    console.error('房间列表加载错误:', err);
+  }
+}
+
+async function quickJoin(rid) {
+  document.getElementById('joinRoomId').value = rid;
+  joinTab.click();
+  joinRoomBtn.click();
+}
+
+createTab.addEventListener('click', ()=>{
+  createTab.classList.add('active'); joinTab.classList.remove('active');
+  createPanel.style.display='block'; joinPanel.style.display='none';
+});
+joinTab.addEventListener('click', ()=>{
+  joinTab.classList.add('active'); createTab.classList.remove('active');
+  createPanel.style.display='none'; joinPanel.style.display='block';
+});
+
+const urlParams = new URLSearchParams(window.location.search);
+const roomParam = urlParams.get('room');
+const inviteParam = urlParams.get('invite');
+if (roomParam) {
+  joinTab.click();
+  document.getElementById('joinRoomId').value = roomParam;
+  if (inviteParam) document.getElementById('joinInviteToken').value = inviteParam;
+}
+
+createRoomBtn.addEventListener('click', async () => {
+  if (!token) { alert('请先登录'); return; }
+  const color = parseInt(createColor.value);
+  const password = createPassword.value.trim() || undefined;
+  const invite = createInvite.checked;
+  try {
+    const res = await fetch('/api/room/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ color, password, invite })
+    });
+    const data = await res.json();
+    if (data.success) {
+      roomId = data.roomId;
+      myColor = data.color;
+      startGame();
+      if (data.inviteToken) {
+        const link = `${location.origin}/gomoku-online.html?room=${roomId}&invite=${data.inviteToken}`;
+        inviteLinkBox.style.display = 'block';
+        inviteLinkInput.value = link;
+      }
+    } else alert('创建失败：' + data.error);
+  } catch (e) { alert('网络错误，请重试'); }
+});
+
+joinRoomBtn.addEventListener('click', async () => {
+  if (!token) { alert('请先登录'); return; }
+  const roomIdInput = joinRoomId.value.trim().toUpperCase();
+  const password = joinPassword.value.trim() || undefined;
+  const inviteToken = joinInviteToken.value;
+  try {
+    const res = await fetch('/api/room/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ roomId: roomIdInput, password, inviteToken: inviteToken || undefined })
+    });
+    const data = await res.json();
+    if (data.success) {
+      roomId = roomIdInput;
+      myColor = data.color;
+      startGame();
+      setTimeout(fetchRoom, 500);
+    } else alert('加入失败：' + data.error);
+  } catch (e) { alert('网络错误，请重试'); }
+});
+
+function copyInviteLink() {
+  inviteLinkInput.select();
+  document.execCommand('copy');
+  alert('邀请链接已复制！');
+}
+
+function startGame() {
+  startScreen.style.display = 'none';
+  gameScreen.style.display = 'flex';
+  document.getElementById('chatWidget').style.display = 'block';
+  roomDisplay.textContent = roomId;
+  undoBtn.disabled = false;
+  restartBtn.disabled = false;
+  chatOpen = false;
+  lastSeenMessageCount = 0;
+  unreadCount = 0;
+  messageInitialized = false;
+  updateUnreadBadge();
+  startPolling();
+  startHeartbeat();
+  fetchRoom();
+}
+
+function startHeartbeat() {
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(async () => {
+    if (!roomId || !token) return;
+    try {
+      await fetch('/api/room/heartbeat', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ roomId }) });
+    } catch(e) {}
+  }, 10000);
+}
+
+function startPolling() {
+  if (pollingInterval) clearInterval(pollingInterval);
+  pollingInterval = setInterval(fetchRoom, 1000);
+}
+
+function stopPolling() {
+  if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+  if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
+}
+
+async function fetchRoom() {
+  if (!roomId || isPlacingMove) return;
+  try {
+    const res = await fetch(`/api/room/${roomId}`);
+    if (!res.ok) { stopPolling(); return; }
+    const room = await res.json();
+    if (isPlacingMove) return;
+    currentRoom = room;
+    board = room.board;
+    currentPlayer = room.currentPlayer;
+    history = room.history || [];
+    gameOver = room.gameOver;
+    const pe = Object.values(room.players).find(p=>p.username===username);
+    if (!pe) { stopPolling(); return; }
+    const other = Object.values(room.players).find(p=>p.username!==username);
+    const otherOnline = other ? other.online : false;
+    const allOnline = pe.online && otherOnline;
+
+    if (room.gameOver) {
+      const winner = room.winner;
+      showResult(winner === 0 ? '🤝 平局！' : (winner === myColor ? '🎉 你赢了！' : '😞 对方获胜'));
+    } else {
+      if (room.status === 'waiting') statusMsg.textContent = '⏳ 等待对手加入...';
+      else if (room.status === 'paused') statusMsg.textContent = otherOnline ? '⏸️ 游戏暂停' : '⚠️ 对方已离开';
+      else if (room.status === 'playing') {
+        const myTurn = (currentPlayer === myColor && allOnline);
+        statusDot.className = 'status-dot ' + (myTurn ? (myColor===1?'black':'white') : 'thinking');
+        statusText.textContent = myTurn ? '你的回合' : (otherOnline ? '对方思考中...' : '等待对方上线');
+        moveTag.textContent = '第 ' + (history.length + 1) + ' 手';
+      }
+    }
+    const messages = room.messages || [];
+    updateChatMessages(messages);
+    if (!messageInitialized) {
+      lastSeenMessageCount = messages.length;
+      messageInitialized = true;
+    } else {
+      if (!chatOpen) {
+        const newMsgs = messages.length - lastSeenMessageCount;
+        if (newMsgs > 0) unreadCount += newMsgs;
+      } else {
+        unreadCount = 0;
+      }
+      lastSeenMessageCount = messages.length;
+    }
+    updateUnreadBadge();
+    drawBoard();
+  } catch(e){}
+}
+
+async function refreshChatOnly() {
+  if (!roomId) return;
+  try {
+    const res = await fetch(`/api/room/${roomId}`);
+    if (!res.ok) return;
+    const room = await res.json();
+    currentRoom = room;
+    const messages = room.messages || [];
+    updateChatMessages(messages);
+    if (!messageInitialized) {
+      lastSeenMessageCount = messages.length;
+      messageInitialized = true;
+    } else {
+      if (!chatOpen) {
+        const newMsgs = messages.length - lastSeenMessageCount;
+        if (newMsgs > 0) unreadCount += newMsgs;
+      } else {
+        unreadCount = 0;
+      }
+      lastSeenMessageCount = messages.length;
+    }
+    updateUnreadBadge();
+  } catch(e) {}
+}
+
+function updateChatMessages(messages) {
+  const chatDiv = document.getElementById('chatMessages');
+  if (!chatDiv) return;
+  chatDiv.innerHTML = messages.map(m => `<div class="chat-message"><b>${m.username}:</b> ${m.text}</div>`).join('');
+  chatDiv.scrollTop = chatDiv.scrollHeight;
+}
+
+function updateUnreadBadge() {
+  const badge = document.getElementById('chatUnreadBadge');
+  if (!badge) return;
+  if (unreadCount > 0) {
+    badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function openChat() {
+  document.getElementById('chatPanel').classList.add('open');
+  document.getElementById('chatToggle').style.display = 'none';
+  chatOpen = true;
+  unreadCount = 0;
+  if (currentRoom && currentRoom.messages) lastSeenMessageCount = currentRoom.messages.length;
+  updateUnreadBadge();
+}
+
+function closeChat() {
+  document.getElementById('chatPanel').classList.remove('open');
+  document.getElementById('chatToggle').style.display = 'flex';
+  chatOpen = false;
+}
+
+document.getElementById('chatToggle').addEventListener('click', openChat);
+document.getElementById('chatCloseBtn').addEventListener('click', closeChat);
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  try {
+    await fetch('/api/room/chat', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ roomId, text })
+    });
+    refreshChatOnly();
+  } catch(e) {}
+}
+document.getElementById('chatInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendChat(); });
+
+// 落子（乐观更新）
+canvas.addEventListener('click', async (e) => {
+  if (gameOver || !currentRoom || isPlacingMove) return;
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  const { row, col } = cell;
+  if (board[row][col] !== 0) return;
+  const pe = Object.values(currentRoom.players).find(p=>p.username===username && p.online);
+  if (!pe || currentPlayer !== myColor) return;
+  const oldBoard = JSON.parse(JSON.stringify(board));
+  const oldHistory = [...history];
+  const oldPlayer = currentPlayer;
+  board[row][col] = myColor;
+  history.push({ row, col, player: myColor });
+  currentPlayer = myColor === 1 ? 2 : 1;
+  drawBoard();
+  isPlacingMove = true;
+  try {
+    const res = await fetch('/api/room/move', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ roomId, row, col, player: myColor })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      board = oldBoard; history = oldHistory; currentPlayer = oldPlayer;
+      drawBoard();
+      alert(data.error);
+    } else if (data.room) {
+      applyRoom(data.room);
+    }
+  } catch (err) {
+    board = oldBoard; history = oldHistory; currentPlayer = oldPlayer;
+    drawBoard();
+  } finally { isPlacingMove = false; }
+});
+
+function applyRoom(room) {
+  currentRoom = room;
+  board = room.board;
+  currentPlayer = room.currentPlayer;
+  history = room.history;
+  gameOver = room.gameOver;
+  drawBoard();
+}
+
+undoBtn.addEventListener('click', async () => {
+  if (gameOver) return;
+  try {
+    const res = await fetch('/api/room/undo', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ roomId }) });
+    const data = await res.json();
+    if (!data.success) alert(data.error);
+  } catch(e) { alert('网络错误'); }
+});
+
+restartBtn.addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/room/restart', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ roomId }) });
+    const data = await res.json();
+    if (!data.success) alert(data.error);
+  } catch(e) { alert('网络错误'); }
+});
+
+window.leaveRoom = async function() {
+  if (!roomId) return;
+  try { await fetch('/api/room/leave', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ roomId }) }); } catch(e) {}
+  stopPolling();
+  gameScreen.style.display = 'none';
+  startScreen.style.display = 'block';
+  overlay.classList.remove('show');
+  document.getElementById('chatWidget').style.display = 'none';
+  chatOpen = false;
+  document.getElementById('chatPanel').classList.remove('open');
+  document.getElementById('chatToggle').style.display = 'flex';
+  refreshRoomList();
+};
+
+// 绘制棋盘
+function drawBoard() {
+  ctx.clearRect(0,0,600,600);
+  ctx.strokeStyle='rgba(74,56,38,0.75)'; ctx.lineWidth=1;
+  for (let i=0;i<SIZE;i++) {
+    ctx.beginPath(); ctx.moveTo(MARGIN, MARGIN+i*CELL); ctx.lineTo(MARGIN+(SIZE-1)*CELL, MARGIN+i*CELL); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(MARGIN+i*CELL, MARGIN); ctx.lineTo(MARGIN+i*CELL, MARGIN+(SIZE-1)*CELL); ctx.stroke();
+  }
+  ctx.fillStyle='rgba(74,56,38,0.75)';
+  [3,7,11].forEach(r=>[3,7,11].forEach(c=>{ ctx.beginPath(); ctx.arc(MARGIN+c*CELL, MARGIN+r*CELL,3,0,Math.PI*2); ctx.fill(); }));
+  for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (board[r]&&board[r][c]!==0) drawStone(r,c,board[r][c]);
+  if (hoverCell && !gameOver && currentPlayer===myColor && board[hoverCell.row]&&board[hoverCell.row][hoverCell.col]===0) drawStone(hoverCell.row, hoverCell.col, myColor, true);
+  if (history.length>0&&!winningCells) {
+    const last=history[history.length-1];
+    ctx.strokeStyle='#e63946'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(MARGIN+last.col*CELL, MARGIN+last.row*CELL,5,0,Math.PI*2); ctx.stroke();
+  }
+}
+function drawStone(row,col,player,preview=false) {
+  const x=MARGIN+col*CELL, y=MARGIN+row*CELL, r=STONE_R;
+  if(!preview){ ctx.beginPath(); ctx.ellipse(x+2,y+3,r*0.92,r*0.8,0,0,Math.PI*2); ctx.fillStyle='rgba(40,26,12,0.28)'; ctx.fill(); }
+  const grad=ctx.createRadialGradient(x-6,y-6,2,x,y,r);
+  if(player===1){ grad.addColorStop(0,'#6b6b6b'); grad.addColorStop(1,'#050505'); }
+  else { grad.addColorStop(0,'#ffffff'); grad.addColorStop(1,'#c9c9c9'); }
+  ctx.globalAlpha=preview?0.45:1;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.globalAlpha=1;
+}
+canvas.addEventListener('mousemove', e=>{ hoverCell=cellFromEvent(e); drawBoard(); });
+canvas.addEventListener('mouseleave', ()=>{ hoverCell=null; drawBoard(); });
+function cellFromEvent(e) {
+  const rect=canvas.getBoundingClientRect();
+  const scaleX=canvas.width/rect.width, scaleY=canvas.height/rect.height;
+  const x=(e.clientX-rect.left)*scaleX, y=(e.clientY-rect.top)*scaleY;
+  const col=Math.round((x-MARGIN)/CELL), row=Math.round((y-MARGIN)/CELL);
+  return row<0||row>=SIZE||col<0||col>=SIZE ? null : {row, col};
+}
+function showResult(text) {
+  resultTitle.textContent=text; overlay.classList.add('show');
+  statusText.textContent=text; statusDot.className='status-dot';
+  undoBtn.disabled=true; restartBtn.disabled=false;
+  stopPolling();
+}
+document.getElementById('playAgainBtn').addEventListener('click',()=>{ overlay.classList.remove('show'); restartBtn.click(); });
+document.getElementById('menuFromOverlayBtn').addEventListener('click', leaveRoom);
+document.getElementById('menuBtn').addEventListener('click', leaveRoom);
+document.addEventListener('keydown', e=>{
+  if (gameScreen.style.display!=='flex') return;
+  if (e.key==='Escape') leaveRoom();
+  else if (e.key==='r'||e.key==='R') { if (!gameOver) restartBtn.click(); }
+  else if (e.key==='u'||e.key==='U') undoBtn.click();
+});
+
+createTab.click();
+checkLogin();
+document.getElementById('chatWidget').style.display = 'none';
+</script>
+</body>
+</html>

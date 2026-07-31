@@ -1,0 +1,49 @@
+{
+  "tools": [
+    {
+      "name": "PDF 合并器",
+      "description": "在线合并多个 PDF 文件，免费且安全。",
+      "url": "https://example.com/pdf-merge",
+      "icon": "📄"
+    },
+    {
+      "name": "图片压缩工具",
+      "description": "批量压缩 PNG/JPEG，质量可调。",
+      "url": "https://example.com/image-compress",
+      "icon": "🖼️"
+    },
+    {
+      "name": "JSON 格式化",
+      "description": "快速格式化并校验 JSON 数据。",
+      "url": "https://example.com/json-formatter",
+      "icon": "🔧"
+    }
+  ],
+  "changelogs": [
+    {
+      "version": "v1.2.0",
+      "date": "2026-07-20",
+      "changes": [
+        "新增暗色模式支持",
+        "优化移动端布局",
+        "修复工具卡片点击区域问题"
+      ]
+    },
+    {
+      "version": "v1.1.0",
+      "date": "2026-07-15",
+      "changes": [
+        "上线「PDF 合并器」工具",
+        "更新日志支持按版本分组"
+      ]
+    },
+    {
+      "version": "v1.0.0",
+      "date": "2026-07-01",
+      "changes": [
+        "GreenBox 官网正式发布",
+        "首批 3 个工具上线"
+      ]
+    }
+  ]
+}

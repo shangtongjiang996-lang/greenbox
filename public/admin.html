@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GreenBox · 管理后台</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    .card {
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(12px);
+      border-radius: 24px;
+      padding: 1.8rem 2rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+      border: 1px solid rgba(255,255,255,0.5);
+      margin-bottom: 2rem;
+    }
+    h1 { font-size: 2.2rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 0.5rem; }
+    h2 { font-size: 1.4rem; font-weight: 600; color: #1e293b; margin-bottom: 1.2rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px,1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-item {
+      background: white;
+      border-radius: 16px;
+      padding: 1rem 1.2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      text-align: center;
+    }
+    .stat-item .number { font-size: 2rem; font-weight: 700; color: #16a34a; }
+    .stat-item .label { font-size: 0.9rem; color: #64748b; }
+
+    .tab-bar {
+      display: flex;
+      gap: 0.8rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 0.5rem;
+    }
+    .tab-btn {
+      padding: 0.5rem 1.2rem;
+      border: none;
+      background: transparent;
+      border-radius: 30px;
+      font-weight: 600;
+      color: #64748b;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active { background: #16a34a; color: white; }
+    .tab-btn:hover:not(.active) { background: #e2e8f0; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .tool-item, .log-item, .user-item, .file-item, .room-item {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.8rem 0;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .tool-item:last-child, .log-item:last-child, .user-item:last-child, .file-item:last-child, .room-item:last-child { border-bottom: none; }
+    .tool-item input, .log-item input, .tool-item textarea, .log-item textarea {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 0.5rem 0.8rem;
+      font-size: 0.95rem;
+      background: white;
+      transition: border 0.2s;
+      flex: 1 1 120px;
+    }
+    .tool-item input:focus, .log-item input:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,0.15); }
+    .btn {
+      background: #f1f5f9;
+      border: none;
+      padding: 0.5rem 1.2rem;
+      border-radius: 30px;
+      font-weight: 500;
+      color: #1e293b;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      font-size: 0.9rem;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(22,163,74,0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(22,163,74,0.4);
+      background: linear-gradient(135deg, #15803d 0%, #14532d 100%);
+    }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-outline { background: transparent; border: 1px solid #cbd5e1; }
+    .btn-outline:hover { background: #f8fafc; }
+    .btn-sm { padding: 0.3rem 0.8rem; font-size: 0.8rem; }
+    .btn-icon { background: transparent; border: none; cursor: pointer; font-size: 1.2rem; padding: 0 0.3rem; }
+    .action-bar { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 1rem; }
+    #save-msg, #upload-status { margin-top: 1rem; font-weight: 500; }
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #0f172a;
+      color: white;
+      padding: 0.8rem 1.5rem;
+      border-radius: 30px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      font-weight: 500;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { background: #16a34a; }
+    .toast.error { background: #ef4444; }
+    .hidden { display: none !important; }
+    .upload-area {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+      align-items: center;
+    }
+    .upload-area input[type="text"] {
+      flex: 1;
+      min-width: 120px;
+      padding: 0.5rem 0.8rem;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+    .file-preview { max-height: 300px; overflow: auto; background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 12px; white-space: pre-wrap; margin-top: 0.5rem; }
+    .room-info { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #555; }
+    .room-info span { margin-right: 8px; }
+    .room-meta { font-size: 12px; color: #999; margin-top: 4px; }
+
+    .icon-mode-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 0.5rem;
+      border-radius: 10px;
+      overflow: hidden;
+      width: fit-content;
+      border: 1px solid #e2e8f0;
+    }
+    .icon-mode-btn {
+      padding: 0.4rem 1rem;
+      background: white;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+      color: #64748b;
+    }
+    .icon-mode-btn.active { background: #16a34a; color: white; font-weight: 600; }
+    .icon-mode-btn:not(.active):hover { background: #f1f5f9; }
+    .emoji-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 4px;
+      max-height: 160px;
+      overflow-y: auto;
+      padding: 6px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #f8fafc;
+      margin-bottom: 0.5rem;
+    }
+    .emoji-item {
+      font-size: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .emoji-item:hover { background: #e2e8f0; }
+    .icon-preview { font-size: 2rem; margin-right: 0.5rem; min-width: 40px; text-align: center; }
+    .icon-cell { display: flex; align-items: center; gap: 0.4rem; min-width: 170px; }
+    .icon-cell input { width: 90px; flex: none; }
+    .emoji-pick-btn {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 0.2rem 0.4rem;
+      cursor: pointer;
+      font-size: 1.2rem;
+    }
+    .emoji-pick-btn:hover { background: #e2e8f0; }
+
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+    }
+    .file-input-wrapper input[type=file] {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .file-input-btn {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 30px;
+      padding: 0.5rem 1.2rem;
+      font-weight: 500;
+      color: #1e293b;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      transition: all 0.2s;
+    }
+    .file-input-btn:hover { background: #e2e8f0; }
+    .file-name { margin-left: 0.5rem; font-size: 0.85rem; color: #475569; }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(15,23,42,0.5);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal.active { display: flex; }
+    .modal-content {
+      background: white;
+      border-radius: 20px;
+      padding: 2rem;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+    .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; }
+    @media (max-width: 640px) {
+      .card { padding: 1.2rem; }
+      .tool-item, .log-item, .user-item, .file-item, .room-item { flex-direction: column; align-items: stretch; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .upload-area { flex-direction: column; align-items: stretch; }
+      .emoji-grid { grid-template-columns: repeat(6, 1fr); }
+      .icon-cell { min-width: unset; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div id="dashboard" class="hidden">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+      <h1>🌱 GreenBox 管理</h1>
+      <span style="color:#64748b;font-size:0.9rem;">最后保存：<span id="last-saved">从未</span></span>
+    </div>
+
+    <div class="stats">
+      <div class="stat-item"><div class="number" id="tool-count">0</div><div class="label">🔧 工具</div></div>
+      <div class="stat-item"><div class="number" id="log-count">0</div><div class="label">📝 更新日志</div></div>
+      <div class="stat-item"><div class="number" id="total-items">0</div><div class="label">📦 总条目</div></div>
+      <div class="stat-item"><div class="number" id="active-rooms">0</div><div class="label">🏠 活跃房间</div></div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="tools">🔧 工具管理</button>
+      <button class="tab-btn" data-tab="changelog">📝 更新日志</button>
+      <button class="tab-btn" data-tab="users">👥 用户管理</button>
+      <button class="tab-btn" data-tab="files">📁 文件管理</button>
+      <button class="tab-btn" data-tab="rooms">🏠 房间管理</button>
+      <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
+    </div>
+
+    <!-- 工具管理 -->
+    <div id="tab-tools" class="tab-content active">
+      <div class="card">
+        <h2>🔧 工具列表 <span style="font-size:0.8rem;font-weight:400;color:#94a3b8;">（点击图标区域按钮更换图标）</span></h2>
+        <div id="tools-list"></div>
+        <button class="btn btn-primary" onclick="addTool()">+ 添加新工具（手动）</button>
+      </div>
+      <div class="card">
+        <h2>📤 上传新工具（自动添加）</h2>
+        <p style="color:#64748b;margin-bottom:1rem;">上传 .html 文件，自动添加到工具列表并通过 <code>/tool/ID</code> 访问。</p>
+        <form id="upload-form" enctype="multipart/form-data">
+          <div class="upload-area">
+            <div style="display:flex; flex-direction: column; gap: 0.3rem; min-width: 200px;">
+              <label style="font-size:0.85rem; color:#64748b;">图标</label>
+              <div class="icon-mode-toggle">
+                <button type="button" class="icon-mode-btn active" data-mode="emoji">😀 Emoji</button>
+                <button type="button" class="icon-mode-btn" data-mode="upload">🖼️ 上传图片</button>
+                <button type="button" class="icon-mode-btn" data-mode="url">🔗 图片链接</button>
+              </div>
+              <div id="icon-emoji-area">
+                <div class="icon-preview" id="icon-preview">🔧</div>
+                <div class="emoji-grid" id="emoji-grid"></div>
+                <input type="hidden" id="tool-icon-emoji" value="🔧">
+              </div>
+              <div id="icon-upload-area" style="display:none;">
+                <input type="file" id="tool-icon-file" accept="image/*" style="width:100%;">
+                <div style="margin-top:0.3rem; font-size:0.8rem; color:#64748b;">支持 .ico, .png, .jpg 等</div>
+              </div>
+              <div id="icon-url-area" style="display:none;">
+                <input type="text" id="tool-icon-url" placeholder="https://...ico 或 .png" style="width:100%;">
+              </div>
+            </div>
+            <input type="text" id="tool-name" placeholder="工具名称" required style="flex:1;min-width:120px;">
+            <input type="text" id="tool-desc" placeholder="简短描述" style="flex:1.5;min-width:150px;">
+          </div>
+          <div style="margin:0.8rem 0;">
+            <div class="file-input-wrapper">
+              <span class="file-input-btn">📁 选择 HTML 文件</span>
+              <input type="file" id="tool-file" accept=".html" required>
+            </div>
+            <span id="tool-file-name" class="file-name"></span>
+          </div>
+          <button type="submit" class="btn btn-primary" style="padding:0.8rem 2rem; font-size:1.05rem;">📤 上传并添加到工具列表</button>
+        </form>
+        <div id="upload-status"></div>
+      </div>
+    </div>
+
+    <!-- 更新日志 -->
+    <div id="tab-changelog" class="tab-content">
+      <div class="card">
+        <h2>📝 更新日志</h2>
+        <div id="changelogs-list"></div>
+        <button class="btn btn-primary" onclick="addChangelog()">+ 添加新日志</button>
+      </div>
+    </div>
+
+    <!-- 用户管理 -->
+    <div id="tab-users" class="tab-content">
+      <div class="card">
+        <h2>👥 用户管理</h2>
+        <div id="users-list"><p style="color:#94a3b8;">加载中...</p></div>
+        <button class="btn btn-primary" onclick="loadUsers()">🔄 刷新列表</button>
+      </div>
+    </div>
+
+    <!-- 文件管理 -->
+    <div id="tab-files" class="tab-content">
+      <div class="card">
+        <h2>📁 文件管理（上传的工具 HTML）</h2>
+        <div id="files-list"><p style="color:#94a3b8;">加载中...</p></div>
+        <button class="btn btn-primary" onclick="loadFiles()">🔄 刷新列表</button>
+      </div>
+    </div>
+
+    <!-- 房间管理 -->
+    <div id="tab-rooms" class="tab-content">
+      <div class="card">
+        <h2>🏠 房间管理</h2>
+        <div id="rooms-list"><p style="color:#94a3b8;">加载中...</p></div>
+        <button class="btn btn-primary" onclick="loadAdminRooms()">🔄 刷新房间列表</button>
+      </div>
+    </div>
+
+    <!-- 设置 -->
+    <div id="tab-settings" class="tab-content">
+      <div class="card">
+        <h2>⚙️ 修改管理员密码</h2>
+        <div style="max-width:400px;">
+          <div style="margin-bottom:1rem;">
+            <label style="display:block;font-weight:500;margin-bottom:0.3rem;">新密码</label>
+            <input type="password" id="new-pwd" placeholder="至少6位" style="width:100%;padding:0.8rem;border:1px solid #d1d5db;border-radius:10px;">
+          </div>
+          <div style="margin-bottom:1rem;">
+            <label style="display:block;font-weight:500;margin-bottom:0.3rem;">确认密码</label>
+            <input type="password" id="confirm-pwd" placeholder="再次输入新密码" style="width:100%;padding:0.8rem;border:1px solid #d1d5db;border-radius:10px;">
+          </div>
+          <button class="btn btn-primary" onclick="changePassword()">修改密码</button>
+          <div id="pwd-msg" style="margin-top:0.5rem;font-weight:500;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="action-bar">
+        <button class="btn btn-primary" onclick="saveAll()">💾 保存全部修改</button>
+        <button class="btn btn-danger" onclick="clearAllData()">🗑️ 清空所有数据</button>
+        <button class="btn btn-outline" onclick="window.open('/tools','_blank')">🔗 预览工具页</button>
+      </div>
+      <div id="save-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast 通知 -->
+<div id="toast" class="toast"></div>
+
+<!-- 图标编辑模态框 -->
+<div id="iconModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>更换图标</h3>
+      <button class="modal-close" onclick="closeIconModal()">✕</button>
+    </div>
+    <div class="icon-mode-toggle">
+      <button type="button" class="icon-mode-btn active" data-mode="emoji">😀 Emoji</button>
+      <button type="button" class="icon-mode-btn" data-mode="upload">🖼️ 上传图片</button>
+      <button type="button" class="icon-mode-btn" data-mode="url">🔗 图片链接</button>
+    </div>
+    <div id="modal-icon-emoji-area">
+      <div class="icon-preview" id="modal-icon-preview">🔧</div>
+      <div class="emoji-grid" id="modal-emoji-grid"></div>
+      <input type="hidden" id="modal-icon-emoji" value="🔧">
+    </div>
+    <div id="modal-icon-upload-area" style="display:none;">
+      <div class="file-input-wrapper">
+        <span class="file-input-btn">📁 选择图片文件</span>
+        <input type="file" id="modal-icon-file" accept="image/*">
+      </div>
+      <div style="margin-top:0.3rem; font-size:0.8rem; color:#64748b;">选择图片文件，将自动转为图标</div>
+    </div>
+    <div id="modal-icon-url-area" style="display:none;">
+      <input type="text" id="modal-icon-url" placeholder="https://...ico 或 .png" style="width:100%;">
+    </div>
+    <div style="text-align: right; margin-top: 1rem;">
+      <button class="btn btn-primary" onclick="applyIconChange()">确认更换</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+//  核心配置
+// ================================================================
+const API_BASE = '';
+let token = localStorage.getItem('greenbox_token');
+let currentData = { tools: [], changelogs: [] };
+let iconModalTarget = null;
+let currentModalMode = 'emoji';
+
+(async function init() {
+  if (!token) { redirectToLogin(); return; }
+  try {
+    const verifyRes = await fetch(`/api/verify`, { headers: { 'Authorization': `Bearer ${token}` } });
+    const verifyData = await verifyRes.json();
+    if (!verifyData.valid || verifyData.role !== 'admin') { redirectToLogin(); return; }
+    const dataRes = await fetch(`/api/data`);
+    const data = await dataRes.json();
+    currentData = data || { tools: [], changelogs: [] };
+    renderAll();
+    document.getElementById('dashboard').classList.remove('hidden');
+    loadUsers(); loadFiles(); loadAdminRooms(); updateRoomCount();
+    setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
+  } catch (e) { redirectToLogin(); }
+})();
+
+function redirectToLogin() {
+  const redirect = encodeURIComponent(window.location.pathname);
+  window.location.href = `/login.html?redirect=${redirect}`;
+}
+
+function setupTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const tabId = this.dataset.tab;
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.getElementById(`tab-${tabId}`).classList.add('active');
+      if (tabId === 'rooms') { loadAdminRooms(); updateRoomCount(); }
+    });
+  });
+}
+
+function setupFileInputs() {
+  document.querySelectorAll('.file-input-wrapper input[type=file]').forEach(input => {
+    input.addEventListener('change', function() {
+      const fileNameSpan = this.parentElement.nextElementSibling;
+      if (fileNameSpan && fileNameSpan.classList.contains('file-name')) {
+        fileNameSpan.textContent = this.files[0] ? this.files[0].name : '';
+      }
+    });
+  });
+}
+
+// ---------- 上传表单图标选择器 ----------
+function setupUploadIconSelector() {
+  const modeBtns = document.querySelectorAll('#upload-form .icon-mode-btn');
+  const emojiArea = document.getElementById('icon-emoji-area');
+  const uploadArea = document.getElementById('icon-upload-area');
+  const urlArea = document.getElementById('icon-url-area');
+  const emojiGrid = document.getElementById('emoji-grid');
+  const emojiInput = document.getElementById('tool-icon-emoji');
+  const preview = document.getElementById('icon-preview');
+  const uploadFileInput = document.getElementById('tool-icon-file');
+
+  const commonEmojis = ['🔧','🛠️','⚙️','🧰','💻','🌐','📱','📊','🎨','📝','🔗','📁','📂','🗂️','📋','✅','⭐','🔥','💡','🚀','🎯','💰','📈','📉','🧩','🎮','🎵','📚','✂️','🔍','❤️','👍','👏','🎉','✨','🌟','💎','🎁','🏆','🥇','🧪','🔬','📡','🛡️','⚡','☁️','🔒','🔑','📌','🗑️'];
+  emojiGrid.innerHTML = commonEmojis.map(e => `<div class="emoji-item" data-emoji="${e}">${e}</div>`).join('');
+
+  emojiGrid.addEventListener('click', (e) => {
+    const item = e.target.closest('.emoji-item');
+    if (!item) return;
+    emojiInput.value = item.dataset.emoji;
+    preview.textContent = item.dataset.emoji;
+  });
+
+  modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      modeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const mode = btn.dataset.mode;
+      emojiArea.style.display = mode === 'emoji' ? 'block' : 'none';
+      uploadArea.style.display = mode === 'upload' ? 'block' : 'none';
+      urlArea.style.display = mode === 'url' ? 'block' : 'none';
+    });
+  });
+
+  uploadFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      preview.textContent = '🖼️';
+      emojiInput.value = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function getUploadIconValue() {
+  const mode = document.querySelector('#upload-form .icon-mode-btn.active')?.dataset.mode;
+  if (mode === 'emoji') return document.getElementById('tool-icon-emoji').value || '🔧';
+  if (mode === 'upload') {
+    const val = document.getElementById('tool-icon-emoji').value;
+    return val.startsWith('data:image') ? val : '🔧';
+  }
+  if (mode === 'url') return document.getElementById('tool-icon-url').value.trim();
+  return '🔧';
+}
+
+// ---------- 图标模态框 ----------
+function setupModalIconSelector() {
+  const modeBtns = document.querySelectorAll('#iconModal .icon-mode-btn');
+  const emojiArea = document.getElementById('modal-icon-emoji-area');
+  const uploadArea = document.getElementById('modal-icon-upload-area');
+  const urlArea = document.getElementById('modal-icon-url-area');
+  const emojiGrid = document.getElementById('modal-emoji-grid');
+  const emojiInput = document.getElementById('modal-icon-emoji');
+  const preview = document.getElementById('modal-icon-preview');
+  const uploadFileInput = document.getElementById('modal-icon-file');
+
+  const commonEmojis = ['🔧','🛠️','⚙️','🧰','💻','🌐','📱','📊','🎨','📝','🔗','📁','📂','🗂️','📋','✅','⭐','🔥','💡','🚀','🎯','💰','📈','📉','🧩','🎮','🎵','📚','✂️','🔍','❤️','👍','👏','🎉','✨','🌟','💎','🎁','🏆','🥇','🧪','🔬','📡','🛡️','⚡','☁️','🔒','🔑','📌','🗑️'];
+  emojiGrid.innerHTML = commonEmojis.map(e => `<div class="emoji-item" data-emoji="${e}">${e}</div>`).join('');
+
+  emojiGrid.addEventListener('click', (e) => {
+    const item = e.target.closest('.emoji-item');
+    if (!item) return;
+    emojiInput.value = item.dataset.emoji;
+    preview.textContent = item.dataset.emoji;
+  });
+
+  modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      modeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentModalMode = btn.dataset.mode;
+      emojiArea.style.display = currentModalMode === 'emoji' ? 'block' : 'none';
+      uploadArea.style.display = currentModalMode === 'upload' ? 'block' : 'none';
+      urlArea.style.display = currentModalMode === 'url' ? 'block' : 'none';
+    });
+  });
+
+  uploadFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      preview.textContent = '🖼️';
+      emojiInput.value = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function openIconModal(target) {
+  iconModalTarget = target;
+  document.querySelector('#iconModal .icon-mode-btn[data-mode="emoji"]').click();
+  const emojiInput = document.getElementById('modal-icon-emoji');
+  const urlInput = document.getElementById('modal-icon-url');
+  const preview = document.getElementById('modal-icon-preview');
+  const uploadFileInput = document.getElementById('modal-icon-file');
+  
+  let currentIcon = '🔧';
+  if (target !== 'upload') {
+    const tool = currentData.tools[target];
+    currentIcon = tool.icon || '🔧';
+  }
+  emojiInput.value = currentIcon;
+  urlInput.value = currentIcon;
+  uploadFileInput.value = '';
+  preview.textContent = currentIcon.startsWith('data:') ? '🖼️' : currentIcon;
+  document.getElementById('iconModal').classList.add('active');
+}
+
+function closeIconModal() {
+  document.getElementById('iconModal').classList.remove('active');
+  iconModalTarget = null;
+}
+
+function applyIconChange() {
+  if (iconModalTarget === null) return;
+  let newIcon = '🔧';
+  const mode = currentModalMode;
+  if (mode === 'emoji') newIcon = document.getElementById('modal-icon-emoji').value || '🔧';
+  else if (mode === 'upload') {
+    const val = document.getElementById('modal-icon-emoji').value;
+    newIcon = val.startsWith('data:image') ? val : '🔧';
+  } else if (mode === 'url') newIcon = document.getElementById('modal-icon-url').value.trim() || '🔧';
+  
+  if (iconModalTarget === 'upload') {
+    document.getElementById('tool-icon-emoji').value = newIcon;
+    document.getElementById('icon-preview').textContent = newIcon.startsWith('data:') ? '🖼️' : newIcon;
+  } else {
+    currentData.tools[iconModalTarget].icon = newIcon;
+    renderTools();
+  }
+  closeIconModal();
+}
+
+// ---------- 渲染 ----------
+function renderAll() { renderTools(); renderChangelogs(); updateStats(); }
+function updateStats() {
+  document.getElementById('tool-count').textContent = currentData.tools.length;
+  document.getElementById('log-count').textContent = currentData.changelogs.length;
+  document.getElementById('total-items').textContent = currentData.tools.length + currentData.changelogs.length;
+}
+
+function renderTools() {
+  const container = document.getElementById('tools-list');
+  if (currentData.tools.length === 0) {
+    container.innerHTML = '<p style="color:#94a3b8;padding:1rem 0;">暂无工具，点击下方添加</p>';
+    return;
+  }
+  container.innerHTML = currentData.tools.map((t, i) => {
+    const iconHtml = renderIcon(t.icon);
+    return `
+      <div class="tool-item" data-index="${i}">
+        <div class="icon-cell">
+          ${iconHtml}
+          <input value="${t.icon || ''}" placeholder="图标" readonly onfocus="this.blur()" style="width:90px; cursor:pointer;" onclick="openIconModal(${i})">
+          <button type="button" class="emoji-pick-btn" onclick="openIconModal(${i})" title="更换图标">🎨</button>
+        </div>
+        <input value="${t.name || ''}" placeholder="名称" onchange="updateTool(${i}, 'name', this.value)" style="flex:1.5;">
+        <input value="${t.description || ''}" placeholder="描述" onchange="updateTool(${i}, 'description', this.value)" style="flex:2;">
+        <input value="${t.url || ''}" placeholder="链接" onchange="updateTool(${i}, 'url', this.value)" style="flex:2;">
+        <div style="display:flex;gap:0.3rem;">
+          <button class="btn-icon" onclick="moveTool(${i}, -1)" title="上移">⬆️</button>
+          <button class="btn-icon" onclick="moveTool(${i}, 1)" title="下移">⬇️</button>
+          <button class="btn-icon" onclick="previewTool('${t.url || ''}')" title="预览链接">🔗</button>
+          <button class="btn btn-danger btn-sm" onclick="removeTool(${i})">删除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderIcon(icon) {
+  if (!icon) return '<span>🔧</span>';
+  if (icon.startsWith('data:image') || icon.startsWith('http')) return `<img src="${icon}" alt="icon" style="width:24px;height:24px;object-fit:contain;border-radius:4px;">`;
+  return `<span style="font-size:1.5rem;">${icon}</span>`;
+}
+
+function renderChangelogs() {
+  const container = document.getElementById('changelogs-list');
+  if (currentData.changelogs.length === 0) {
+    container.innerHTML = '<p style="color:#94a3b8;padding:1rem 0;">暂无日志，点击下方添加</p>';
+    return;
+  }
+  container.innerHTML = currentData.changelogs.map((c, i) => `
+    <div class="log-item">
+      <input value="${c.version || ''}" placeholder="版本号" onchange="updateChangelog(${i}, 'version', this.value)" style="width:100px;">
+      <input value="${c.date || ''}" placeholder="日期 YYYY-MM-DD" onchange="updateChangelog(${i}, 'date', this.value)" style="width:130px;">
+      <textarea placeholder="每行一条更新内容" onchange="updateChangelogText(${i}, this.value)" rows="2">${(c.changes || []).join('\n')}</textarea>
+      <button class="btn btn-danger btn-sm" onclick="removeChangelog(${i})">删除</button>
+    </div>
+  `).join('');
+}
+
+// ---------- 数据操作 ----------
+window.updateTool = (idx, key, val) => { currentData.tools[idx][key] = val; };
+window.updateChangelog = (idx, key, val) => { currentData.changelogs[idx][key] = val; };
+window.updateChangelogText = (idx, val) => { currentData.changelogs[idx].changes = val.split('\n').filter(s => s.trim()); };
+window.addTool = () => { currentData.tools.push({ name: '新工具', description: '', url: '#', icon: '🔧' }); renderTools(); updateStats(); };
+window.removeTool = (idx) => { if (confirm('确定删除该工具吗？')) { currentData.tools.splice(idx, 1); renderTools(); updateStats(); } };
+window.addChangelog = () => { const today = new Date().toISOString().slice(0,10); currentData.changelogs.unshift({ version: 'v1.0.0', date: today, changes: ['新增功能'] }); renderChangelogs(); updateStats(); };
+window.removeChangelog = (idx) => { if (confirm('确定删除该更新日志吗？')) { currentData.changelogs.splice(idx, 1); renderChangelogs(); updateStats(); } };
+window.moveTool = (idx, direction) => { const newIdx = idx + direction; if (newIdx < 0 || newIdx >= currentData.tools.length) return; const [item] = currentData.tools.splice(idx, 1); currentData.tools.splice(newIdx, 0, item); renderTools(); updateStats(); };
+window.previewTool = (url) => { if (url && url !== '#') window.open(url, '_blank'); else showToast('该工具暂无有效链接', 'error'); };
+
+// ---------- 保存 / 清空 ----------
+window.saveAll = async function() {
+  const msg = document.getElementById('save-msg');
+  msg.innerHTML = '⏳ 保存中...';
+  try {
+    const res = await fetch(`/api/update`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(currentData) });
+    const result = await res.json();
+    if (result.success) {
+      const now = new Date().toLocaleString('zh-CN');
+      localStorage.setItem('greenbox_last_saved', now);
+      document.getElementById('last-saved').textContent = now;
+      msg.innerHTML = '✅ 保存成功！网站已更新。';
+      showToast('保存成功！', 'success');
+    } else {
+      msg.innerHTML = '❌ 保存失败：' + (result.error || '未知错误');
+      showToast('保存失败', 'error');
+    }
+  } catch(e) { msg.innerHTML = '❌ 网络错误'; showToast('网络错误', 'error'); }
+};
+
+window.clearAllData = function() {
+  if (!confirm('⚠️ 确定要清空所有工具和更新日志吗？此操作不可撤销！')) return;
+  if (!confirm('二次确认：真的要全部清空吗？')) return;
+  currentData.tools = []; currentData.changelogs = [];
+  renderAll();
+  showToast('已清空所有数据，请点击保存生效', 'error');
+};
+
+// ---------- Toast ----------
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast ' + type;
+  setTimeout(() => toast.classList.add('show'), 10);
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// ---------- 上传工具表单提交 ----------
+document.getElementById('upload-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const status = document.getElementById('upload-status');
+  status.textContent = '上传中...'; status.style.color = '#64748b';
+
+  const formData = new FormData();
+  const icon = getUploadIconValue();
+  const name = document.getElementById('tool-name').value.trim();
+  const description = document.getElementById('tool-desc').value.trim();
+  if (!name) { status.textContent = '请输入工具名称'; status.style.color = '#ef4444'; return; }
+
+  formData.append('name', name);
+  formData.append('icon', icon);
+  formData.append('description', description);
+
+  const fileInput = document.getElementById('tool-file');
+  if (fileInput.files.length === 0) { status.textContent = '请选择 HTML 文件'; status.style.color = '#ef4444'; return; }
+  formData.append('file', fileInput.files[0]);
+
+  try {
+    const res = await fetch(`/api/tool/upload`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
+    const result = await res.json();
+    if (result.success) {
+      status.textContent = `✅ 上传成功！工具 ID: ${result.id}，访问链接: ${result.url}`;
+      status.style.color = '#16a34a';
+      const dataRes = await fetch(`/api/data`);
+      const data = await dataRes.json();
+      currentData = data || { tools: [], changelogs: [] };
+      renderAll();
+      document.getElementById('upload-form').reset();
+      document.getElementById('tool-icon-emoji').value = '🔧';
+      document.getElementById('icon-preview').textContent = '🔧';
+      document.getElementById('tool-icon-url').value = '';
+      document.getElementById('tool-icon-file').value = '';
+      document.getElementById('tool-file-name').textContent = '';
+      document.querySelector('#upload-form .icon-mode-btn[data-mode="emoji"]').click();
+      showToast('工具上传成功！', 'success');
+      loadFiles();
+    } else {
+      status.textContent = '❌ 上传失败：' + (result.error || '未知错误');
+      status.style.color = '#ef4444';
+      showToast('上传失败', 'error');
+    }
+  } catch (err) {
+    status.textContent = '❌ 网络错误：' + err.message;
+    status.style.color = '#ef4444';
+    showToast('网络错误', 'error');
+  }
+});
+
+// ---------- 用户管理（完整版） ----------
+async function loadUsers() {
+  const container = document.getElementById('users-list');
+  try {
+    const res = await fetch('/api/admin/users', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) { container.innerHTML = '<p style="color:#ef4444;">加载失败，请检查权限</p>'; return; }
+    let users = await res.json();
+    if (users.length === 0) { container.innerHTML = '<p style="color:#94a3b8;">暂无用户</p>'; return; }
+    users.sort((a, b) => a.username === 'admin' ? -1 : b.username === 'admin' ? 1 : a.username.localeCompare(b.username));
+
+    container.innerHTML = users.map(u => {
+      const isAdmin = u.username === 'admin';
+      return `
+        <div class="user-item">
+          <span style="font-weight:600;">${u.username}</span>
+          <span style="color:#64748b;font-size:0.9rem;">角色：</span>
+          ${isAdmin ? '<span style="font-weight:600;color:#16a34a;">管理员（系统）</span>' : `
+            <select onchange="changeUserRole('${u.username}', this.value)" style="border:1px solid #e2e8f0;border-radius:6px;padding:0.2rem 0.5rem;">
+              <option value="user" ${u.role === 'user' ? 'selected' : ''}>普通用户</option>
+              <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>管理员</option>
+            </select>
+          `}
+          ${!isAdmin ? `
+            <button class="btn btn-outline btn-sm" onclick="viewPassword('${u.username}')">👁️ 查看密码</button>
+            <button class="btn btn-outline btn-sm" onclick="resetPassword('${u.username}')">🔑 重置密码</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">删除</button>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+  } catch (err) { container.innerHTML = '<p style="color:#ef4444;">加载失败：' + err.message + '</p>'; }
+}
+
+window.deleteUser = async function(username) {
+  if (!confirm(`确定要删除用户 "${username}" 吗？`)) return;
+  try {
+    const res = await fetch('/api/admin/users', { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ username }) });
+    const data = await res.json();
+    if (data.success) { showToast('用户已删除', 'success'); loadUsers(); }
+    else showToast('删除失败：' + data.error, 'error');
+  } catch (err) { showToast('错误：' + err.message, 'error'); }
+};
+
+window.changeUserRole = async function(username, role) {
+  try {
+    const res = await fetch('/api/admin/users/role', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ username, role }) });
+    const data = await res.json();
+    if (data.success) { showToast('角色已更新', 'success'); loadUsers(); }
+    else showToast('更新失败：' + data.error, 'error');
+  } catch (err) { showToast('错误：' + err.message, 'error'); }
+};
+
+window.resetPassword = async function(username) {
+  const newPwd = prompt(`为 ${username} 设置新密码（至少6位）：`);
+  if (!newPwd) return;
+  if (newPwd.length < 6) { alert('密码至少6位'); return; }
+  const confirmPwd = prompt('请再次输入确认：');
+  if (confirmPwd !== newPwd) { alert('两次密码不一致'); return; }
+  try {
+    const res = await fetch('/api/admin/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ username, newPassword: newPwd }) });
+    const data = await res.json();
+    if (data.success) showToast(`用户 ${username} 密码已重置`, 'success');
+    else showToast('重置失败：' + data.error, 'error');
+  } catch (err) { showToast('错误：' + err.message, 'error'); }
+};
+
+// ---------- 查看密码（二次验证） ----------
+window.viewPassword = async function(username) {
+  const adminPwd = prompt(`验证管理员身份：请输入你的管理员密码以查看用户 ${username} 的密码`);
+  if (!adminPwd) return;
+  try {
+    const verifyRes = await fetch('/api/admin/verify-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ adminPassword: adminPwd })
+    });
+    const verifyData = await verifyRes.json();
+    if (!verifyData.success) { alert('验证失败：' + (verifyData.error || '密码错误')); return; }
+    
+    const viewRes = await fetch('/api/admin/view-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ username, tempToken: verifyData.tempToken })
+    });
+    const viewData = await viewRes.json();
+    if (viewData.success) {
+      alert(`用户 ${username} 的密码：\n${viewData.password}`);
+    } else {
+      alert('获取密码失败：' + (viewData.error || '未知错误'));
+    }
+  } catch (err) { alert('网络错误：' + err.message); }
+};
+
+// ---------- 文件管理 ----------
+async function loadFiles() {
+  const container = document.getElementById('files-list');
+  try {
+    const res = await fetch('/api/admin/files', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) { container.innerHTML = '<p style="color:#ef4444;">加载失败</p>'; return; }
+    const files = await res.json();
+    if (files.length === 0) { container.innerHTML = '<p style="color:#94a3b8;">暂无上传的文件</p>'; return; }
+    container.innerHTML = files.map(f => {
+      const iconHtml = renderIcon(f.icon);
+      return `
+        <div class="file-item">
+          <span style="display:flex; align-items:center; gap:0.4rem;">${iconHtml}<strong>${f.name}</strong></span>
+          <span style="color:#64748b;font-size:0.85rem;">(${f.id})</span>
+          <span style="color:#94a3b8;font-size:0.8rem;">${(f.size/1024).toFixed(1)} KB</span>
+          <span style="color:#64748b;font-size:0.8rem;">类别：${f.category}</span>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" onclick="previewFile('${f.id}')">👁️ 预览</button>
+            <button class="btn btn-outline btn-sm" onclick="editFile('${f.id}')">✏️ 编辑信息</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.id}')">🗑️ 删除</button>
+          </div>
+          <div id="preview-${f.id}" style="display:none;" class="file-preview"></div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) { container.innerHTML = '<p style="color:#ef4444;">加载失败：' + err.message + '</p>'; }
+}
+
+window.previewFile = async function(id) {
+  const container = document.getElementById(`preview-${id}`);
+  if (container.style.display === 'block') { container.style.display = 'none'; return; }
+  try {
+    const res = await fetch(`/api/admin/files/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('获取失败');
+    const content = await res.text();
+    container.textContent = content.substring(0, 2000) + (content.length > 2000 ? '\n... (截断)' : '');
+    container.style.display = 'block';
+  } catch (err) { showToast('预览失败：' + err.message, 'error'); }
+};
+
+window.editFile = async function(id) {
+  const newName = prompt('请输入新名称：');
+  if (newName === null) return;
+  const newIcon = prompt('请输入新图标（Emoji 或图片 URL）：', '🔧');
+  if (newIcon === null) return;
+  try {
+    const res = await fetch(`/api/admin/tools/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ name: newName, icon: newIcon }) });
+    const data = await res.json();
+    if (data.success) { showToast('工具信息已更新', 'success'); loadFiles(); const dataRes = await fetch(`/api/data`); currentData = (await dataRes.json()) || { tools: [], changelogs: [] }; renderTools(); }
+    else showToast('更新失败：' + data.error, 'error');
+  } catch (err) { showToast('错误：' + err.message, 'error'); }
+};
+
+window.deleteFile = async function(id) {
+  if (!confirm(`确定要删除该工具文件吗？`)) return;
+  try {
+    const res = await fetch(`/api/admin/files/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    if (data.success) { showToast('文件已删除', 'success'); loadFiles(); const dataRes = await fetch(`/api/data`); currentData = (await dataRes.json()) || { tools: [], changelogs: [] }; renderTools(); }
+    else showToast('删除失败：' + data.error, 'error');
+  } catch (err) { showToast('错误：' + err.message, 'error'); }
+};
+
+// ---------- 房间管理 ----------
+async function loadAdminRooms() {
+  const container = document.getElementById('rooms-list');
+  try {
+    const res = await fetch('/api/admin/rooms', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) { container.innerHTML = '<p style="color:#ef4444;">加载失败</p>'; return; }
+    const rooms = await res.json();
+    if (rooms.length === 0) { container.innerHTML = '<p style="color:#94a3b8;">暂无房间</p>'; updateRoomCountDirect(0); return; }
+    const activeRooms = rooms.filter(r => r.status !== 'closed' && r.status !== 'finished');
+    updateRoomCountDirect(activeRooms.length);
+
+    container.innerHTML = rooms.map(r => {
+      const playersStr = r.players.map(p => `${p.username}(${p.online ? '在线' : '离线'})`).join('、');
+      const statusBadge = { waiting: '🟡 等待中', playing: '🟢 游戏中', paused: '⏸️ 暂停', finished: '🏁 已结束', closed: '🔴 已关闭' }[r.status] || r.status;
+      return `
+        <div class="room-item">
+          <div style="flex:1;">
+            <strong>${r.roomId}</strong>
+            <span style="margin-left:8px;background:#e2e8f0;padding:2px 8px;border-radius:12px;font-size:12px;">${statusBadge}</span>
+            <div class="room-info">
+              <span>创建者：${r.creator}</span>
+              <span>玩家：${playersStr || '无'}</span>
+              <span>人数：${r.onlineCount}/${r.playerCount}</span>
+              ${r.hasPassword ? '<span>🔒</span>' : ''}
+            </div>
+            <div class="room-meta">创建：${new Date(r.createdAt).toLocaleString()} | 最后活跃：${new Date(r.lastActive).toLocaleString()}</div>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="closeRoom('${r.roomId}')">关闭房间</button>
+        </div>
+      `;
+    }).join('');
+  } catch (err) { container.innerHTML = '<p style="color:#ef4444;">加载失败：' + err.message + '</p>'; }
+}
+
+function updateRoomCountDirect(count) { document.getElementById('active-rooms').textContent = count; }
+
+async function updateRoomCount() {
+  try {
+    const res = await fetch('/api/admin/rooms', { headers: { 'Authorization': `Bearer ${token}` } });
+    const rooms = await res.json();
+    const active = rooms.filter(r => r.status !== 'closed' && r.status !== 'finished').length;
+    updateRoomCountDirect(active);
+  } catch (e) {}
+}
+
+window.closeRoom = async function(roomId) {
+  if (!confirm(`确定要强制关闭房间 ${roomId} 吗？`)) return;
+  try {
+    const res = await fetch('/api/admin/rooms/close', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ roomId }) });
+    const data = await res.json();
+    if (data.success) { showToast('房间已关闭', 'success'); loadAdminRooms(); }
+    else showToast('关闭失败：' + data.error, 'error');
+  } catch (err) { showToast('错误：' + err.message, 'error'); }
+};
+
+// ---------- 修改管理员密码 ----------
+window.changePassword = async function() {
+  const newPwd = document.getElementById('new-pwd').value;
+  const confirmPwd = document.getElementById('confirm-pwd').value;
+  const msg = document.getElementById('pwd-msg');
+  if (!newPwd || newPwd.length < 6) { msg.innerHTML = '<span style="color:#ef4444;">密码至少6位</span>'; return; }
+  if (newPwd !== confirmPwd) { msg.innerHTML = '<span style="color:#ef4444;">两次密码不一致</span>'; return; }
+  try {
+    const res = await fetch('/api/admin/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ newPassword: newPwd }) });
+    const data = await res.json();
+    if (data.success) {
+      msg.innerHTML = '<span style="color:#16a34a;">✅ 密码修改成功</span>';
+      document.getElementById('new-pwd').value = '';
+      document.getElementById('confirm-pwd').value = '';
+      showToast('密码已更新', 'success');
+    } else msg.innerHTML = '<span style="color:#ef4444;">❌ ' + data.error + '</span>';
+  } catch (err) { msg.innerHTML = '<span style="color:#ef4444;">❌ 错误：' + err.message + '</span>'; }
+};
+
+// 初始化最后保存时间
+window.onload = function() {
+  const saved = localStorage.getItem('greenbox_last_saved');
+  if (saved) document.getElementById('last-saved').textContent = saved;
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人中心 · GreenBox</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .profile-container {
+      max-width: 500px;
+      margin: 4rem auto;
+      padding: 2rem;
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .profile-container h1 {
+      margin-bottom: 0.5rem;
+    }
+    .profile-container .avatar {
+      font-size: 4rem;
+      margin: 1rem 0;
+    }
+    .profile-container .username {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .profile-container .role-badge {
+      display: inline-block;
+      padding: 0.2rem 1rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-top: 0.5rem;
+    }
+    .role-badge.admin {
+      background: #fef08a;
+      color: #854d0e;
+    }
+    .role-badge.user {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .profile-actions {
+      margin-top: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+    .profile-actions button,
+    .profile-actions a.btn-link {
+      padding: 0.8rem;
+      border-radius: 30px;
+      font-size: 1rem;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      text-decoration: none;
+      display: block;
+      text-align: center;
+    }
+    .profile-actions .btn-logout {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+    .profile-actions .btn-logout:hover {
+      background: #cbd5e1;
+    }
+    .profile-actions .btn-delete {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .profile-actions .btn-delete:hover {
+      background: #fecaca;
+    }
+    .profile-actions .btn-admin {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .profile-actions .btn-admin:hover {
+      background: #bfdbfe;
+    }
+    .profile-actions .btn-back {
+      background: transparent;
+      color: #64748b;
+      text-decoration: underline;
+    }
+    .profile-actions .btn-back:hover {
+      color: #0f172a;
+    }
+    .message {
+      margin-top: 1rem;
+      padding: 0.5rem;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+    .message.error {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .message.success {
+      background: #dcfce7;
+      color: #166534;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="logo">🌱 GreenBox</a>
+      <ul class="nav-links">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="tools.html">工具</a></li>
+        <li><a href="changelog.html">更新日志</a></li>
+        <li><a href="/profile.html">个人中心</a></li>
+      </ul>
+      <button id="theme-toggle" aria-label="切换主题">🌙</button>
+      <div class="user-area" id="userArea"></div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="profile-container" id="profileContent">
+      <!-- 由 JS 动态渲染 -->
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 GreenBox · 用心制作</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+  <script>
+    const API_BASE = '';
+
+    // ---------- 认证检查 ----------
+    async function checkAuth() {
+      const token = localStorage.getItem('greenbox_token');
+      if (!token) return null;
+      try {
+        const res = await fetch(`${API_BASE}/api/verify`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.valid) {
+          return data;
+        } else {
+          localStorage.removeItem('greenbox_token');
+          localStorage.removeItem('greenbox_user');
+          return null;
+        }
+      } catch(e) {
+        return null;
+      }
+    }
+
+    // ---------- 渲染个人中心 ----------
+    async function renderProfile() {
+      const container = document.getElementById('profileContent');
+      const user = await checkAuth();
+      if (!user) {
+        window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+        return;
+      }
+
+      const isAdmin = user.role === 'admin';
+      const roleLabel = isAdmin ? '管理员' : '普通用户';
+      const roleClass = isAdmin ? 'admin' : 'user';
+
+      container.innerHTML = `
+        <div class="avatar">${isAdmin ? '🛡️' : '👤'}</div>
+        <div class="username">${user.username}</div>
+        <span class="role-badge ${roleClass}">${roleLabel}</span>
+        <div class="profile-actions">
+          ${isAdmin ? `<a href="/admin" class="btn-link btn-admin">⚙️ 管理界面</a>` : ''}
+          <button class="btn-logout" onclick="handleLogout()">🚪 退出登录</button>
+          ${!isAdmin ? `<button class="btn-delete" onclick="handleDeleteAccount()">🗑️ 注销账号</button>` : ''}
+          <button class="btn-back" onclick="window.location.href='/'">← 返回首页</button>
+        </div>
+        <div id="message" class="message" style="display:none;"></div>
+      `;
+
+      // 更新导航栏用户区域
+      renderUserArea();
+    }
+
+    // ---------- 退出登录 ----------
+    window.handleLogout = function() {
+      const token = localStorage.getItem('greenbox_token');
+      if (token) {
+        fetch(`${API_BASE}/api/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      }
+      localStorage.removeItem('greenbox_token');
+      localStorage.removeItem('greenbox_user');
+      window.location.href = '/';
+    };
+
+    // ---------- 注销账号 ----------
+    window.handleDeleteAccount = async function() {
+      if (!confirm('⚠️ 确定要注销账号吗？此操作将永久删除您的所有数据，不可恢复！')) return;
+      if (!confirm('再次确认：真的要注销吗？')) return;
+
+      const token = localStorage.getItem('greenbox_token');
+      if (!token) {
+        alert('未登录，请重新登录后再试。');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/delete-account`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          localStorage.removeItem('greenbox_token');
+          localStorage.removeItem('greenbox_user');
+          alert('账号已成功注销。');
+          window.location.href = '/';
+        } else {
+          alert('注销失败：' + (data.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('网络错误，请稍后重试。');
+      }
+    };
+
+    // ---------- 导航栏用户区域 ----------
+    async function renderUserArea() {
+      const userArea = document.getElementById('userArea');
+      const user = await checkAuth();
+      if (user) {
+        userArea.innerHTML = `
+          <span class="user-name">${user.username}</span>
+          <button onclick="handleLogout()" class="btn-outline">退出</button>
+        `;
+      } else {
+        userArea.innerHTML = `
+          <a href="/login.html" class="btn-primary-sm">登录</a>
+          <a href="/register.html" class="btn-outline">注册</a>
+        `;
+      }
+    }
+
+    // ---------- 初始化 ----------
+    renderProfile();
+  </script>
+</body>
+</html>
