@@ -1,7 +1,7 @@
 {
   "name": "greenbox-realtime",
   "version": "1.0.0",
-  "description": "GreenBox 实时联机版 (Node.js + Socket.IO + Redis)",
+  "description": "GreenBox 实时联机版",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
