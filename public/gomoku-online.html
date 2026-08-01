@@ -414,9 +414,14 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
   });
 
   // 监听新消息
-  socket.on('new-message', (msg) => {
-    appendChatMessage(msg);
-  });
+socket.on('new-message', (msg) => {
+  appendChatMessage(msg);
+  // 如果聊天面板未打开，增加未读计数
+  if (!chatOpen) {
+    unreadCount++;
+    updateUnreadBadge();
+  }
+});
 
   // 错误处理
   socket.on('error', (msg) => {
@@ -472,27 +477,52 @@ function applyRoom(room) {
   const otherOnline = other ? other.online : false;
   const allOnline = pe.online && otherOnline;
 
+  // 调试日志（可删除）
+  console.log('applyRoom:', {
+    status: room.status,
+    currentPlayer,
+    myColor,
+    allOnline,
+    gameOver
+  });
+
+  // 先更新游戏状态（胜负、平局）
   if (room.gameOver) {
     const winner = room.winner;
     showResult(winner === 0 ? '🤝 平局！' : (winner === myColor ? '🎉 你赢了！' : '😞 对方获胜'));
-  } else {
-    if (room.status === 'waiting') {
-      statusMsg.textContent = '⏳ 等待对手加入...';
-      statusText.textContent = '等待对手加入';
-      statusDot.className = 'status-dot black';
-    } else if (room.status === 'paused') {
-      statusMsg.textContent = otherOnline ? '⏸️ 游戏暂停' : '⚠️ 对方已离开';
-      statusText.textContent = otherOnline ? '游戏暂停' : '等待对方重新上线';
-      statusDot.className = 'status-dot thinking';
-    } else if (room.status === 'playing') {
-      const myTurn = (currentPlayer === myColor && allOnline);
-      statusDot.className = 'status-dot ' + (myTurn ? (myColor===1?'black':'white') : 'thinking');
-      statusText.textContent = myTurn ? '你的回合' : (otherOnline ? '对方思考中...' : '等待对方上线');
-      moveTag.textContent = '第 ' + (history.length + 1) + ' 手';
-    }
+    // 状态更新完就返回，不再继续
+    drawBoard();
+    // 仍需更新消息
+    const messages = room.messages || [];
+    updateChatMessages(messages);
+    // 不再执行后续状态更新
+    return;
   }
 
-  // 处理聊天消息（如果未初始化或需要更新）
+  // 更新状态提示（非结束状态）
+  if (room.status === 'waiting') {
+    statusMsg.textContent = '⏳ 等待对手加入...';
+    statusText.textContent = '等待对手加入';
+    statusDot.className = 'status-dot black';
+  } else if (room.status === 'paused') {
+    statusMsg.textContent = otherOnline ? '⏸️ 游戏暂停' : '⚠️ 对方已离开';
+    statusText.textContent = otherOnline ? '游戏暂停' : '等待对方重新上线';
+    statusDot.className = 'status-dot thinking';
+  } else if (room.status === 'playing') {
+    // 关键：判断当前玩家是否是本地玩家
+    const myTurn = (currentPlayer === myColor && allOnline);
+    statusMsg.textContent = myTurn ? '你的回合' : (otherOnline ? '对方思考中...' : '等待对方上线');
+    statusText.textContent = myTurn ? '你的回合' : (otherOnline ? '对方思考中...' : '等待对方上线');
+    statusDot.className = 'status-dot ' + (myTurn ? (myColor===1?'black':'white') : 'thinking');
+    moveTag.textContent = '第 ' + (history.length + 1) + ' 手';
+  } else {
+    // 未知状态
+    statusMsg.textContent = '⏳ 状态未知...';
+    statusText.textContent = '状态未知';
+    statusDot.className = 'status-dot thinking';
+  }
+
+  // 处理聊天消息
   const messages = room.messages || [];
   updateChatMessages(messages);
   if (!messageInitialized) {
