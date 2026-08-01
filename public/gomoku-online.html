@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>五子棋 · 联机版</title>
-  <!-- 引入 Socket.IO 客户端 -->
+  <!-- 强制不缓存 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -255,7 +258,7 @@ let board = [], currentPlayer = 1, gameOver = false, history = [], hoverCell = n
 let myColor = 1, roomId = '', isPlacingMove = false;
 let token = localStorage.getItem('greenbox_token'), username = '';
 let currentRoom = null;
-let socket = null;   // WebSocket 连接
+let socket = null;
 let chatOpen = false;
 let lastSeenMessageCount = 0;
 let unreadCount = 0;
@@ -353,9 +356,7 @@ createRoomBtn.addEventListener('click', async () => {
         inviteLinkBox.style.display = 'block';
         inviteLinkInput.value = link;
       }
-      // 建立 WebSocket 连接并加入房间
       startGame();
-      // 通过 WebSocket 加入房间（同时保留 REST 创建成功）
       connectSocketAndJoin(roomId, password, data.inviteToken);
     } else alert('创建失败：' + data.error);
   } catch (e) { alert('网络错误，请重试'); }
@@ -388,10 +389,9 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
   if (socket && socket.connected) {
     socket.disconnect();
   }
-  socket = io(); // 连接当前域名
+  socket = io();
   socket.on('connect', () => {
     console.log('WebSocket 已连接');
-    // 加入房间
     socket.emit('join-room', {
       roomId,
       token,
@@ -400,7 +400,6 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
     });
   });
 
-  // 监听加入结果
   socket.on('joined', (data) => {
     console.log('加入房间成功', data);
     // 只在初次加入时设置 myColor，重连时不覆盖
@@ -409,13 +408,11 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
     }
   });
 
-  // 监听房间更新（核心）
   socket.on('room-update', (room) => {
     console.log('收到房间更新', room);
     applyRoom(room);
   });
 
-  // 监听新消息
   socket.on('new-message', (msg) => {
     appendChatMessage(msg);
     if (!chatOpen) {
@@ -424,12 +421,10 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
     }
   });
 
-  // 错误处理
   socket.on('error', (msg) => {
     alert('WebSocket 错误：' + msg);
   });
 
-  // 断线重连
   socket.on('disconnect', () => {
     console.log('WebSocket 断开');
     statusMsg.textContent = '⚠️ 连接已断开，正在重连...';
@@ -439,11 +434,10 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
     statusMsg.textContent = '✅ 已重新连接';
   });
 
-  // 新增：监听重新开始成功
+  // 监听重新开始和悔棋成功
   socket.on('restart-success', (room) => {
     applyRoom(room);
   });
-  // 新增：监听悔棋成功
   socket.on('undo-success', (room) => {
     applyRoom(room);
   });
@@ -462,7 +456,6 @@ function startGame() {
   unreadCount = 0;
   messageInitialized = false;
   updateUnreadBadge();
-  // 初始化空棋盘
   board = Array(15).fill().map(() => Array(15).fill(0));
   currentPlayer = 1;
   gameOver = false;
@@ -472,28 +465,32 @@ function startGame() {
   statusDot.className = 'status-dot black';
 }
 
-// -------- 应用房间状态（核心） --------
+// -------- 核心：应用房间状态（修复版） --------
 function applyRoom(room) {
   if (isPlacingMove) return;
+
+  // 强制校准 myColor
+  const myPlayer = Object.values(room.players).find(p => p.username === username);
+  if (!myPlayer) {
+    leaveRoom();
+    return;
+  }
+  if (myColor !== myPlayer.color) {
+    console.warn('myColor 修正:', myColor, '->', myPlayer.color);
+    myColor = myPlayer.color;
+  }
+
   currentRoom = room;
   board = room.board;
   currentPlayer = room.currentPlayer;
   history = room.history || [];
   gameOver = room.gameOver;
 
-  const pe = Object.values(room.players).find(p => p.username === username);
-  if (!pe) { leaveRoom(); return; }
   const other = Object.values(room.players).find(p => p.username !== username);
   const otherOnline = other ? other.online : false;
-  const allOnline = pe.online && otherOnline;
+  const allOnline = myPlayer.online && otherOnline;
 
-  console.log('applyRoom:', {
-    status: room.status,
-    currentPlayer,
-    myColor,
-    allOnline,
-    gameOver
-  });
+  console.log('applyRoom:', { status: room.status, currentPlayer, myColor, allOnline, gameOver });
 
   if (room.gameOver) {
     const winner = room.winner;
@@ -510,11 +507,8 @@ function applyRoom(room) {
     statusText.textContent = '等待对手加入';
     statusDot.className = 'status-dot black';
   } else if (room.status === 'paused') {
-    // 如果双方都在线且游戏未结束，强制转为 playing
-    if (!room.gameOver && allOnline) {
-      room.status = 'playing';
-      // 同步更新，但仅本地显示，后端会在下次 heartbeat 或操作时更新
-      // 为避免不一致，此处仅显示为 playing
+    if (allOnline && !room.gameOver) {
+      // 双方在线且游戏未结束，显示恢复中（实际下一手会自动变 playing）
       statusMsg.textContent = '⏳ 恢复中...';
       statusText.textContent = '恢复中...';
       statusDot.className = 'status-dot thinking';
@@ -535,7 +529,7 @@ function applyRoom(room) {
     statusDot.className = 'status-dot thinking';
   }
 
-  // 处理聊天消息
+  // 聊天消息
   const messages = room.messages || [];
   updateChatMessages(messages);
   if (!messageInitialized) {
@@ -609,7 +603,6 @@ canvas.addEventListener('click', async (e) => {
   const pe = Object.values(currentRoom.players).find(p=>p.username===username && p.online);
   if (!pe || currentPlayer !== myColor) return;
   
-  // 乐观更新
   const oldBoard = JSON.parse(JSON.stringify(board));
   const oldHistory = [...history];
   const oldPlayer = currentPlayer;
@@ -637,19 +630,25 @@ applyRoom = function(room) {
   isPlacingMove = false;
 };
 
-// -------- 悔棋（改为 WebSocket） --------
+// -------- 悔棋（WebSocket） --------
 undoBtn.addEventListener('click', () => {
-  if (gameOver || !roomId || !socket || !socket.connected) return;
+  if (gameOver || !roomId || !socket || !socket.connected) {
+    alert('无法悔棋：游戏未连接或已结束');
+    return;
+  }
   socket.emit('undo', { roomId });
 });
 
-// -------- 重新开始（改为 WebSocket） --------
+// -------- 重新开始（WebSocket） --------
 restartBtn.addEventListener('click', () => {
-  if (!roomId || !socket || !socket.connected) return;
+  if (!roomId || !socket || !socket.connected) {
+    alert('无法重新开始：未连接');
+    return;
+  }
   socket.emit('restart', { roomId });
 });
 
-// -------- 离开房间（保留 REST） --------
+// -------- 离开房间（REST） --------
 window.leaveRoom = async function() {
   if (!roomId) return;
   if (socket && socket.connected) {
@@ -687,7 +686,7 @@ document.addEventListener('keydown', e=>{
   else if (e.key==='u'||e.key==='U') undoBtn.click();
 });
 
-// -------- 聊天功能 --------
+// -------- 聊天 --------
 function openChat() {
   document.getElementById('chatPanel').classList.add('open');
   document.getElementById('chatToggle').style.display = 'none';
@@ -738,14 +737,13 @@ function sendChat() {
 }
 document.getElementById('chatInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendChat(); });
 
-// -------- 复制邀请链接 --------
 function copyInviteLink() {
   inviteLinkInput.select();
   document.execCommand('copy');
   alert('邀请链接已复制！');
 }
 
-// -------- 初始化 --------
+// 初始化
 createTab.click();
 checkLogin();
 document.getElementById('chatWidget').style.display = 'none';
