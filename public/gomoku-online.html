@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>五子棋 · 联机版</title>
+  <!-- 引入 Socket.IO 客户端 -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -47,6 +49,7 @@
       color: #fff8ea; border: none; border-radius: 10px;
       font-size: 17px; letter-spacing: 3px; cursor: pointer;
     }
+    .start-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
     #gameScreen { display: none; flex-direction: column; align-items: center; width: 100%; }
     .top-bar { display: flex; justify-content: space-between; width: 100%; margin-bottom: 12px; }
@@ -77,7 +80,6 @@
     button.ctrl:disabled { background: #cbb691; cursor: not-allowed; }
     button.ctrl.secondary { background: #e4cf9d; color: #6b4526; }
 
-    /* 聊天小窗口 */
     .chat-widget {
       position: fixed; bottom: 20px; right: 20px; z-index: 500;
       font-family: inherit;
@@ -112,6 +114,7 @@
       flex: 1; overflow-y: auto; padding: 8px;
       font-size: 13px; max-height: 200px;
     }
+    .chat-message { margin: 4px 0; }
     .chat-input-area { display: flex; padding: 8px; gap: 4px; border-top: 1px solid #e4cf9d; }
     .chat-input { flex: 1; padding: 6px; border: 1px solid #e4cf9d; border-radius: 6px; font-size: 13px; }
     .chat-send-btn { background: #7a5230; color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
@@ -197,7 +200,7 @@
     </div>
   </div>
 
-  <!-- 聊天小窗口（右下角） -->
+  <!-- 聊天小窗口 -->
   <div class="chat-widget" id="chatWidget">
     <button class="chat-toggle-btn" id="chatToggle">
       💬
@@ -248,21 +251,19 @@ const joinRoomId = document.getElementById('joinRoomId');
 const joinPassword = document.getElementById('joinPassword');
 const joinInviteToken = document.getElementById('joinInviteToken');
 
-let board = [], currentPlayer = 1, gameOver = false, history = [], winningCells = null, hoverCell = null;
+let board = [], currentPlayer = 1, gameOver = false, history = [], hoverCell = null;
 let myColor = 1, roomId = '', isPlacingMove = false;
 let token = localStorage.getItem('greenbox_token'), username = '';
 let currentRoom = null;
-let pollingInterval = null, heartbeatInterval = null;
-
-// 聊天状态
+let socket = null;   // WebSocket 连接
 let chatOpen = false;
 let lastSeenMessageCount = 0;
 let unreadCount = 0;
 let messageInitialized = false;
 
-// 检查登录
+// -------- 登录检查 --------
 async function checkLogin() {
-  if (!token) { statusMsg.innerHTML = '⚠️ 请先登录 (<a href="/login.html">去登录</a>)'; return; }
+  if (!token) { statusMsg.innerHTML = '⚠️ 请先登录 (<a href="/login.html">去登录</a>)'; return false; }
   try {
     const res = await fetch('/api/verify', { headers: { 'Authorization': `Bearer ${token}` } });
     const data = await res.json();
@@ -271,36 +272,34 @@ async function checkLogin() {
       statusMsg.textContent = `✅ 已登录：${username}`;
       refreshRoomList();
       setInterval(refreshRoomList, 15000);
+      return true;
     } else {
       localStorage.removeItem('greenbox_token'); token = null;
       statusMsg.innerHTML = '⚠️ 登录过期 (<a href="/login.html">重新登录</a>)';
+      return false;
     }
   } catch (e) {
     statusMsg.innerHTML = '⚠️ 网络错误，请刷新重试';
+    return false;
   }
 }
 
-// 刷新房间列表（修复版）
+// -------- 房间列表 --------
 async function refreshRoomList() {
   const roomListEl = document.getElementById('roomList');
-  // 显示加载状态
   roomListEl.innerHTML = '<p style="color:#94a3b8;">⏳ 加载房间列表...</p>';
-
   if (!token) {
     roomListEl.innerHTML = '<p style="color:#94a3b8;">请先登录后查看房间</p>';
     return;
   }
-
   try {
     const res = await fetch('/api/rooms');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const rooms = await res.json();
-
     if (rooms.length === 0) {
       roomListEl.innerHTML = '<p style="color:#94a3b8;">🏠 暂无在线房间，快去创建吧</p>';
       return;
     }
-
     roomListEl.innerHTML = rooms.map(r => `
       <div class="room-item">
         <div class="info">
@@ -317,13 +316,13 @@ async function refreshRoomList() {
     console.error('房间列表加载错误:', err);
   }
 }
-
-async function quickJoin(rid) {
+window.quickJoin = function(rid) {
   document.getElementById('joinRoomId').value = rid;
   joinTab.click();
   joinRoomBtn.click();
-}
+};
 
+// -------- 标签切换 --------
 createTab.addEventListener('click', ()=>{
   createTab.classList.add('active'); joinTab.classList.remove('active');
   createPanel.style.display='block'; joinPanel.style.display='none';
@@ -333,15 +332,7 @@ joinTab.addEventListener('click', ()=>{
   createPanel.style.display='none'; joinPanel.style.display='block';
 });
 
-const urlParams = new URLSearchParams(window.location.search);
-const roomParam = urlParams.get('room');
-const inviteParam = urlParams.get('invite');
-if (roomParam) {
-  joinTab.click();
-  document.getElementById('joinRoomId').value = roomParam;
-  if (inviteParam) document.getElementById('joinInviteToken').value = inviteParam;
-}
-
+// -------- 创建房间（使用 REST） --------
 createRoomBtn.addEventListener('click', async () => {
   if (!token) { alert('请先登录'); return; }
   const color = parseInt(createColor.value);
@@ -357,16 +348,20 @@ createRoomBtn.addEventListener('click', async () => {
     if (data.success) {
       roomId = data.roomId;
       myColor = data.color;
-      startGame();
       if (data.inviteToken) {
         const link = `${location.origin}/gomoku-online.html?room=${roomId}&invite=${data.inviteToken}`;
         inviteLinkBox.style.display = 'block';
         inviteLinkInput.value = link;
       }
+      // 建立 WebSocket 连接并加入房间
+      startGame();
+      // 通过 WebSocket 加入房间（同时保留 REST 创建成功）
+      connectSocketAndJoin(roomId, password, data.inviteToken);
     } else alert('创建失败：' + data.error);
   } catch (e) { alert('网络错误，请重试'); }
 });
 
+// -------- 加入房间（使用 REST） --------
 joinRoomBtn.addEventListener('click', async () => {
   if (!token) { alert('请先登录'); return; }
   const roomIdInput = joinRoomId.value.trim().toUpperCase();
@@ -383,17 +378,63 @@ joinRoomBtn.addEventListener('click', async () => {
       roomId = roomIdInput;
       myColor = data.color;
       startGame();
-      setTimeout(fetchRoom, 500);
+      connectSocketAndJoin(roomId, password, inviteToken);
     } else alert('加入失败：' + data.error);
   } catch (e) { alert('网络错误，请重试'); }
 });
 
-function copyInviteLink() {
-  inviteLinkInput.select();
-  document.execCommand('copy');
-  alert('邀请链接已复制！');
+// -------- 建立 WebSocket 并加入房间 --------
+function connectSocketAndJoin(roomId, password, inviteToken) {
+  if (socket && socket.connected) {
+    socket.disconnect();
+  }
+  socket = io(); // 连接当前域名
+  socket.on('connect', () => {
+    console.log('WebSocket 已连接');
+    // 加入房间
+    socket.emit('join-room', {
+      roomId,
+      token,
+      password: password || undefined,
+      inviteToken: inviteToken || undefined
+    });
+  });
+
+  // 监听加入结果
+  socket.on('joined', (data) => {
+    console.log('加入房间成功', data);
+    myColor = data.color;
+    // 已进入游戏，等待后续更新
+  });
+
+  // 监听房间更新（核心）
+  socket.on('room-update', (room) => {
+    console.log('收到房间更新', room);
+    applyRoom(room);
+  });
+
+  // 监听新消息
+  socket.on('new-message', (msg) => {
+    appendChatMessage(msg);
+  });
+
+  // 错误处理
+  socket.on('error', (msg) => {
+    alert('WebSocket 错误：' + msg);
+  });
+
+  // 断线重连
+  socket.on('disconnect', () => {
+    console.log('WebSocket 断开');
+    statusMsg.textContent = '⚠️ 连接已断开，正在重连...';
+  });
+  socket.on('reconnect', () => {
+    console.log('WebSocket 重连成功');
+    statusMsg.textContent = '✅ 已重新连接';
+  });
 }
 
+// -------- 游戏界面切换 --------
 function startGame() {
   startScreen.style.display = 'none';
   gameScreen.style.display = 'flex';
@@ -406,236 +447,72 @@ function startGame() {
   unreadCount = 0;
   messageInitialized = false;
   updateUnreadBadge();
-  startPolling();
-  startHeartbeat();
-  fetchRoom();
-}
-
-function startHeartbeat() {
-  if (heartbeatInterval) clearInterval(heartbeatInterval);
-  heartbeatInterval = setInterval(async () => {
-    if (!roomId || !token) return;
-    try {
-      await fetch('/api/room/heartbeat', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ roomId }) });
-    } catch(e) {}
-  }, 10000);
-}
-
-function startPolling() {
-  if (pollingInterval) clearInterval(pollingInterval);
-  pollingInterval = setInterval(fetchRoom, 1000);
-}
-
-function stopPolling() {
-  if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
-  if (heartbeatInterval) { clearInterval(heartbeatInterval); heartbeatInterval = null; }
-}
-
-async function fetchRoom() {
-  if (!roomId || isPlacingMove) return;
-  try {
-    const res = await fetch(`/api/room/${roomId}`);
-    if (!res.ok) { stopPolling(); return; }
-    const room = await res.json();
-    if (isPlacingMove) return;
-    currentRoom = room;
-    board = room.board;
-    currentPlayer = room.currentPlayer;
-    history = room.history || [];
-    gameOver = room.gameOver;
-    const pe = Object.values(room.players).find(p=>p.username===username);
-    if (!pe) { stopPolling(); return; }
-    const other = Object.values(room.players).find(p=>p.username!==username);
-    const otherOnline = other ? other.online : false;
-    const allOnline = pe.online && otherOnline;
-
-    if (room.gameOver) {
-      const winner = room.winner;
-      showResult(winner === 0 ? '🤝 平局！' : (winner === myColor ? '🎉 你赢了！' : '😞 对方获胜'));
-    } else {
-      if (room.status === 'waiting') statusMsg.textContent = '⏳ 等待对手加入...';
-      else if (room.status === 'paused') statusMsg.textContent = otherOnline ? '⏸️ 游戏暂停' : '⚠️ 对方已离开';
-      else if (room.status === 'playing') {
-        const myTurn = (currentPlayer === myColor && allOnline);
-        statusDot.className = 'status-dot ' + (myTurn ? (myColor===1?'black':'white') : 'thinking');
-        statusText.textContent = myTurn ? '你的回合' : (otherOnline ? '对方思考中...' : '等待对方上线');
-        moveTag.textContent = '第 ' + (history.length + 1) + ' 手';
-      }
-    }
-    const messages = room.messages || [];
-    updateChatMessages(messages);
-    if (!messageInitialized) {
-      lastSeenMessageCount = messages.length;
-      messageInitialized = true;
-    } else {
-      if (!chatOpen) {
-        const newMsgs = messages.length - lastSeenMessageCount;
-        if (newMsgs > 0) unreadCount += newMsgs;
-      } else {
-        unreadCount = 0;
-      }
-      lastSeenMessageCount = messages.length;
-    }
-    updateUnreadBadge();
-    drawBoard();
-  } catch(e){}
-}
-
-async function refreshChatOnly() {
-  if (!roomId) return;
-  try {
-    const res = await fetch(`/api/room/${roomId}`);
-    if (!res.ok) return;
-    const room = await res.json();
-    currentRoom = room;
-    const messages = room.messages || [];
-    updateChatMessages(messages);
-    if (!messageInitialized) {
-      lastSeenMessageCount = messages.length;
-      messageInitialized = true;
-    } else {
-      if (!chatOpen) {
-        const newMsgs = messages.length - lastSeenMessageCount;
-        if (newMsgs > 0) unreadCount += newMsgs;
-      } else {
-        unreadCount = 0;
-      }
-      lastSeenMessageCount = messages.length;
-    }
-    updateUnreadBadge();
-  } catch(e) {}
-}
-
-function updateChatMessages(messages) {
-  const chatDiv = document.getElementById('chatMessages');
-  if (!chatDiv) return;
-  chatDiv.innerHTML = messages.map(m => `<div class="chat-message"><b>${m.username}:</b> ${m.text}</div>`).join('');
-  chatDiv.scrollTop = chatDiv.scrollHeight;
-}
-
-function updateUnreadBadge() {
-  const badge = document.getElementById('chatUnreadBadge');
-  if (!badge) return;
-  if (unreadCount > 0) {
-    badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-function openChat() {
-  document.getElementById('chatPanel').classList.add('open');
-  document.getElementById('chatToggle').style.display = 'none';
-  chatOpen = true;
-  unreadCount = 0;
-  if (currentRoom && currentRoom.messages) lastSeenMessageCount = currentRoom.messages.length;
-  updateUnreadBadge();
-}
-
-function closeChat() {
-  document.getElementById('chatPanel').classList.remove('open');
-  document.getElementById('chatToggle').style.display = 'flex';
-  chatOpen = false;
-}
-
-document.getElementById('chatToggle').addEventListener('click', openChat);
-document.getElementById('chatCloseBtn').addEventListener('click', closeChat);
-
-async function sendChat() {
-  const input = document.getElementById('chatInput');
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-  try {
-    await fetch('/api/room/chat', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ roomId, text })
-    });
-    refreshChatOnly();
-  } catch(e) {}
-}
-document.getElementById('chatInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendChat(); });
-
-// 落子（乐观更新）
-canvas.addEventListener('click', async (e) => {
-  if (gameOver || !currentRoom || isPlacingMove) return;
-  const cell = cellFromEvent(e);
-  if (!cell) return;
-  const { row, col } = cell;
-  if (board[row][col] !== 0) return;
-  const pe = Object.values(currentRoom.players).find(p=>p.username===username && p.online);
-  if (!pe || currentPlayer !== myColor) return;
-  const oldBoard = JSON.parse(JSON.stringify(board));
-  const oldHistory = [...history];
-  const oldPlayer = currentPlayer;
-  board[row][col] = myColor;
-  history.push({ row, col, player: myColor });
-  currentPlayer = myColor === 1 ? 2 : 1;
+  // 初始化空棋盘
+  board = Array(15).fill().map(() => Array(15).fill(0));
+  currentPlayer = 1;
+  gameOver = false;
+  history = [];
   drawBoard();
-  isPlacingMove = true;
-  try {
-    const res = await fetch('/api/room/move', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ roomId, row, col, player: myColor })
-    });
-    const data = await res.json();
-    if (!data.success) {
-      board = oldBoard; history = oldHistory; currentPlayer = oldPlayer;
-      drawBoard();
-      alert(data.error);
-    } else if (data.room) {
-      applyRoom(data.room);
-    }
-  } catch (err) {
-    board = oldBoard; history = oldHistory; currentPlayer = oldPlayer;
-    drawBoard();
-  } finally { isPlacingMove = false; }
-});
+  statusText.textContent = '等待对手加入...';
+  statusDot.className = 'status-dot black';
+}
 
+// -------- 应用房间状态（替代轮询） --------
 function applyRoom(room) {
+  if (isPlacingMove) return;
   currentRoom = room;
   board = room.board;
   currentPlayer = room.currentPlayer;
-  history = room.history;
+  history = room.history || [];
   gameOver = room.gameOver;
+
+  const pe = Object.values(room.players).find(p => p.username === username);
+  if (!pe) { leaveRoom(); return; }
+  const other = Object.values(room.players).find(p => p.username !== username);
+  const otherOnline = other ? other.online : false;
+  const allOnline = pe.online && otherOnline;
+
+  if (room.gameOver) {
+    const winner = room.winner;
+    showResult(winner === 0 ? '🤝 平局！' : (winner === myColor ? '🎉 你赢了！' : '😞 对方获胜'));
+  } else {
+    if (room.status === 'waiting') {
+      statusMsg.textContent = '⏳ 等待对手加入...';
+      statusText.textContent = '等待对手加入';
+      statusDot.className = 'status-dot black';
+    } else if (room.status === 'paused') {
+      statusMsg.textContent = otherOnline ? '⏸️ 游戏暂停' : '⚠️ 对方已离开';
+      statusText.textContent = otherOnline ? '游戏暂停' : '等待对方重新上线';
+      statusDot.className = 'status-dot thinking';
+    } else if (room.status === 'playing') {
+      const myTurn = (currentPlayer === myColor && allOnline);
+      statusDot.className = 'status-dot ' + (myTurn ? (myColor===1?'black':'white') : 'thinking');
+      statusText.textContent = myTurn ? '你的回合' : (otherOnline ? '对方思考中...' : '等待对方上线');
+      moveTag.textContent = '第 ' + (history.length + 1) + ' 手';
+    }
+  }
+
+  // 处理聊天消息（如果未初始化或需要更新）
+  const messages = room.messages || [];
+  updateChatMessages(messages);
+  if (!messageInitialized) {
+    lastSeenMessageCount = messages.length;
+    messageInitialized = true;
+  } else {
+    if (!chatOpen) {
+      const newMsgs = messages.length - lastSeenMessageCount;
+      if (newMsgs > 0) unreadCount += newMsgs;
+    } else {
+      unreadCount = 0;
+    }
+    lastSeenMessageCount = messages.length;
+  }
+  updateUnreadBadge();
+
   drawBoard();
 }
 
-undoBtn.addEventListener('click', async () => {
-  if (gameOver) return;
-  try {
-    const res = await fetch('/api/room/undo', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ roomId }) });
-    const data = await res.json();
-    if (!data.success) alert(data.error);
-  } catch(e) { alert('网络错误'); }
-});
-
-restartBtn.addEventListener('click', async () => {
-  try {
-    const res = await fetch('/api/room/restart', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ roomId }) });
-    const data = await res.json();
-    if (!data.success) alert(data.error);
-  } catch(e) { alert('网络错误'); }
-});
-
-window.leaveRoom = async function() {
-  if (!roomId) return;
-  try { await fetch('/api/room/leave', { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ roomId }) }); } catch(e) {}
-  stopPolling();
-  gameScreen.style.display = 'none';
-  startScreen.style.display = 'block';
-  overlay.classList.remove('show');
-  document.getElementById('chatWidget').style.display = 'none';
-  chatOpen = false;
-  document.getElementById('chatPanel').classList.remove('open');
-  document.getElementById('chatToggle').style.display = 'flex';
-  refreshRoomList();
-};
-
-// 绘制棋盘
+// -------- 绘制棋盘 --------
 function drawBoard() {
   ctx.clearRect(0,0,600,600);
   ctx.strokeStyle='rgba(74,56,38,0.75)'; ctx.lineWidth=1;
@@ -647,7 +524,7 @@ function drawBoard() {
   [3,7,11].forEach(r=>[3,7,11].forEach(c=>{ ctx.beginPath(); ctx.arc(MARGIN+c*CELL, MARGIN+r*CELL,3,0,Math.PI*2); ctx.fill(); }));
   for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (board[r]&&board[r][c]!==0) drawStone(r,c,board[r][c]);
   if (hoverCell && !gameOver && currentPlayer===myColor && board[hoverCell.row]&&board[hoverCell.row][hoverCell.col]===0) drawStone(hoverCell.row, hoverCell.col, myColor, true);
-  if (history.length>0&&!winningCells) {
+  if (history.length>0) {
     const last=history[history.length-1];
     ctx.strokeStyle='#e63946'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(MARGIN+last.col*CELL, MARGIN+last.row*CELL,5,0,Math.PI*2); ctx.stroke();
@@ -677,11 +554,110 @@ function showResult(text) {
   resultTitle.textContent=text; overlay.classList.add('show');
   statusText.textContent=text; statusDot.className='status-dot';
   undoBtn.disabled=true; restartBtn.disabled=false;
-  stopPolling();
 }
-document.getElementById('playAgainBtn').addEventListener('click',()=>{ overlay.classList.remove('show'); restartBtn.click(); });
+
+// -------- 下棋（通过 WebSocket） --------
+canvas.addEventListener('click', async (e) => {
+  if (gameOver || !currentRoom || isPlacingMove || !socket) return;
+  const cell = cellFromEvent(e);
+  if (!cell) return;
+  const { row, col } = cell;
+  if (board[row][col] !== 0) return;
+  const pe = Object.values(currentRoom.players).find(p=>p.username===username && p.online);
+  if (!pe || currentPlayer !== myColor) return;
+  
+  // 乐观更新
+  const oldBoard = JSON.parse(JSON.stringify(board));
+  const oldHistory = [...history];
+  const oldPlayer = currentPlayer;
+  board[row][col] = myColor;
+  history.push({ row, col });
+  currentPlayer = myColor === 1 ? 2 : 1;
+  drawBoard();
+  isPlacingMove = true;
+  
+  // 发送下棋事件
+  socket.emit('make-move', { roomId, row, col });
+  // 等待服务端返回 room-update 来确认或回滚
+  // 但为了快速回滚，我们在收到错误时恢复
+  socket.once('error', (msg) => {
+    if (msg.includes('不是你的回合') || msg.includes('该位置已有棋子')) {
+      board = oldBoard; history = oldHistory; currentPlayer = oldPlayer;
+      drawBoard();
+      alert(msg);
+    }
+    isPlacingMove = false;
+  });
+  // 但更可靠的是在 room-update 中重置 isPlacingMove
+  // 因为服务端会广播更新，我们在 applyRoom 中重置
+});
+
+// 在 applyRoom 中重置 isPlacingMove
+const originalApply = applyRoom;
+applyRoom = function(room) {
+  originalApply(room);
+  isPlacingMove = false;
+};
+
+// -------- 悔棋（通过 REST） --------
+undoBtn.addEventListener('click', async () => {
+  if (gameOver || !roomId) return;
+  try {
+    const res = await fetch('/api/room/undo', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ roomId })
+    });
+    const data = await res.json();
+    if (!data.success) alert(data.error);
+  } catch(e) { alert('网络错误'); }
+});
+
+// -------- 重新开始（通过 REST） --------
+restartBtn.addEventListener('click', async () => {
+  if (!roomId) return;
+  try {
+    const res = await fetch('/api/room/restart', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ roomId })
+    });
+    const data = await res.json();
+    if (!data.success) alert(data.error);
+  } catch(e) { alert('网络错误'); }
+});
+
+// -------- 离开房间 --------
+window.leaveRoom = async function() {
+  if (!roomId) return;
+  if (socket && socket.connected) {
+    socket.disconnect();
+  }
+  try {
+    await fetch('/api/room/leave', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ roomId })
+    });
+  } catch(e) {}
+  gameScreen.style.display = 'none';
+  startScreen.style.display = 'block';
+  overlay.classList.remove('show');
+  document.getElementById('chatWidget').style.display = 'none';
+  chatOpen = false;
+  document.getElementById('chatPanel').classList.remove('open');
+  document.getElementById('chatToggle').style.display = 'flex';
+  refreshRoomList();
+  roomId = '';
+};
+
+document.getElementById('playAgainBtn').addEventListener('click', ()=>{
+  overlay.classList.remove('show');
+  restartBtn.click();
+});
 document.getElementById('menuFromOverlayBtn').addEventListener('click', leaveRoom);
 document.getElementById('menuBtn').addEventListener('click', leaveRoom);
+
 document.addEventListener('keydown', e=>{
   if (gameScreen.style.display!=='flex') return;
   if (e.key==='Escape') leaveRoom();
@@ -689,6 +665,65 @@ document.addEventListener('keydown', e=>{
   else if (e.key==='u'||e.key==='U') undoBtn.click();
 });
 
+// -------- 聊天功能 --------
+function openChat() {
+  document.getElementById('chatPanel').classList.add('open');
+  document.getElementById('chatToggle').style.display = 'none';
+  chatOpen = true;
+  unreadCount = 0;
+  if (currentRoom && currentRoom.messages) lastSeenMessageCount = currentRoom.messages.length;
+  updateUnreadBadge();
+}
+function closeChat() {
+  document.getElementById('chatPanel').classList.remove('open');
+  document.getElementById('chatToggle').style.display = 'flex';
+  chatOpen = false;
+}
+document.getElementById('chatToggle').addEventListener('click', openChat);
+document.getElementById('chatCloseBtn').addEventListener('click', closeChat);
+
+function updateChatMessages(messages) {
+  const chatDiv = document.getElementById('chatMessages');
+  if (!chatDiv) return;
+  chatDiv.innerHTML = messages.map(m => `<div class="chat-message"><b>${m.username}:</b> ${m.text}</div>`).join('');
+  chatDiv.scrollTop = chatDiv.scrollHeight;
+}
+function appendChatMessage(msg) {
+  const chatDiv = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-message';
+  div.innerHTML = `<b>${msg.username}:</b> ${msg.text}`;
+  chatDiv.appendChild(div);
+  chatDiv.scrollTop = chatDiv.scrollHeight;
+}
+function updateUnreadBadge() {
+  const badge = document.getElementById('chatUnreadBadge');
+  if (!badge) return;
+  if (unreadCount > 0) {
+    badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+function sendChat() {
+  if (!socket || !socket.connected) { alert('未连接，请刷新重试'); return; }
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  socket.emit('send-message', { roomId, text });
+}
+document.getElementById('chatInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendChat(); });
+
+// -------- 复制邀请链接 --------
+function copyInviteLink() {
+  inviteLinkInput.select();
+  document.execCommand('copy');
+  alert('邀请链接已复制！');
+}
+
+// -------- 初始化 --------
 createTab.click();
 checkLogin();
 document.getElementById('chatWidget').style.display = 'none';
