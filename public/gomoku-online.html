@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>五子棋 · 联机版</title>
-  <!-- 强制不缓存 -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -422,8 +421,9 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
     }
   });
 
+  // 错误提示：直接显示原因，不加前缀
   socket.on('error', (msg) => {
-    alert('WebSocket 错误：' + msg);
+    alert(msg);
   });
 
   socket.on('disconnect', () => {
@@ -435,14 +435,18 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
     statusMsg.textContent = '✅ 已重新连接';
   });
 
-  // 重新开始相关
+  // 重新开始相关（修复循环弹窗）
   socket.on('restart-request', ({ from }) => {
-    if (confirm(`${from} 请求重新开始，是否同意？`)) {
-      socket.emit('restart-request', { roomId });
+    // 只有不是自己发起的才弹窗
+    if (from !== username) {
+      if (confirm(`${from} 请求重新开始，是否同意？`)) {
+        socket.emit('restart-request', { roomId });
+      }
     }
   });
   socket.on('restart-agreed', ({ from }) => {
     // 可选提示
+    // alert('对方已同意，游戏重新开始');
   });
 
   // 监听重新开始和悔棋成功
@@ -477,7 +481,7 @@ function startGame() {
   statusDot.className = 'status-dot black';
 }
 
-// -------- 核心：应用房间状态（修复版） --------
+// -------- 核心：应用房间状态 --------
 function applyRoom(room) {
   const myPlayer = Object.values(room.players).find(p => p.username === username);
   if (!myPlayer) {
