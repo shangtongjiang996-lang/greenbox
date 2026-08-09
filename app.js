@@ -365,7 +365,7 @@ app.put('/api/admin/files/:id', upload.single('file'), async (req, res) => {
   res.json({ success: true });
 });
 
-// ===== 修复：管理员房间列表返回 players 数组 =====
+// 管理员房间列表（修复 players 数组）
 app.get('/api/admin/rooms', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   try {
@@ -456,7 +456,6 @@ app.get('/api/rooms', async (req, res) => {
       const roomId = key.name.replace('gomoku:', '');
       const room = await kvGet(key.name);
       if (!room) continue;
-      // 只显示等待、暂停、进行中的房间，不显示已关闭或已结束的
       if (room.status === 'closed' || room.status === 'finished') continue;
       rooms.push({
         roomId,
@@ -485,12 +484,12 @@ app.post('/api/room/create', async (req, res) => {
   const now = Date.now();
   const room = {
     board: Array(15).fill().map(() => Array(15).fill(0)),
-    currentPlayer: color === 1 ? 1 : 2,
+    currentPlayer: 1,   // 黑子先手，无论房主选什么
     gameOver: false,
     history: [],
     players: { [color]: { username: session.username, online: true, color } },
     creator: session.username,
-    creatorColor: color,
+    creatorColor: color,  // 记录房主选择的颜色
     password: password || null,
     inviteToken: invite ? crypto.randomUUID() : null,
     status: 'waiting',
@@ -611,7 +610,7 @@ app.post('/api/room/restart', async (req, res) => {
   const onlineCount = Object.values(room.players).filter(p => p.online).length;
   if (onlineCount < 2) return res.status(400).json({ error: '需要两人都在线才能重新开始' });
   room.board = Array(15).fill().map(() => Array(15).fill(0));
-  room.currentPlayer = room.creatorColor;
+  room.currentPlayer = 1;   // 黑子先手
   room.gameOver = false;
   room.history = [];
   room.winner = null;
@@ -668,7 +667,6 @@ async function getRoom(roomId) {
   return room;
 }
 
-// 修改 saveRoom 支持自定义过期时间
 async function saveRoom(roomId, room, options = {}) {
   roomCache.set(roomId, room);
   await kvPut(`gomoku:${roomId}`, room, { expirationTtl: options.expirationTtl || 7200 });
@@ -846,6 +844,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 重新开始请求（修复循环弹窗）
   socket.on('restart-request', async ({ roomId }) => {
     try {
       const room = await getRoom(roomId);
@@ -853,9 +852,11 @@ io.on('connection', (socket) => {
       const player = Object.values(room.players).find(p => p.username === socket.data.username && p.online);
       if (!player) return socket.emit('error', '你不在房间或已离线');
 
+      // 如果已经有请求且不是自己发的，说明对方请求重开，我们同意
       if (room.restartRequestedBy && room.restartRequestedBy !== socket.data.username) {
+        // 同意重开
         room.board = Array(15).fill().map(() => Array(15).fill(0));
-        room.currentPlayer = room.creatorColor;
+        room.currentPlayer = 1;   // 黑子先手
         room.gameOver = false;
         room.history = [];
         room.winner = null;
@@ -868,16 +869,20 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('room-update', room);
         io.to(roomId).emit('restart-agreed', { from: socket.data.username });
       } else {
-        room.restartRequestedBy = socket.data.username;
-        await saveRoom(roomId, room);
-        io.to(roomId).emit('restart-request', { from: socket.data.username });
+        // 第一次请求，或者自己重复请求（忽略自己重复请求）
+        if (room.restartRequestedBy !== socket.data.username) {
+          room.restartRequestedBy = socket.data.username;
+          await saveRoom(roomId, room);
+          // 广播给其他人（不包括自己）
+          socket.to(roomId).emit('restart-request', { from: socket.data.username });
+        }
       }
     } catch (e) {
       socket.emit('error', e.message);
     }
   });
 
-  // ===== 修复：断开连接时处理房间过期 =====
+  // 断开连接
   socket.on('disconnect', async () => {
     if (!socket.data?.roomId) return;
     const room = await getRoom(socket.data.roomId);
