@@ -121,7 +121,6 @@ async function checkRateLimit(key, limit, windowSeconds) {
 
 // ======== REST API ========
 
-// 注册
 app.post('/api/register', async (req, res) => {
   const ip = clientIp(req);
   if (!(await checkRateLimit(`rl:register:${ip}`, 5, 3600))) return res.status(429).json({ error: '请求过于频繁' });
@@ -137,7 +136,6 @@ app.post('/api/register', async (req, res) => {
   res.json({ success: true, message: '注册成功' });
 });
 
-// 登录
 app.post('/api/login', async (req, res) => {
   const ip = clientIp(req);
   if (!(await checkRateLimit(`rl:login:${ip}`, 10, 600))) return res.status(429).json({ error: '登录过于频繁' });
@@ -169,7 +167,6 @@ app.post('/api/login', async (req, res) => {
   res.json({ success: true, token, username, role: user.role || 'user', needsUpgrade });
 });
 
-// 验证 token
 app.get('/api/verify', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -180,14 +177,12 @@ app.get('/api/verify', async (req, res) => {
   res.json({ valid: true, username: session.username, role: session.role, needsUpgrade });
 });
 
-// 登出
 app.post('/api/logout', async (req, res) => {
   const token = getBearerToken(req);
   if (token) await kvDelete(`session:${token}`);
   res.json({ success: true });
 });
 
-// 修改密码
 app.post('/api/change-my-password', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -205,7 +200,6 @@ app.post('/api/change-my-password', async (req, res) => {
   res.json({ success: true });
 });
 
-// 删除账号
 app.post('/api/delete-account', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -218,13 +212,11 @@ app.post('/api/delete-account', async (req, res) => {
   res.json({ success: true });
 });
 
-// 获取站点数据
 app.get('/api/data', async (req, res) => {
   const data = await kvGet('site_data') || { tools: [], changelogs: [] };
   res.json(data);
 });
 
-// 更新站点数据（需管理员）
 app.post('/api/update', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const clean = req.body;
@@ -232,7 +224,6 @@ app.post('/api/update', async (req, res) => {
   res.json({ success: true });
 });
 
-// 上传工具（需管理员）
 app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { name, icon, description, category } = req.body;
@@ -250,7 +241,6 @@ app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   res.json({ success: true, id, url: `/tool/${id}` });
 });
 
-// 获取工具内容
 app.get('/tool/:id', async (req, res) => {
   const html = await kvGet(`tool_content:${req.params.id}`);
   if (!html) return res.status(404).send('工具不存在');
@@ -375,6 +365,7 @@ app.put('/api/admin/files/:id', upload.single('file'), async (req, res) => {
   res.json({ success: true });
 });
 
+// ===== 修复：管理员房间列表返回 players 数组 =====
 app.get('/api/admin/rooms', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   try {
@@ -393,6 +384,7 @@ app.get('/api/admin/rooms', async (req, res) => {
         hasPassword: !!room.password,
         createdAt: room.created || Date.now(),
         lastActive: room.lastActive || 0,
+        players: Object.values(room.players || {}).map(p => ({ username: p.username, online: p.online }))
       });
     }
     rooms.sort((a,b) => b.createdAt - a.createdAt);
@@ -464,6 +456,8 @@ app.get('/api/rooms', async (req, res) => {
       const roomId = key.name.replace('gomoku:', '');
       const room = await kvGet(key.name);
       if (!room) continue;
+      // 只显示等待、暂停、进行中的房间，不显示已关闭或已结束的
+      if (room.status === 'closed' || room.status === 'finished') continue;
       rooms.push({
         roomId,
         creator: room.creator || '未知',
@@ -674,9 +668,10 @@ async function getRoom(roomId) {
   return room;
 }
 
-async function saveRoom(roomId, room) {
+// 修改 saveRoom 支持自定义过期时间
+async function saveRoom(roomId, room, options = {}) {
   roomCache.set(roomId, room);
-  await kvPut(`gomoku:${roomId}`, room, { expirationTtl: 7200 });
+  await kvPut(`gomoku:${roomId}`, room, { expirationTtl: options.expirationTtl || 7200 });
 }
 
 function checkWin(row, col, player, board) {
@@ -702,7 +697,6 @@ io.on('connection', (socket) => {
   console.log('新连接:', socket.id);
   socket.data = {};
 
-  // 加入房间（修复重连状态）
   socket.on('join-room', async ({ roomId, token, password, inviteToken }) => {
     try {
       const session = await getSession(token);
@@ -760,7 +754,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 下棋
   socket.on('make-move', async ({ roomId, row, col }) => {
     try {
       if (!socket.data?.roomId || socket.data.roomId !== roomId) return socket.emit('error', '未加入房间');
@@ -776,7 +769,7 @@ io.on('connection', (socket) => {
       
       room.board[row][col] = player;
       room.history.push({ row, col });
-      room.undoBy = null;   // 清除悔棋标记，允许后续悔棋
+      room.undoBy = null;   // 清除悔棋标记
 
       const win = checkWin(row, col, player, room.board);
       if (win) {
@@ -798,7 +791,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 聊天
   socket.on('send-message', async ({ roomId, text }) => {
     try {
       if (!socket.data?.roomId || socket.data.roomId !== roomId) return;
@@ -813,7 +805,6 @@ io.on('connection', (socket) => {
     } catch (e) {}
   });
 
-  // 悔棋（WebSocket）—— 修正版
   socket.on('undo', async ({ roomId }) => {
     try {
       const room = await getRoom(roomId);
@@ -824,29 +815,24 @@ io.on('connection', (socket) => {
       const player = Object.values(room.players).find(p => p.username === socket.data.username && p.online);
       if (!player) return socket.emit('error', '你不在房间或已离线');
 
-      // 检查最后一步是否是该玩家的棋子（只能悔自己的）
       if (room.history.length === 0) return socket.emit('error', '没有可悔的棋');
       const lastMove = room.history[room.history.length - 1];
       if (room.board[lastMove.row][lastMove.col] !== player.color) {
         return socket.emit('error', '只能悔自己的棋');
       }
 
-      // 检查是否连续悔棋（刚悔过，且该玩家还未落子）
       if (room.undoBy === socket.data.username) {
         return socket.emit('error', '你已悔过棋，请先落子再悔');
       }
 
-      // 检查悔棋次数（每人3次）
       if (!room.undoCountPerPlayer) room.undoCountPerPlayer = {};
       const playerUndoCount = room.undoCountPerPlayer[socket.data.username] || 0;
       if (playerUndoCount >= 3) {
         return socket.emit('error', '你的悔棋次数已用完（最多3次）');
       }
 
-      // 执行悔棋
       room.history.pop();
       room.board[lastMove.row][lastMove.col] = 0;
-      // 悔棋后，落子权交给悔棋者（让他重新下）
       room.currentPlayer = player.color;
       room.undoBy = socket.data.username;
       room.undoCountPerPlayer[socket.data.username] = (room.undoCountPerPlayer[socket.data.username] || 0) + 1;
@@ -860,7 +846,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 请求重新开始（双方同意）
   socket.on('restart-request', async ({ roomId }) => {
     try {
       const room = await getRoom(roomId);
@@ -892,7 +877,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 断开连接
+  // ===== 修复：断开连接时处理房间过期 =====
   socket.on('disconnect', async () => {
     if (!socket.data?.roomId) return;
     const room = await getRoom(socket.data.roomId);
@@ -904,7 +889,9 @@ io.on('connection', (socket) => {
       const online = Object.values(room.players).filter(p => p.online).length;
       room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
       room.lastActive = Date.now();
-      await saveRoom(socket.data.roomId, room);
+      // 如果在线人数为0，设置短过期时间（10分钟），让房间自动清理
+      const ttl = (online === 0) ? 600 : 7200;
+      await saveRoom(socket.data.roomId, room, { expirationTtl: ttl });
       io.to(socket.data.roomId).emit('room-update', room);
     }
   });
