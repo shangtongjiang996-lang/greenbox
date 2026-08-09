@@ -78,10 +78,11 @@
     .overlay.show { display: flex; }
     .overlay .result-title { font-size: 26px; margin-bottom: 20px; }
     .overlay button { padding: 10px 22px; font-size: 14px; background: #fff8ea; color: #6b4526; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-    #controls { margin: 18px 0; display: flex; gap: 10px; }
+    #controls { margin: 18px 0; display: flex; gap: 10px; align-items: center; }
     button.ctrl { padding: 10px 22px; font-size: 14px; background: #7a5230; color: #fff8ea; border: none; border-radius: 8px; cursor: pointer; }
     button.ctrl:disabled { background: #cbb691; cursor: not-allowed; }
     button.ctrl.secondary { background: #e4cf9d; color: #6b4526; }
+    #undoRemain { font-size: 13px; color: #8a6d47; margin-left: 6px; }
 
     .chat-widget {
       position: fixed; bottom: 20px; right: 20px; z-index: 500;
@@ -198,6 +199,7 @@
     </div>
     <div id="controls">
       <button class="ctrl" id="undoBtn" disabled>悔棋</button>
+      <span id="undoRemain">剩余3次</span>
       <button class="ctrl" id="restartBtn" disabled>重新开始</button>
       <button class="ctrl secondary" id="menuBtn">返回菜单</button>
     </div>
@@ -402,7 +404,6 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
 
   socket.on('joined', (data) => {
     console.log('加入房间成功', data);
-    // 只在初次加入时设置 myColor，重连时不覆盖
     if (data.action !== 'reconnect') {
       myColor = data.color;
     }
@@ -434,6 +435,17 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
     statusMsg.textContent = '✅ 已重新连接';
   });
 
+  // 重新开始相关
+  socket.on('restart-request', ({ from }) => {
+    if (confirm(`${from} 请求重新开始，是否同意？`)) {
+      socket.emit('restart-request', { roomId });
+    }
+  });
+  socket.on('restart-agreed', ({ from }) => {
+    // 可选提示
+    // alert('对方已同意，游戏重新开始');
+  });
+
   // 监听重新开始和悔棋成功
   socket.on('restart-success', (room) => {
     applyRoom(room);
@@ -460,6 +472,7 @@ function startGame() {
   currentPlayer = 1;
   gameOver = false;
   history = [];
+  document.getElementById('undoRemain').textContent = '剩余3次';
   drawBoard();
   statusText.textContent = '等待对手加入...';
   statusDot.className = 'status-dot black';
@@ -467,14 +480,12 @@ function startGame() {
 
 // -------- 核心：应用房间状态（修复版） --------
 function applyRoom(room) {
-  // 获取当前玩家信息
   const myPlayer = Object.values(room.players).find(p => p.username === username);
   if (!myPlayer) {
     leaveRoom();
     return;
   }
 
-  // 强制校准 myColor（服务端为主）
   if (myColor !== myPlayer.color) {
     console.warn('myColor 修正:', myColor, '->', myPlayer.color);
     myColor = myPlayer.color;
@@ -501,7 +512,12 @@ function applyRoom(room) {
     return;
   }
 
-  // 状态更新
+  // 更新悔棋剩余次数
+  if (room.undoCountPerPlayer) {
+    const remain = 3 - (room.undoCountPerPlayer[username] || 0);
+    document.getElementById('undoRemain').textContent = `剩余${remain}次`;
+  }
+
   if (room.status === 'waiting') {
     statusMsg.textContent = '⏳ 等待对手加入...';
     statusText.textContent = '等待对手加入';
@@ -528,7 +544,6 @@ function applyRoom(room) {
     statusDot.className = 'status-dot thinking';
   }
 
-  // 聊天消息
   const messages = room.messages || [];
   updateChatMessages(messages);
   if (!messageInitialized) {
@@ -598,7 +613,6 @@ canvas.addEventListener('click', async (e) => {
   const cell = cellFromEvent(e);
   if (!cell) return;
   const { row, col } = cell;
-  // 简单校验：本地棋盘该位置已有棋子（虽然后端会再次校验，但提前反馈）
   if (board[row][col] !== 0) {
     alert('该位置已有棋子');
     return;
@@ -613,7 +627,6 @@ canvas.addEventListener('click', async (e) => {
     return;
   }
 
-  // 发送落子请求，不进行乐观更新，等待服务器广播
   socket.emit('make-move', { roomId, row, col });
 });
 
@@ -626,13 +639,13 @@ undoBtn.addEventListener('click', () => {
   socket.emit('undo', { roomId });
 });
 
-// -------- 重新开始（WebSocket） --------
+// -------- 重新开始（请求） --------
 restartBtn.addEventListener('click', () => {
   if (!roomId || !socket || !socket.connected) {
     alert('无法重新开始：未连接');
     return;
   }
-  socket.emit('restart', { roomId });
+  socket.emit('restart-request', { roomId });
 });
 
 // -------- 离开房间（REST） --------
@@ -661,7 +674,11 @@ window.leaveRoom = async function() {
 
 document.getElementById('playAgainBtn').addEventListener('click', ()=>{
   overlay.classList.remove('show');
-  restartBtn.click();
+  if (roomId && socket && socket.connected) {
+    socket.emit('restart-request', { roomId });
+  } else {
+    alert('连接已断开，请刷新重试');
+  }
 });
 document.getElementById('menuFromOverlayBtn').addEventListener('click', leaveRoom);
 document.getElementById('menuBtn').addEventListener('click', leaveRoom);
