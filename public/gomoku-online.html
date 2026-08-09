@@ -255,7 +255,7 @@ const joinPassword = document.getElementById('joinPassword');
 const joinInviteToken = document.getElementById('joinInviteToken');
 
 let board = [], currentPlayer = 1, gameOver = false, history = [], hoverCell = null;
-let myColor = 1, roomId = '', isPlacingMove = false;
+let myColor = 1, roomId = '';
 let token = localStorage.getItem('greenbox_token'), username = '';
 let currentRoom = null;
 let socket = null;
@@ -467,14 +467,14 @@ function startGame() {
 
 // -------- 核心：应用房间状态（修复版） --------
 function applyRoom(room) {
-  if (isPlacingMove) return;
-
-  // 强制校准 myColor
+  // 获取当前玩家信息
   const myPlayer = Object.values(room.players).find(p => p.username === username);
   if (!myPlayer) {
     leaveRoom();
     return;
   }
+
+  // 强制校准 myColor（服务端为主）
   if (myColor !== myPlayer.color) {
     console.warn('myColor 修正:', myColor, '->', myPlayer.color);
     myColor = myPlayer.color;
@@ -508,7 +508,6 @@ function applyRoom(room) {
     statusDot.className = 'status-dot black';
   } else if (room.status === 'paused') {
     if (allOnline && !room.gameOver) {
-      // 双方在线且游戏未结束，显示恢复中（实际下一手会自动变 playing）
       statusMsg.textContent = '⏳ 恢复中...';
       statusText.textContent = '恢复中...';
       statusDot.className = 'status-dot thinking';
@@ -595,40 +594,28 @@ function showResult(text) {
 
 // -------- 下棋（通过 WebSocket） --------
 canvas.addEventListener('click', async (e) => {
-  if (gameOver || !currentRoom || isPlacingMove || !socket) return;
+  if (gameOver || !currentRoom || !socket) return;
   const cell = cellFromEvent(e);
   if (!cell) return;
   const { row, col } = cell;
-  if (board[row][col] !== 0) return;
+  // 简单校验：本地棋盘该位置已有棋子（虽然后端会再次校验，但提前反馈）
+  if (board[row][col] !== 0) {
+    alert('该位置已有棋子');
+    return;
+  }
   const pe = Object.values(currentRoom.players).find(p=>p.username===username && p.online);
-  if (!pe || currentPlayer !== myColor) return;
-  
-  const oldBoard = JSON.parse(JSON.stringify(board));
-  const oldHistory = [...history];
-  const oldPlayer = currentPlayer;
-  board[row][col] = myColor;
-  history.push({ row, col });
-  currentPlayer = myColor === 1 ? 2 : 1;
-  drawBoard();
-  isPlacingMove = true;
-  
-  socket.emit('make-move', { roomId, row, col });
-  socket.once('error', (msg) => {
-    if (msg.includes('不是你的回合') || msg.includes('该位置已有棋子')) {
-      board = oldBoard; history = oldHistory; currentPlayer = oldPlayer;
-      drawBoard();
-      alert(msg);
-    }
-    isPlacingMove = false;
-  });
-});
+  if (!pe) {
+    alert('你不在房间或已离线');
+    return;
+  }
+  if (currentPlayer !== myColor) {
+    alert('不是你的回合');
+    return;
+  }
 
-// 在 applyRoom 中重置 isPlacingMove
-const originalApply = applyRoom;
-applyRoom = function(room) {
-  originalApply(room);
-  isPlacingMove = false;
-};
+  // 发送落子请求，不进行乐观更新，等待服务器广播
+  socket.emit('make-move', { roomId, row, col });
+});
 
 // -------- 悔棋（WebSocket） --------
 undoBtn.addEventListener('click', () => {
