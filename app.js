@@ -776,6 +776,8 @@ io.on('connection', (socket) => {
       
       room.board[row][col] = player;
       room.history.push({ row, col });
+      room.undoBy = null;   // 清除悔棋标记，允许后续悔棋
+
       const win = checkWin(row, col, player, room.board);
       if (win) {
         room.gameOver = true;
@@ -811,37 +813,45 @@ io.on('connection', (socket) => {
     } catch (e) {}
   });
 
-  // 悔棋（WebSocket）
+  // 悔棋（WebSocket）—— 修正版
   socket.on('undo', async ({ roomId }) => {
     try {
       const room = await getRoom(roomId);
       if (!room) return socket.emit('error', '房间不存在');
       if (room.gameOver) return socket.emit('error', '游戏已结束');
       if (room.status !== 'playing') return socket.emit('error', '游戏未开始');
+
       const player = Object.values(room.players).find(p => p.username === socket.data.username && p.online);
       if (!player) return socket.emit('error', '你不在房间或已离线');
-      if (room.currentPlayer !== player.color) {
-        return socket.emit('error', '不是你的回合');
-      }
-      if (room.undoBy === socket.data.username) {
-        return socket.emit('error', '你已悔过棋，等对方下完再悔');
-      }
-      if (!room.undoCountPerPlayer) room.undoCountPerPlayer = {};
-      const playerUndoCount = room.undoCountPerPlayer[socket.data.username] || 0;
-      if (playerUndoCount >= 3) {
-        return socket.emit('error', '你的悔棋次数已用完（最多3次）');
-      }
+
+      // 检查最后一步是否是该玩家的棋子（只能悔自己的）
       if (room.history.length === 0) return socket.emit('error', '没有可悔的棋');
       const lastMove = room.history[room.history.length - 1];
       if (room.board[lastMove.row][lastMove.col] !== player.color) {
         return socket.emit('error', '只能悔自己的棋');
       }
+
+      // 检查是否连续悔棋（刚悔过，且该玩家还未落子）
+      if (room.undoBy === socket.data.username) {
+        return socket.emit('error', '你已悔过棋，请先落子再悔');
+      }
+
+      // 检查悔棋次数（每人3次）
+      if (!room.undoCountPerPlayer) room.undoCountPerPlayer = {};
+      const playerUndoCount = room.undoCountPerPlayer[socket.data.username] || 0;
+      if (playerUndoCount >= 3) {
+        return socket.emit('error', '你的悔棋次数已用完（最多3次）');
+      }
+
+      // 执行悔棋
       room.history.pop();
       room.board[lastMove.row][lastMove.col] = 0;
-      room.currentPlayer = player.color === 1 ? 2 : 1;
+      // 悔棋后，落子权交给悔棋者（让他重新下）
+      room.currentPlayer = player.color;
       room.undoBy = socket.data.username;
       room.undoCountPerPlayer[socket.data.username] = (room.undoCountPerPlayer[socket.data.username] || 0) + 1;
       room.lastActive = Date.now();
+
       await saveRoom(roomId, room);
       io.to(roomId).emit('room-update', room);
       socket.emit('undo-success', room);
