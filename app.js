@@ -503,6 +503,9 @@ app.post('/api/room/create', async (req, res) => {
     lastActive: now,
     created: now,
     messages: [],
+    undoCountPerPlayer: {},
+    undoBy: null,
+    restartRequestedBy: null
   };
   try {
     await kvPut(`gomoku:${roomId}`, room, { expirationTtl: 7200 });
@@ -619,6 +622,9 @@ app.post('/api/room/restart', async (req, res) => {
   room.history = [];
   room.winner = null;
   room.status = 'playing';
+  room.undoCountPerPlayer = {};
+  room.undoBy = null;
+  room.restartRequestedBy = null;
   room.lastActive = Date.now();
   await kvPut(key, room, { expirationTtl: 7200 });
   res.json({ success: true });
@@ -697,68 +703,62 @@ io.on('connection', (socket) => {
   socket.data = {};
 
   // 加入房间（修复重连状态）
-socket.on('join-room', async ({ roomId, token, password, inviteToken }) => {
-  try {
-    const session = await getSession(token);
-    if (!session) return socket.emit('error', '请先登录');
-    const room = await getRoom(roomId);
-    if (!room) return socket.emit('error', '房间不存在');
-    if (room.status === 'closed' || room.status === 'finished') return socket.emit('error', '房间已结束');
+  socket.on('join-room', async ({ roomId, token, password, inviteToken }) => {
+    try {
+      const session = await getSession(token);
+      if (!session) return socket.emit('error', '请先登录');
+      const room = await getRoom(roomId);
+      if (!room) return socket.emit('error', '房间不存在');
+      if (room.status === 'closed' || room.status === 'finished') return socket.emit('error', '房间已结束');
 
-    let valid = false;
-    if (inviteToken && room.inviteToken === inviteToken) valid = true;
-    if (!valid && room.password && room.password !== password) return socket.emit('error', '密码错误');
+      let valid = false;
+      if (inviteToken && room.inviteToken === inviteToken) valid = true;
+      if (!valid && room.password && room.password !== password) return socket.emit('error', '密码错误');
 
-    let existingColor = null;
-    for (const [color, p] of Object.entries(room.players)) {
-      if (p.username === session.username) { existingColor = Number(color); break; }
-    }
+      let existingColor = null;
+      for (const [color, p] of Object.entries(room.players)) {
+        if (p.username === session.username) { existingColor = Number(color); break; }
+      }
 
-    // ----- 重连分支（已修复） -----
-    if (existingColor !== null) {
-      room.players[existingColor].online = true;
+      if (existingColor !== null) {
+        room.players[existingColor].online = true;
+        const total = Object.keys(room.players).length;
+        const online = Object.values(room.players).filter(p => p.online).length;
+        room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
+        await saveRoom(roomId, room);
+        socket.join(roomId);
+        socket.data = { username: session.username, roomId, color: existingColor };
+        io.to(roomId).emit('room-update', room);
+        return socket.emit('joined', { color: existingColor, action: 'reconnect' });
+      }
 
-      // ✅ 修复：重新计算房间状态
+      const occupied = Object.keys(room.players).map(Number);
+      let color = null;
+      if (room.status === 'waiting' || room.status === 'paused') {
+        if (occupied.length < 2) color = occupied.includes(1) ? 2 : 1;
+        else return socket.emit('error', '房间已满');
+      } else if (room.status === 'playing') {
+        const offline = Object.values(room.players).find(p => !p.online);
+        if (offline) {
+          color = offline.color;
+          delete room.players[color];
+        } else return socket.emit('error', '房间已满且无人离线');
+      } else return socket.emit('error', '房间状态异常');
+
+      room.players[color] = { username: session.username, online: true, color };
       const total = Object.keys(room.players).length;
       const online = Object.values(room.players).filter(p => p.online).length;
       room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
-      // 如果游戏已结束，入口已拦截，无需额外处理
-
+      room.lastActive = Date.now();
       await saveRoom(roomId, room);
       socket.join(roomId);
-      socket.data = { username: session.username, roomId, color: existingColor };
+      socket.data = { username: session.username, roomId, color };
       io.to(roomId).emit('room-update', room);
-      return socket.emit('joined', { color: existingColor, action: 'reconnect' });
+      socket.emit('joined', { color, action: 'join' });
+    } catch (e) {
+      socket.emit('error', e.message);
     }
-
-    // ----- 新玩家加入（保持不变） -----
-    const occupied = Object.keys(room.players).map(Number);
-    let color = null;
-    if (room.status === 'waiting' || room.status === 'paused') {
-      if (occupied.length < 2) color = occupied.includes(1) ? 2 : 1;
-      else return socket.emit('error', '房间已满');
-    } else if (room.status === 'playing') {
-      const offline = Object.values(room.players).find(p => !p.online);
-      if (offline) {
-        color = offline.color;
-        delete room.players[color];
-      } else return socket.emit('error', '房间已满且无人离线');
-    } else return socket.emit('error', '房间状态异常');
-
-    room.players[color] = { username: session.username, online: true, color };
-    const total = Object.keys(room.players).length;
-    const online = Object.values(room.players).filter(p => p.online).length;
-    room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
-    room.lastActive = Date.now();
-    await saveRoom(roomId, room);
-    socket.join(roomId);
-    socket.data = { username: session.username, roomId, color };
-    io.to(roomId).emit('room-update', room);
-    socket.emit('joined', { color, action: 'join' });
-  } catch (e) {
-    socket.emit('error', e.message);
-  }
-});
+  });
 
   // 下棋
   socket.on('make-move', async ({ roomId, row, col }) => {
@@ -820,10 +820,27 @@ socket.on('join-room', async ({ roomId, token, password, inviteToken }) => {
       if (room.status !== 'playing') return socket.emit('error', '游戏未开始');
       const player = Object.values(room.players).find(p => p.username === socket.data.username && p.online);
       if (!player) return socket.emit('error', '你不在房间或已离线');
+      if (room.currentPlayer !== player.color) {
+        return socket.emit('error', '不是你的回合');
+      }
+      if (room.undoBy === socket.data.username) {
+        return socket.emit('error', '你已悔过棋，等对方下完再悔');
+      }
+      if (!room.undoCountPerPlayer) room.undoCountPerPlayer = {};
+      const playerUndoCount = room.undoCountPerPlayer[socket.data.username] || 0;
+      if (playerUndoCount >= 3) {
+        return socket.emit('error', '你的悔棋次数已用完（最多3次）');
+      }
       if (room.history.length === 0) return socket.emit('error', '没有可悔的棋');
-      const last = room.history.pop();
-      room.board[last.row][last.col] = 0;
-      room.currentPlayer = room.currentPlayer === 1 ? 2 : 1;
+      const lastMove = room.history[room.history.length - 1];
+      if (room.board[lastMove.row][lastMove.col] !== player.color) {
+        return socket.emit('error', '只能悔自己的棋');
+      }
+      room.history.pop();
+      room.board[lastMove.row][lastMove.col] = 0;
+      room.currentPlayer = player.color === 1 ? 2 : 1;
+      room.undoBy = socket.data.username;
+      room.undoCountPerPlayer[socket.data.username] = (room.undoCountPerPlayer[socket.data.username] || 0) + 1;
       room.lastActive = Date.now();
       await saveRoom(roomId, room);
       io.to(roomId).emit('room-update', room);
@@ -833,25 +850,33 @@ socket.on('join-room', async ({ roomId, token, password, inviteToken }) => {
     }
   });
 
-  // 重新开始（WebSocket）
-  socket.on('restart', async ({ roomId }) => {
+  // 请求重新开始（双方同意）
+  socket.on('restart-request', async ({ roomId }) => {
     try {
       const room = await getRoom(roomId);
       if (!room) return socket.emit('error', '房间不存在');
       const player = Object.values(room.players).find(p => p.username === socket.data.username && p.online);
       if (!player) return socket.emit('error', '你不在房间或已离线');
-      const onlineCount = Object.values(room.players).filter(p => p.online).length;
-      if (onlineCount < 2) return socket.emit('error', '需要两人都在线才能重新开始');
-      room.board = Array(15).fill().map(() => Array(15).fill(0));
-      room.currentPlayer = room.creatorColor;
-      room.gameOver = false;
-      room.history = [];
-      room.winner = null;
-      room.status = 'playing';
-      room.lastActive = Date.now();
-      await saveRoom(roomId, room);
-      io.to(roomId).emit('room-update', room);
-      socket.emit('restart-success', room);
+
+      if (room.restartRequestedBy && room.restartRequestedBy !== socket.data.username) {
+        room.board = Array(15).fill().map(() => Array(15).fill(0));
+        room.currentPlayer = room.creatorColor;
+        room.gameOver = false;
+        room.history = [];
+        room.winner = null;
+        room.status = 'playing';
+        room.undoCountPerPlayer = {};
+        room.undoBy = null;
+        room.restartRequestedBy = null;
+        room.lastActive = Date.now();
+        await saveRoom(roomId, room);
+        io.to(roomId).emit('room-update', room);
+        io.to(roomId).emit('restart-agreed', { from: socket.data.username });
+      } else {
+        room.restartRequestedBy = socket.data.username;
+        await saveRoom(roomId, room);
+        io.to(roomId).emit('restart-request', { from: socket.data.username });
+      }
     } catch (e) {
       socket.emit('error', e.message);
     }
