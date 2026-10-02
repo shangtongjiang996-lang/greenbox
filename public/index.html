@@ -405,6 +405,295 @@
       .ai-sidebar.collapsed { display: none; }
       .ai-chat-btn { bottom: 18px; right: 18px; width: 54px; height: 54px; }
     }
+
+    /* ===== AI 助手更新提示 ===== */
+    .ai-update-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .ai-update-modal.show {
+      display: flex;
+      animation: aiUpdateFadeIn .3s ease-out;
+    }
+    @keyframes aiUpdateFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .ai-update-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(8px);
+    }
+    .ai-update-card {
+      position: relative;
+      width: 100%;
+      max-width: 460px;
+      background: linear-gradient(160deg, #ffffff 0%, #f0fdf4 100%);
+      border-radius: 26px;
+      padding: 34px 28px 24px;
+      box-shadow: 0 30px 80px rgba(15, 23, 42, 0.35),
+                  0 0 0 1px rgba(22, 163, 74, 0.12),
+                  inset 0 1px 0 rgba(255,255,255,0.8);
+      animation: aiUpdateSlideIn .45s cubic-bezier(.34, 1.56, .64, 1);
+      overflow: hidden;
+      text-align: center;
+    }
+    @keyframes aiUpdateSlideIn {
+      from { opacity: 0; transform: translateY(40px) scale(.9); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .ai-update-glow {
+      position: absolute;
+      top: -60%;
+      right: -30%;
+      width: 340px;
+      height: 340px;
+      background: radial-gradient(circle, rgba(22,163,74,0.22) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .ai-update-glow-2 {
+      position: absolute;
+      bottom: -50%;
+      left: -30%;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .ai-update-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.05);
+      border: none;
+      color: #64748b;
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .2s;
+      z-index: 2;
+    }
+    .ai-update-close:hover {
+      background: rgba(15, 23, 42, 0.12);
+      color: #0f172a;
+      transform: rotate(90deg);
+    }
+    .ai-update-icon {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 78px;
+      height: 78px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      font-size: 40px;
+      margin-bottom: 18px;
+      box-shadow: 0 12px 32px rgba(22, 163, 74, 0.4),
+                  inset 0 -3px 0 rgba(0,0,0,0.1);
+      animation: aiUpdateBounce 2s ease-in-out infinite;
+      z-index: 1;
+    }
+    @keyframes aiUpdateBounce {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-8px) rotate(-4deg); }
+    }
+    .ai-update-badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background: #ef4444;
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 10px;
+      letter-spacing: .5px;
+      box-shadow: 0 4px 10px rgba(239, 68, 68, 0.4);
+      animation: aiUpdatePulseBadge 1.5s infinite;
+    }
+    @keyframes aiUpdatePulseBadge {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    .ai-update-title {
+      position: relative;
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 8px;
+      letter-spacing: -0.3px;
+      z-index: 1;
+    }
+    .ai-update-title .new-tag {
+      display: inline-block;
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 8px;
+      margin-left: 6px;
+      vertical-align: middle;
+      letter-spacing: 0.5px;
+    }
+    .ai-update-desc {
+      position: relative;
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.6;
+      margin-bottom: 20px;
+      z-index: 1;
+    }
+    .ai-update-features {
+      position: relative;
+      list-style: none;
+      padding: 0;
+      margin: 0 0 24px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      z-index: 1;
+    }
+    .ai-update-features li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(22, 163, 74, 0.15);
+      border-radius: 12px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #334155;
+      text-align: left;
+      transition: all .2s;
+    }
+    .ai-update-features li:hover {
+      background: white;
+      border-color: rgba(22, 163, 74, 0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(22, 163, 74, 0.1);
+    }
+    .ai-update-features .feat-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .ai-update-actions {
+      position: relative;
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      z-index: 1;
+    }
+    .ai-update-btn {
+      flex: 1;
+      padding: 13px 20px;
+      border-radius: 14px;
+      font-size: 14.5px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .25s;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .ai-update-btn.primary {
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      color: white;
+      box-shadow: 0 8px 20px rgba(22, 163, 74, 0.35);
+      flex: 1.5;
+    }
+    .ai-update-btn.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(22, 163, 74, 0.45);
+    }
+    .ai-update-btn.primary:active {
+      transform: translateY(0);
+    }
+    .ai-update-btn.secondary {
+      background: rgba(15, 23, 42, 0.05);
+      color: #64748b;
+    }
+    .ai-update-btn.secondary:hover {
+      background: rgba(15, 23, 42, 0.1);
+      color: #334155;
+    }
+    .ai-update-checkbox {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: #94a3b8;
+      cursor: pointer;
+      user-select: none;
+      z-index: 1;
+    }
+    .ai-update-checkbox input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #16a34a;
+      cursor: pointer;
+    }
+    .ai-update-checkbox:hover {
+      color: #64748b;
+    }
+
+    [data-theme="dark"] .ai-update-card {
+      background: linear-gradient(160deg, #1e293b 0%, #16213a 100%);
+      box-shadow: 0 30px 80px rgba(0,0,0,0.6),
+                  0 0 0 1px rgba(34, 197, 94, 0.15);
+    }
+    [data-theme="dark"] .ai-update-title { color: #eef2f7; }
+    [data-theme="dark"] .ai-update-desc { color: #93a2b8; }
+    [data-theme="dark"] .ai-update-features li {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(34, 197, 94, 0.15);
+      color: #cbd5e1;
+    }
+    [data-theme="dark"] .ai-update-features li:hover {
+      background: rgba(255,255,255,0.08);
+    }
+    [data-theme="dark"] .ai-update-close {
+      background: rgba(255,255,255,0.08);
+      color: #94a3b8;
+    }
+    [data-theme="dark"] .ai-update-close:hover {
+      background: rgba(255,255,255,0.15);
+      color: #eef2f7;
+    }
+    [data-theme="dark"] .ai-update-btn.secondary {
+      background: rgba(255,255,255,0.06);
+      color: #94a3b8;
+    }
+    [data-theme="dark"] .ai-update-btn.secondary:hover {
+      background: rgba(255,255,255,0.12);
+      color: #cbd5e1;
+    }
+
+    @media (max-width: 480px) {
+      .ai-update-card { padding: 28px 20px 20px; border-radius: 22px; }
+      .ai-update-icon { width: 66px; height: 66px; font-size: 34px; }
+      .ai-update-title { font-size: 19px; }
+      .ai-update-features { grid-template-columns: 1fr; }
+      .ai-update-actions { flex-direction: column; }
+      .ai-update-btn { flex: 1 !important; }
+    }
   </style>
 </head>
 <body>
@@ -463,6 +752,49 @@
         <button class="btn btn-ghost" onclick="skipUpgrade()">稍后再说</button>
         <button class="btn btn-primary" onclick="submitPasswordUpgrade()">更新密码</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== AI 助手更新提示弹窗 ===== -->
+  <div id="aiUpdateModal" class="ai-update-modal">
+    <div class="ai-update-backdrop" id="aiUpdateBackdrop"></div>
+    <div class="ai-update-card">
+      <div class="ai-update-glow"></div>
+      <div class="ai-update-glow-2"></div>
+      <button class="ai-update-close" id="aiUpdateClose" title="关闭">✕</button>
+      
+      <div class="ai-update-icon">
+        🤖
+        <span class="ai-update-badge">NEW</span>
+      </div>
+      
+      <h2 class="ai-update-title">
+        AI 助手全新上线<span class="new-tag">升级</span>
+      </h2>
+      <p class="ai-update-desc">
+        GreenBox 现在有智能 AI 助手啦！可以帮你解答问题、编写代码、查找资料，随时随地提供帮助。
+      </p>
+      
+      <ul class="ai-update-features">
+        <li><span class="feat-icon">💬</span> 实时对话</li>
+        <li><span class="feat-icon">🧠</span> 深度思考</li>
+        <li><span class="feat-icon">💾</span> 云端记录</li>
+        <li><span class="feat-icon">📚</span> 预设问题</li>
+      </ul>
+      
+      <div class="ai-update-actions">
+        <button class="ai-update-btn primary" id="aiUpdateOpen">
+          <span>✨</span> 立即体验
+        </button>
+        <button class="ai-update-btn secondary" id="aiUpdateLater">
+          稍后再说
+        </button>
+      </div>
+      
+      <label class="ai-update-checkbox">
+        <input type="checkbox" id="aiUpdateNoShow">
+        <span>不再提示</span>
+      </label>
     </div>
   </div>
 
@@ -1261,6 +1593,67 @@
         if (!cfg.enableHistory) { toggleSidebarBtn.style.display = 'none'; sidebarEl.classList.add('collapsed'); }
         loadQuota();
       })();
+    })();
+
+    // ============================================================
+    //  AI 助手更新提示弹窗
+    // ============================================================
+    (function() {
+      const STORAGE_KEY = 'greenbox_ai_update_seen_v1';
+      const modal = document.getElementById('aiUpdateModal');
+      const backdrop = document.getElementById('aiUpdateBackdrop');
+      const closeBtn = document.getElementById('aiUpdateClose');
+      const openBtn = document.getElementById('aiUpdateOpen');
+      const laterBtn = document.getElementById('aiUpdateLater');
+      const noShowCheckbox = document.getElementById('aiUpdateNoShow');
+
+      if (!modal) return;
+
+      const seen = localStorage.getItem(STORAGE_KEY);
+      if (seen === '1') return;
+
+      setTimeout(() => {
+        modal.classList.add('show');
+      }, 1200);
+
+      function closeModal() {
+        if (noShowCheckbox && noShowCheckbox.checked) {
+          localStorage.setItem(STORAGE_KEY, '1');
+        }
+        modal.classList.remove('show');
+        setTimeout(() => { modal.style.display = 'none'; }, 300);
+      }
+
+      closeBtn.addEventListener('click', closeModal);
+      backdrop.addEventListener('click', closeModal);
+      document.addEventListener('keydown', function escHandler(e) {
+        if (e.key === 'Escape' && modal.classList.contains('show')) {
+          closeModal();
+          document.removeEventListener('keydown', escHandler);
+        }
+      });
+      laterBtn.addEventListener('click', closeModal);
+
+      openBtn.addEventListener('click', () => {
+        closeModal();
+        setTimeout(() => {
+          const chatBtn = document.getElementById('aiChatBtn');
+          const chatPanel = document.getElementById('aiChatPanel');
+          if (chatBtn && chatPanel && !chatPanel.classList.contains('open')) {
+            chatBtn.click();
+          }
+        }, 350);
+      });
+
+      if (noShowCheckbox) {
+        noShowCheckbox.addEventListener('change', function() {
+          if (this.checked) {
+            localStorage.setItem(STORAGE_KEY, '1');
+          } else {
+            localStorage.removeItem(STORAGE_KEY);
+          }
+        });
+      }
     })();
   </script>
 </body>
