@@ -296,6 +296,7 @@
       <button class="tab-btn" data-tab="users">👥 用户管理</button>
       <button class="tab-btn" data-tab="files">📁 文件管理</button>
       <button class="tab-btn" data-tab="rooms">🏠 房间管理</button>
+      <button class="tab-btn" data-tab="chat">💬 AI 助手</button>
       <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
     </div>
 
@@ -380,6 +381,28 @@
         <h2>🏠 房间管理</h2>
         <div id="rooms-list"><p style="color:#94a3b8;">加载中...</p></div>
         <button class="btn btn-primary" onclick="loadAdminRooms()">🔄 刷新房间列表</button>
+      </div>
+    </div>
+
+    <!-- AI 助手配额管理 -->
+    <div id="tab-chat" class="tab-content">
+      <div class="card">
+        <h2>💬 AI 助手配额管理</h2>
+        <p style="color:#64748b;margin-bottom:1rem;">
+          默认每个用户每天 <strong>20 次</strong>。可以为单个用户设置独立限额（0 = 禁止使用）。
+        </p>
+
+        <div style="margin-bottom:1.5rem;padding:1rem;background:#f8fafc;border-radius:12px;">
+          <label style="font-weight:600;display:block;margin-bottom:0.5rem;">🌐 默认每日限额（所有用户）</label>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <input type="number" id="chat-default-limit" min="0" max="10000" value="20"
+                   style="width:120px;padding:0.5rem 0.8rem;border:1px solid #e2e8f0;border-radius:10px;">
+            <button class="btn btn-primary" onclick="saveDefaultChatLimit()">保存默认值</button>
+          </div>
+        </div>
+
+        <div id="chat-users-list"><p style="color:#94a3b8;">加载中...</p></div>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadChatLimits()">🔄 刷新列表</button>
       </div>
     </div>
 
@@ -470,7 +493,7 @@ let currentModalMode = 'emoji';
     currentData = data || { tools: [], changelogs: [] };
     renderAll();
     document.getElementById('dashboard').classList.remove('hidden');
-    loadUsers(); loadFiles(); loadAdminRooms(); updateRoomCount();
+    loadUsers(); loadFiles(); loadAdminRooms(); updateRoomCount(); loadChatLimits();
     setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
   } catch (e) { redirectToLogin(); }
 })();
@@ -489,6 +512,7 @@ function setupTabs() {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.getElementById(`tab-${tabId}`).classList.add('active');
       if (tabId === 'rooms') { loadAdminRooms(); updateRoomCount(); }
+      if (tabId === 'chat') { loadChatLimits(); }
     });
   });
 }
@@ -806,7 +830,7 @@ document.getElementById('upload-form').addEventListener('submit', async function
   }
 });
 
-// ---------- 用户管理（完整版） ----------
+// ---------- 用户管理 ----------
 async function loadUsers() {
   const container = document.getElementById('users-list');
   try {
@@ -974,7 +998,7 @@ async function loadAdminRooms() {
     updateRoomCountDirect(activeRooms.length);
 
     container.innerHTML = rooms.map(r => {
-      const playersStr = r.players.map(p => `${p.username}(${p.online ? '在线' : '离线'})`).join('、');
+      const playersStr = (r.players || []).map(p => `${p.username}(${p.online ? '在线' : '离线'})`).join('、');
       const statusBadge = { waiting: '🟡 等待中', playing: '🟢 游戏中', paused: '⏸️ 暂停', finished: '🏁 已结束', closed: '🔴 已关闭' }[r.status] || r.status;
       return `
         <div class="room-item">
@@ -1016,6 +1040,95 @@ window.closeRoom = async function(roomId) {
     else showToast('关闭失败：' + data.error, 'error');
   } catch (err) { showToast('错误：' + err.message, 'error'); }
 };
+
+// ---------- AI 助手配额管理 ----------
+async function loadChatLimits() {
+  const container = document.getElementById('chat-users-list');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/admin/chat/limits', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) { container.innerHTML = '<p style="color:#ef4444;">加载失败</p>'; return; }
+    const data = await res.json();
+
+    document.getElementById('chat-default-limit').value = data.default;
+
+    if (!data.users || data.users.length === 0) {
+      container.innerHTML = '<p style="color:#94a3b8;">暂无其他用户</p>';
+      return;
+    }
+
+    container.innerHTML = data.users.map(u => `
+      <div class="user-item">
+        <span style="font-weight:600;min-width:100px;">${u.username}</span>
+        <span style="color:#64748b;font-size:0.85rem;">
+          今日已用：<strong style="color:#16a34a;">${u.used}</strong> / ${u.limit}
+        </span>
+        <input type="number" id="chat-limit-${u.username}" min="0" max="10000"
+               value="${u.limit}"
+               style="width:90px;padding:0.3rem 0.6rem;border:1px solid #e2e8f0;border-radius:8px;">
+        <button class="btn btn-primary btn-sm" onclick="saveChatLimit('${u.username}')">保存</button>
+        ${u.hasOverride
+          ? `<button class="btn btn-outline btn-sm" onclick="clearChatLimit('${u.username}')">恢复默认</button>`
+          : ''}
+        <button class="btn btn-outline btn-sm" onclick="resetChatUsage('${u.username}')">重置今日用量</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    container.innerHTML = '<p style="color:#ef4444;">加载失败：' + err.message + '</p>';
+  }
+}
+
+window.saveDefaultChatLimit = async function() {
+  const v = document.getElementById('chat-default-limit').value;
+  await updateChatLimit('default', v);
+};
+
+window.saveChatLimit = async function(username) {
+  const v = document.getElementById(`chat-limit-${username}`).value;
+  await updateChatLimit(username, v);
+};
+
+async function updateChatLimit(username, limit) {
+  try {
+    const res = await fetch('/api/admin/chat/limit', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ username, limit: parseInt(limit, 10) })
+    });
+    const data = await res.json();
+    if (data.success) { showToast(data.message || '已更新', 'success'); loadChatLimits(); }
+    else showToast('失败：' + data.error, 'error');
+  } catch (e) { showToast('网络错误', 'error'); }
+}
+
+window.clearChatLimit = async function(username) {
+  if (!confirm(`确定将 ${username} 的限额恢复为默认值吗？`)) return;
+  try {
+    const res = await fetch(`/api/admin/chat/limit/${encodeURIComponent(username)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.success) { showToast('已恢复默认', 'success'); loadChatLimits(); }
+    else showToast('失败：' + data.error, 'error');
+  } catch (e) { showToast('网络错误', 'error'); }
+}
+
+window.resetChatUsage = async function(username) {
+  if (!confirm(`确定重置 ${username} 今日的 AI 用量吗？`)) return;
+  try {
+    const res = await fetch('/api/admin/chat/reset-usage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ username })
+    });
+    const data = await res.json();
+    if (data.success) { showToast('已重置', 'success'); loadChatLimits(); }
+    else showToast('失败：' + data.error, 'error');
+  } catch (e) { showToast('网络错误', 'error'); }
+}
 
 // ---------- 修改管理员密码 ----------
 window.changePassword = async function() {
