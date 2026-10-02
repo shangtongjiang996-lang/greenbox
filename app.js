@@ -224,8 +224,31 @@ app.post('/api/update', async (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { name, icon, description, category } = req.body;
+  const file = req.file;
+  if (!file || !file.originalname.toLowerCase().endsWith('.html')) {
+    return res.status(400).json({ error: '请上传 .html 文件' });
+  }
+  const htmlContent = file.buffer.toString('utf8');
+  if (!htmlContent.trim()) return res.status(400).json({ error: '文件内容为空' });
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  await kvPut(`tool_content:${id}`, htmlContent);
+  const currentData = (await kvGet('site_data')) || { tools: [], changelogs: [] };
+  currentData.tools.push({ name, icon, description, category, url: `/tool/${id}` });
+  await kvPut('site_data', currentData);
+  res.json({ success: true, id, url: `/tool/${id}` });
+});
+
+app.get('/tool/:id', async (req, res) => {
+  const html = await kvGet(`tool_content:${req.params.id}`);
+  if (!html) return res.status(404).send('工具不存在');
+  res.set('Content-Type', 'text/html; charset=utf-8').send(html);
+});
+
 // ============================================================
-//  AI 聊天助手（智谱 GLM + 流式 + 多会话 + 云端存储）
+//  AI 聊天助手
 // ============================================================
 const CHAT_DEFAULT_LIMIT = 20;
 const ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
@@ -256,21 +279,18 @@ const DEFAULT_CHAT_CONFIG = {
   deepThinkPrompt: '在回答用户问题前，请先在 [THOUGHT] 和 [/THOUGHT] 标签内进行深度思考（分析问题、列举方案、评估优缺点），然后在 [ANSWER] 和 [/ANSWER] 标签内给出最终答案。'
 };
 
-// 北京时间日期
 function todayKey() {
   const now = new Date();
   const bj = new Date(now.getTime() + 8 * 3600 * 1000);
   return bj.toISOString().slice(0, 10);
 }
 
-// 获取聊天配置
 async function getChatConfig() {
   const cfg = await kvGet('chat_config');
   if (!cfg || typeof cfg !== 'object') return { ...DEFAULT_CHAT_CONFIG };
   return { ...DEFAULT_CHAT_CONFIG, ...cfg };
 }
 
-// 获取用户限额
 async function getUserChatLimit(username) {
   let limit = await kvGet(`chat_limit:${username}`);
   if (limit === null || limit === undefined) {
@@ -281,13 +301,11 @@ async function getUserChatLimit(username) {
   return isNaN(n) ? CHAT_DEFAULT_LIMIT : n;
 }
 
-// 获取今日用量
 async function getUsedToday(username) {
   const raw = await kvGet(`chat_quota:${username}:${todayKey()}`);
   return raw ? parseInt(raw, 10) : 0;
 }
 
-// 消耗一次配额
 async function consumeQuota(username) {
   const key = `chat_quota:${username}:${todayKey()}`;
   const used = await getUsedToday(username);
@@ -296,28 +314,25 @@ async function consumeQuota(username) {
   return newUsed;
 }
 
-// 会话索引
 async function getUserSessions(username) {
   const list = await kvGet(`chat_sessions:${username}`);
   return Array.isArray(list) ? list : [];
 }
 
 async function saveUserSessions(username, list) {
-  await kvPut(`chat_sessions:${username}`, list.slice(0, 50)); // 最多 50 个会话
+  await kvPut(`chat_sessions:${username}`, list.slice(0, 50));
 }
 
-// 生成会话 ID
 function genSessionId() {
   return 'S' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-// 从消息生成标题
 function genTitle(text) {
   const t = String(text).replace(/\s+/g, ' ').trim();
   return t.length > 20 ? t.slice(0, 20) + '...' : t || '新对话';
 }
 
-// ---------- 公开：获取聊天配置（前端需要的部分） ----------
+// 公开配置
 app.get('/api/chat/config', async (req, res) => {
   const cfg = await getChatConfig();
   res.json({
@@ -330,17 +345,23 @@ app.get('/api/chat/config', async (req, res) => {
   });
 });
 
-// ---------- 查询配额 ----------
+// 配额
 app.get('/api/chat/quota', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
+
+  // 👑 管理员无限
+  if (session.role === 'admin') {
+    return res.json({ limit: -1, used: 0, remaining: -1, unlimited: true });
+  }
+
   const limit = await getUserChatLimit(session.username);
   const used = await getUsedToday(session.username);
   res.json({ limit, used, remaining: Math.max(0, limit - used) });
 });
 
-// ---------- 会话列表 ----------
+// 会话列表
 app.get('/api/chat/sessions', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -351,7 +372,7 @@ app.get('/api/chat/sessions', async (req, res) => {
   res.json(list);
 });
 
-// ---------- 创建会话 ----------
+// 创建会话
 app.post('/api/chat/sessions', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -383,7 +404,7 @@ app.post('/api/chat/sessions', async (req, res) => {
   res.json({ success: true, session: newSession });
 });
 
-// ---------- 获取会话详情 ----------
+// 获取会话
 app.get('/api/chat/sessions/:id', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -396,7 +417,7 @@ app.get('/api/chat/sessions/:id', async (req, res) => {
   res.json(data);
 });
 
-// ---------- 更新会话（重命名、保存消息） ----------
+// 更新会话
 app.put('/api/chat/sessions/:id', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -421,14 +442,12 @@ app.put('/api/chat/sessions/:id', async (req, res) => {
   data.updatedAt = Date.now();
   await kvPut(`chat_session:${session.username}:${sid}`, data, { expirationTtl: 30 * 24 * 3600 });
 
-  // 更新索引
   const list = await getUserSessions(session.username);
   const idx = list.findIndex(s => s.id === sid);
   if (idx >= 0) {
     list[idx].title = data.title;
     list[idx].updatedAt = data.updatedAt;
     list[idx].count = data.messages.length;
-    // 移到最前
     const [item] = list.splice(idx, 1);
     list.unshift(item);
     await saveUserSessions(session.username, list);
@@ -436,7 +455,7 @@ app.put('/api/chat/sessions/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// ---------- 删除会话 ----------
+// 删除会话
 app.delete('/api/chat/sessions/:id', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -449,7 +468,7 @@ app.delete('/api/chat/sessions/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// ---------- 流式对话（SSE） ----------
+// 流式对话
 app.post('/api/chat/stream', async (req, res) => {
   try {
     const token = getBearerToken(req);
@@ -457,13 +476,16 @@ app.post('/api/chat/stream', async (req, res) => {
     if (!session) return res.status(401).json({ error: '请先登录后使用' });
 
     const username = session.username;
+    const isAdmin = session.role === 'admin';
     const cfg = await getChatConfig();
-    const limit = await getUserChatLimit(username);
-    const used = await getUsedToday(username);
+    const limit = isAdmin ? -1 : await getUserChatLimit(username);
+    const used = isAdmin ? 0 : await getUsedToday(username);
 
-    if (limit <= 0) return res.status(403).json({ error: 'AI 助手暂未开放' });
-    if (used >= limit) {
-      return res.status(429).json({ error: `今日对话次数已用完（${limit} 次/天），明天再来吧～` });
+    if (!isAdmin) {
+      if (limit <= 0) return res.status(403).json({ error: 'AI 助手暂未开放' });
+      if (used >= limit) {
+        return res.status(429).json({ error: `今日对话次数已用完（${limit} 次/天），明天再来吧～` });
+      }
     }
 
     let { messages, sessionId, deepThink, browserInfo } = req.body || {};
@@ -471,7 +493,6 @@ app.post('/api/chat/stream', async (req, res) => {
       return res.status(400).json({ error: '消息不能为空' });
     }
 
-    // 安全清理
     messages = messages.slice(-20).map(m => ({
       role: ['system', 'user', 'assistant'].includes(m.role) ? m.role : 'user',
       content: String(m.content || '').slice(0, 4000),
@@ -479,10 +500,8 @@ app.post('/api/chat/stream', async (req, res) => {
 
     if (messages.length === 0) return res.status(400).json({ error: '消息内容为空' });
 
-    // 构造 system prompt
     let sysPrompt = cfg.systemPrompt || DEFAULT_CHAT_CONFIG.systemPrompt;
 
-    // 追加浏览器环境信息
     if (cfg.enableBrowserInfo && browserInfo && typeof browserInfo === 'object') {
       const tpl = cfg.browserInfoTemplate || DEFAULT_CHAT_CONFIG.browserInfoTemplate;
       const info = tpl
@@ -494,14 +513,12 @@ app.post('/api/chat/stream', async (req, res) => {
       sysPrompt += '\n\n' + info;
     }
 
-    // 深度思考
     if (deepThink && cfg.enableDeepThink) {
       sysPrompt += '\n\n' + (cfg.deepThinkPrompt || DEFAULT_CHAT_CONFIG.deepThinkPrompt);
     }
 
     messages.unshift({ role: 'system', content: sysPrompt });
 
-    // SSE 头
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -544,7 +561,6 @@ app.post('/api/chat/stream', async (req, res) => {
       return;
     }
 
-    // 转发流
     const reader = zhipuRes.body.getReader();
     const decoder = new TextDecoder();
     let fullResponse = '';
@@ -578,17 +594,17 @@ app.post('/api/chat/stream', async (req, res) => {
       console.error('Stream error:', streamErr);
     }
 
-    // 消耗配额
-    const newUsed = await consumeQuota(username);
+    let newUsed = 0;
+    if (!isAdmin) {
+      newUsed = await consumeQuota(username);
+    }
 
-    // 保存到会话
     if (sessionId && cfg.enableHistory) {
       try {
         const data = await kvGet(`chat_session:${username}:${sessionId}`);
         if (data) {
           const userMsg = messages[messages.length - 1];
           if (userMsg && userMsg.role === 'user') {
-            // 提取思考过程
             let thought = '';
             let answer = fullResponse;
             const thoughtMatch = fullResponse.match(/\[THOUGHT\]([\s\S]*?)\[\/THOUGHT\]/);
@@ -606,14 +622,12 @@ app.post('/api/chat/stream', async (req, res) => {
             });
             data.messages = data.messages.slice(-100);
 
-            // 自动生成标题
             if (data.title === '新对话' && data.messages.length <= 2) {
               data.title = genTitle(userMsg.content);
             }
             data.updatedAt = Date.now();
             await kvPut(`chat_session:${username}:${sessionId}`, data, { expirationTtl: 30 * 24 * 3600 });
 
-            // 更新索引
             const list = await getUserSessions(username);
             const idx = list.findIndex(s => s.id === sessionId);
             if (idx >= 0) {
@@ -635,8 +649,9 @@ app.post('/api/chat/stream', async (req, res) => {
       done: true,
       reply: fullResponse,
       used: newUsed,
-      limit,
-      remaining: Math.max(0, limit - newUsed),
+      limit: isAdmin ? -1 : limit,
+      remaining: isAdmin ? -1 : Math.max(0, limit - newUsed),
+      unlimited: isAdmin,
     })}\n\n`);
     res.end();
 
@@ -649,7 +664,7 @@ app.post('/api/chat/stream', async (req, res) => {
   }
 });
 
-// ---------- 管理员：获取/更新聊天配置 ----------
+// 管理员：配置
 app.get('/api/admin/chat/config', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const cfg = await getChatConfig();
@@ -660,7 +675,6 @@ app.put('/api/admin/chat/config', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const body = req.body || {};
   const old = await getChatConfig();
-
   const newCfg = { ...old };
 
   if (typeof body.systemPrompt === 'string') newCfg.systemPrompt = body.systemPrompt.slice(0, 4000);
@@ -688,7 +702,7 @@ app.put('/api/admin/chat/config', async (req, res) => {
   res.json({ success: true, config: newCfg });
 });
 
-// ---------- 管理员：用户配额列表 ----------
+// 管理员：配额列表
 app.get('/api/admin/chat/limits', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
 
@@ -767,34 +781,6 @@ app.post('/api/admin/chat/reset-usage', async (req, res) => {
   if (!username) return res.status(400).json({ error: '缺少用户名' });
   await kvDelete(`chat_quota:${username}:${todayKey()}`);
   res.json({ success: true });
-});
-
-// ============================================================
-
-// 上传工具（需管理员）
-
-// 上传工具（需管理员）
-app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
-  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
-  const { name, icon, description, category } = req.body;
-  const file = req.file;
-  if (!file || !file.originalname.toLowerCase().endsWith('.html')) {
-    return res.status(400).json({ error: '请上传 .html 文件' });
-  }
-  const htmlContent = file.buffer.toString('utf8');
-  if (!htmlContent.trim()) return res.status(400).json({ error: '文件内容为空' });
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  await kvPut(`tool_content:${id}`, htmlContent);
-  const currentData = (await kvGet('site_data')) || { tools: [], changelogs: [] };
-  currentData.tools.push({ name, icon, description, category, url: `/tool/${id}` });
-  await kvPut('site_data', currentData);
-  res.json({ success: true, id, url: `/tool/${id}` });
-});
-
-app.get('/tool/:id', async (req, res) => {
-  const html = await kvGet(`tool_content:${req.params.id}`);
-  if (!html) return res.status(404).send('工具不存在');
-  res.set('Content-Type', 'text/html; charset=utf-8').send(html);
 });
 
 // ======== 后台管理 API ========
@@ -994,7 +980,7 @@ app.post('/api/admin/view-password', async (req, res) => {
   res.json({ success: true, password: plainPassword });
 });
 
-// ======== 五子棋 REST 辅助接口 ========
+// ======== 五子棋 REST ========
 app.get('/api/rooms', async (req, res) => {
   try {
     const list = await kvList({ prefix: 'gomoku:' });
@@ -1027,7 +1013,7 @@ app.get('/api/room/:roomId', async (req, res) => {
   res.json(safe);
 });
 
-// ======== WebSocket 实时联机 ========
+// ======== WebSocket ========
 const roomCache = new Map();
 
 async function getRoom(roomId) {
@@ -1183,7 +1169,6 @@ function checkWin(row, col, player, board) {
   return false;
 }
 
-// ======== 启动服务器 ========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
