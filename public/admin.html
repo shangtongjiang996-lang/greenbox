@@ -25,6 +25,7 @@
     }
     h1 { font-size: 2.2rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 0.5rem; }
     h2 { font-size: 1.4rem; font-weight: 600; color: #1e293b; margin-bottom: 1.2rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
+    h3 { font-size: 1.1rem; font-weight: 600; color: #334155; margin-bottom: 0.8rem; }
     .stats {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px,1fr));
@@ -265,6 +266,73 @@
       margin-bottom: 1.2rem;
     }
     .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; }
+
+    /* AI 配置样式 */
+    .cfg-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .cfg-field label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 0.3rem;
+      font-size: 0.9rem;
+      color: #334155;
+    }
+    .cfg-field input[type=text],
+    .cfg-field input[type=number],
+    .cfg-field select,
+    .cfg-field textarea {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      background: white;
+      transition: border 0.2s, box-shadow 0.2s;
+    }
+    .cfg-field textarea { resize: vertical; }
+    .cfg-field input:focus,
+    .cfg-field select:focus,
+    .cfg-field textarea:focus {
+      outline: none;
+      border-color: #16a34a;
+      box-shadow: 0 0 0 3px rgba(22,163,74,0.15);
+    }
+    .cfg-field .hint {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      margin-top: 0.3rem;
+    }
+    .cfg-field .hint code {
+      background: #f1f5f9;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: #16a34a;
+    }
+    .cfg-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      padding: 1rem;
+      background: #f8fafc;
+      border-radius: 12px;
+    }
+    .cfg-checks label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      cursor: pointer;
+      font-weight: 500;
+      color: #334155;
+      font-size: 0.9rem;
+    }
+    .cfg-checks input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+
     @media (max-width: 640px) {
       .card { padding: 1.2rem; }
       .tool-item, .log-item, .user-item, .file-item, .room-item { flex-direction: column; align-items: stretch; }
@@ -272,6 +340,7 @@
       .upload-area { flex-direction: column; align-items: stretch; }
       .emoji-grid { grid-template-columns: repeat(6, 1fr); }
       .icon-cell { min-width: unset; width: 100%; }
+      .cfg-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -384,25 +453,98 @@
       </div>
     </div>
 
-    <!-- AI 助手配额管理 -->
+    <!-- AI 助手配置 + 配额管理 -->
     <div id="tab-chat" class="tab-content">
       <div class="card">
-        <h2>💬 AI 助手配额管理</h2>
-        <p style="color:#64748b;margin-bottom:1rem;">
-          默认每个用户每天 <strong>20 次</strong>。可以为单个用户设置独立限额（0 = 禁止使用）。
-        </p>
+        <h2>⚙️ AI 助手 - 基础配置</h2>
+        <div class="cfg-grid">
+          <div class="cfg-field">
+            <label>模型</label>
+            <select id="cfg-model">
+              <option value="glm-4-flash">glm-4-flash（免费 · 快速）</option>
+              <option value="glm-4.7-flash">glm-4.7-flash（免费 · 更强）</option>
+              <option value="glm-4-plus">glm-4-plus（付费 · 最强）</option>
+              <option value="glm-4-air">glm-4-air（付费 · 均衡）</option>
+            </select>
+          </div>
+          <div class="cfg-field">
+            <label>温度（0.0 - 1.0）</label>
+            <input type="number" id="cfg-temperature" step="0.1" min="0" max="1" value="0.7">
+            <div class="hint">低=严谨，高=创意</div>
+          </div>
+          <div class="cfg-field">
+            <label>最大 Token</label>
+            <input type="number" id="cfg-maxTokens" min="100" max="8000" value="2000">
+            <div class="hint">单次回复的最大长度</div>
+          </div>
+        </div>
+        <div class="cfg-checks">
+          <label><input type="checkbox" id="cfg-enableDeepThink"> 允许深度思考</label>
+          <label><input type="checkbox" id="cfg-enableHistory"> 保存聊天记录</label>
+          <label><input type="checkbox" id="cfg-enableBrowserInfo"> 注入浏览器环境信息</label>
+        </div>
+      </div>
 
+      <div class="card">
+        <h2>📝 提示词配置</h2>
+        <div class="cfg-field" style="margin-bottom:1rem;">
+          <label>系统提示词（System Prompt）</label>
+          <textarea id="cfg-systemPrompt" rows="4" placeholder="定义 AI 的角色和基本行为"></textarea>
+          <div class="hint">这是 AI 的核心身份设定，每次对话都会带上</div>
+        </div>
+        <div class="cfg-field" style="margin-bottom:1rem;">
+          <label>欢迎语</label>
+          <textarea id="cfg-welcomeMessage" rows="2" placeholder="打开聊天窗口时显示的第一句话"></textarea>
+          <div class="hint">支持 Markdown 格式</div>
+        </div>
+        <div class="cfg-field" style="margin-bottom:1rem;">
+          <label>深度思考提示词</label>
+          <textarea id="cfg-deepThinkPrompt" rows="3" placeholder="当用户开启深度思考时追加到系统提示词后"></textarea>
+          <div class="hint">默认使用 [THOUGHT]...[/THOUGHT] 和 [ANSWER]...[/ANSWER] 标签</div>
+        </div>
+        <div class="cfg-field">
+          <label>浏览器信息模板</label>
+          <textarea id="cfg-browserInfoTemplate" rows="4" style="font-family:monospace;font-size:0.85rem;"></textarea>
+          <div class="hint">
+            可用变量：<code>{time}</code> <code>{timezone}</code> <code>{lang}</code> <code>{screen}</code> <code>{network}</code>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>💡 预设问题 &amp; 快捷短语</h2>
+        <div class="cfg-field" style="margin-bottom:1rem;">
+          <label>预设问题（每行一条，最多 10 条）</label>
+          <textarea id="cfg-presetQuestions" rows="4" placeholder="介绍一下 GreenBox 有哪些工具&#10;五子棋怎么玩？&#10;你能帮我写代码吗？"></textarea>
+          <div class="hint">新会话时显示给用户点击</div>
+        </div>
+        <div class="cfg-field">
+          <label>快捷短语（每行一条，最多 10 条）</label>
+          <textarea id="cfg-quickPhrases" rows="3" placeholder="继续&#10;再详细一点&#10;举个例子"></textarea>
+          <div class="hint">输入框上方的一键填充短语</div>
+        </div>
+        <div style="margin-top:1.2rem;display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-primary" onclick="saveChatConfig()">💾 保存全部配置</button>
+          <button class="btn btn-outline" onclick="loadChatConfig()">🔄 重新加载</button>
+          <span id="chat-cfg-msg" style="font-weight:500;"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>👥 每日对话配额</h2>
+        <p style="color:#64748b;margin-bottom:1rem;">
+          默认每个用户每天 <strong id="chat-default-display">20</strong> 次。0 = 禁止使用。
+        </p>
         <div style="margin-bottom:1.5rem;padding:1rem;background:#f8fafc;border-radius:12px;">
-          <label style="font-weight:600;display:block;margin-bottom:0.5rem;">🌐 默认每日限额（所有用户）</label>
+          <label style="font-weight:600;display:block;margin-bottom:0.5rem;">🌐 默认每日限额</label>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
             <input type="number" id="chat-default-limit" min="0" max="10000" value="20"
                    style="width:120px;padding:0.5rem 0.8rem;border:1px solid #e2e8f0;border-radius:10px;">
             <button class="btn btn-primary" onclick="saveDefaultChatLimit()">保存默认值</button>
           </div>
         </div>
-
         <div id="chat-users-list"><p style="color:#94a3b8;">加载中...</p></div>
-        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadChatLimits()">🔄 刷新列表</button>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadChatLimits()">🔄 刷新用户列表</button>
       </div>
     </div>
 
@@ -493,7 +635,8 @@ let currentModalMode = 'emoji';
     currentData = data || { tools: [], changelogs: [] };
     renderAll();
     document.getElementById('dashboard').classList.remove('hidden');
-    loadUsers(); loadFiles(); loadAdminRooms(); updateRoomCount(); loadChatLimits();
+    loadUsers(); loadFiles(); loadAdminRooms(); updateRoomCount();
+    loadChatLimits(); loadChatConfig();
     setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
   } catch (e) { redirectToLogin(); }
 })();
@@ -512,7 +655,7 @@ function setupTabs() {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.getElementById(`tab-${tabId}`).classList.add('active');
       if (tabId === 'rooms') { loadAdminRooms(); updateRoomCount(); }
-      if (tabId === 'chat') { loadChatLimits(); }
+      if (tabId === 'chat') { loadChatLimits(); loadChatConfig(); }
     });
   });
 }
@@ -1041,6 +1184,67 @@ window.closeRoom = async function(roomId) {
   } catch (err) { showToast('错误：' + err.message, 'error'); }
 };
 
+// ============================================================
+//  AI 助手 - 配置管理
+// ============================================================
+async function loadChatConfig() {
+  try {
+    const res = await fetch('/api/admin/chat/config', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) { showToast('加载 AI 配置失败', 'error'); return; }
+    const cfg = await res.json();
+    document.getElementById('cfg-model').value = cfg.model || 'glm-4-flash';
+    document.getElementById('cfg-temperature').value = cfg.temperature ?? 0.7;
+    document.getElementById('cfg-maxTokens').value = cfg.maxTokens ?? 2000;
+    document.getElementById('cfg-systemPrompt').value = cfg.systemPrompt || '';
+    document.getElementById('cfg-welcomeMessage').value = cfg.welcomeMessage || '';
+    document.getElementById('cfg-deepThinkPrompt').value = cfg.deepThinkPrompt || '';
+    document.getElementById('cfg-browserInfoTemplate').value = cfg.browserInfoTemplate || '';
+    document.getElementById('cfg-presetQuestions').value = (cfg.presetQuestions || []).join('\n');
+    document.getElementById('cfg-quickPhrases').value = (cfg.quickPhrases || []).join('\n');
+    document.getElementById('cfg-enableDeepThink').checked = !!cfg.enableDeepThink;
+    document.getElementById('cfg-enableHistory').checked = !!cfg.enableHistory;
+    document.getElementById('cfg-enableBrowserInfo').checked = !!cfg.enableBrowserInfo;
+  } catch (e) { showToast('加载 AI 配置失败：' + e.message, 'error'); }
+}
+
+window.saveChatConfig = async function() {
+  const msg = document.getElementById('chat-cfg-msg');
+  msg.textContent = '保存中...'; msg.style.color = '#64748b';
+  const payload = {
+    model: document.getElementById('cfg-model').value,
+    temperature: parseFloat(document.getElementById('cfg-temperature').value),
+    maxTokens: parseInt(document.getElementById('cfg-maxTokens').value, 10),
+    systemPrompt: document.getElementById('cfg-systemPrompt').value,
+    welcomeMessage: document.getElementById('cfg-welcomeMessage').value,
+    deepThinkPrompt: document.getElementById('cfg-deepThinkPrompt').value,
+    browserInfoTemplate: document.getElementById('cfg-browserInfoTemplate').value,
+    presetQuestions: document.getElementById('cfg-presetQuestions').value.split('\n').map(s => s.trim()).filter(Boolean),
+    quickPhrases: document.getElementById('cfg-quickPhrases').value.split('\n').map(s => s.trim()).filter(Boolean),
+    enableDeepThink: document.getElementById('cfg-enableDeepThink').checked,
+    enableHistory: document.getElementById('cfg-enableHistory').checked,
+    enableBrowserInfo: document.getElementById('cfg-enableBrowserInfo').checked,
+  };
+  try {
+    const res = await fetch('/api/admin/chat/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.success) {
+      msg.textContent = '✅ 已保存'; msg.style.color = '#16a34a';
+      showToast('配置已保存', 'success');
+    } else {
+      msg.textContent = '❌ ' + (data.error || '保存失败'); msg.style.color = '#ef4444';
+    }
+  } catch (e) {
+    msg.textContent = '❌ ' + e.message; msg.style.color = '#ef4444';
+  }
+  setTimeout(() => { msg.textContent = ''; }, 3000);
+};
+
 // ---------- AI 助手配额管理 ----------
 async function loadChatLimits() {
   const container = document.getElementById('chat-users-list');
@@ -1053,6 +1257,7 @@ async function loadChatLimits() {
     const data = await res.json();
 
     document.getElementById('chat-default-limit').value = data.default;
+    document.getElementById('chat-default-display').textContent = data.default;
 
     if (!data.users || data.users.length === 0) {
       container.innerHTML = '<p style="color:#94a3b8;">暂无其他用户</p>';
