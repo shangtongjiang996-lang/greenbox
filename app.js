@@ -225,11 +225,36 @@ app.post('/api/update', async (req, res) => {
 });
 
 // ============================================================
-//  AI 聊天助手（智谱 GLM 代理 + 每日配额）
+//  AI 聊天助手（智谱 GLM + 流式 + 多会话 + 云端存储）
 // ============================================================
 const CHAT_DEFAULT_LIMIT = 20;
 const ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-const ZHIPU_MODEL = 'glm-4-flash';
+
+const DEFAULT_CHAT_CONFIG = {
+  model: 'glm-4-flash',
+  temperature: 0.7,
+  maxTokens: 2000,
+  systemPrompt: '你是 GreenBox 网站的 AI 助手，回答简洁、友好、准确。涉及本站工具（如五子棋、PDF合并器）时可主动介绍。',
+  welcomeMessage: '你好！我是 GreenBox 的 AI 助手 ✨\n有什么可以帮你的吗？',
+  presetQuestions: [
+    '介绍一下 GreenBox 有哪些工具',
+    '五子棋怎么玩？',
+    '你能帮我写代码吗？',
+    '今天有什么热门新闻？'
+  ],
+  quickPhrases: [
+    '继续',
+    '换个说法',
+    '再详细一点',
+    '举个例子',
+    '总结一下'
+  ],
+  enableDeepThink: true,
+  enableHistory: true,
+  enableBrowserInfo: true,
+  browserInfoTemplate: '【环境信息】\n时间：{time}\n时区：{timezone}\n语言：{lang}\n屏幕：{screen}\n网络：{network}',
+  deepThinkPrompt: '在回答用户问题前，请先在 [THOUGHT] 和 [/THOUGHT] 标签内进行深度思考（分析问题、列举方案、评估优缺点），然后在 [ANSWER] 和 [/ANSWER] 标签内给出最终答案。'
+};
 
 // 北京时间日期
 function todayKey() {
@@ -238,6 +263,14 @@ function todayKey() {
   return bj.toISOString().slice(0, 10);
 }
 
+// 获取聊天配置
+async function getChatConfig() {
+  const cfg = await kvGet('chat_config');
+  if (!cfg || typeof cfg !== 'object') return { ...DEFAULT_CHAT_CONFIG };
+  return { ...DEFAULT_CHAT_CONFIG, ...cfg };
+}
+
+// 获取用户限额
 async function getUserChatLimit(username) {
   let limit = await kvGet(`chat_limit:${username}`);
   if (limit === null || limit === undefined) {
@@ -248,13 +281,56 @@ async function getUserChatLimit(username) {
   return isNaN(n) ? CHAT_DEFAULT_LIMIT : n;
 }
 
+// 获取今日用量
 async function getUsedToday(username) {
-  const key = `chat_quota:${username}:${todayKey()}`;
-  const raw = await kvGet(key);
+  const raw = await kvGet(`chat_quota:${username}:${todayKey()}`);
   return raw ? parseInt(raw, 10) : 0;
 }
 
-// 查询配额
+// 消耗一次配额
+async function consumeQuota(username) {
+  const key = `chat_quota:${username}:${todayKey()}`;
+  const used = await getUsedToday(username);
+  const newUsed = used + 1;
+  await kvPut(key, newUsed, { expirationTtl: 60 * 60 * 48 });
+  return newUsed;
+}
+
+// 会话索引
+async function getUserSessions(username) {
+  const list = await kvGet(`chat_sessions:${username}`);
+  return Array.isArray(list) ? list : [];
+}
+
+async function saveUserSessions(username, list) {
+  await kvPut(`chat_sessions:${username}`, list.slice(0, 50)); // 最多 50 个会话
+}
+
+// 生成会话 ID
+function genSessionId() {
+  return 'S' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// 从消息生成标题
+function genTitle(text) {
+  const t = String(text).replace(/\s+/g, ' ').trim();
+  return t.length > 20 ? t.slice(0, 20) + '...' : t || '新对话';
+}
+
+// ---------- 公开：获取聊天配置（前端需要的部分） ----------
+app.get('/api/chat/config', async (req, res) => {
+  const cfg = await getChatConfig();
+  res.json({
+    welcomeMessage: cfg.welcomeMessage,
+    presetQuestions: cfg.presetQuestions,
+    quickPhrases: cfg.quickPhrases,
+    enableDeepThink: cfg.enableDeepThink,
+    enableHistory: cfg.enableHistory,
+    model: cfg.model,
+  });
+});
+
+// ---------- 查询配额 ----------
 app.get('/api/chat/quota', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -264,14 +340,124 @@ app.get('/api/chat/quota', async (req, res) => {
   res.json({ limit, used, remaining: Math.max(0, limit - used) });
 });
 
-// 发送消息
-app.post('/api/chat', async (req, res) => {
+// ---------- 会话列表 ----------
+app.get('/api/chat/sessions', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const cfg = await getChatConfig();
+  if (!cfg.enableHistory) return res.json([]);
+  const list = await getUserSessions(session.username);
+  res.json(list);
+});
+
+// ---------- 创建会话 ----------
+app.post('/api/chat/sessions', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const cfg = await getChatConfig();
+  if (!cfg.enableHistory) return res.status(403).json({ error: '历史功能已关闭' });
+
+  const sid = genSessionId();
+  const now = Date.now();
+  const newSession = {
+    id: sid,
+    title: '新对话',
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+  };
+
+  const list = await getUserSessions(session.username);
+  list.unshift({
+    id: sid,
+    title: newSession.title,
+    createdAt: now,
+    updatedAt: now,
+    count: 0,
+  });
+  await saveUserSessions(session.username, list);
+  await kvPut(`chat_session:${session.username}:${sid}`, newSession, { expirationTtl: 30 * 24 * 3600 });
+
+  res.json({ success: true, session: newSession });
+});
+
+// ---------- 获取会话详情 ----------
+app.get('/api/chat/sessions/:id', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const cfg = await getChatConfig();
+  if (!cfg.enableHistory) return res.status(403).json({ error: '历史功能已关闭' });
+
+  const data = await kvGet(`chat_session:${session.username}:${req.params.id}`);
+  if (!data) return res.status(404).json({ error: '会话不存在' });
+  res.json(data);
+});
+
+// ---------- 更新会话（重命名、保存消息） ----------
+app.put('/api/chat/sessions/:id', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const cfg = await getChatConfig();
+  if (!cfg.enableHistory) return res.status(403).json({ error: '历史功能已关闭' });
+
+  const sid = req.params.id;
+  const data = await kvGet(`chat_session:${session.username}:${sid}`);
+  if (!data) return res.status(404).json({ error: '会话不存在' });
+
+  const { title, messages } = req.body || {};
+  if (typeof title === 'string' && title.trim()) data.title = title.trim().slice(0, 50);
+  if (Array.isArray(messages)) {
+    data.messages = messages.slice(-100).map(m => ({
+      role: ['user', 'assistant', 'system'].includes(m.role) ? m.role : 'user',
+      content: String(m.content || '').slice(0, 8000),
+      time: m.time || Date.now(),
+      thought: m.thought ? String(m.thought).slice(0, 4000) : undefined,
+    }));
+  }
+  data.updatedAt = Date.now();
+  await kvPut(`chat_session:${session.username}:${sid}`, data, { expirationTtl: 30 * 24 * 3600 });
+
+  // 更新索引
+  const list = await getUserSessions(session.username);
+  const idx = list.findIndex(s => s.id === sid);
+  if (idx >= 0) {
+    list[idx].title = data.title;
+    list[idx].updatedAt = data.updatedAt;
+    list[idx].count = data.messages.length;
+    // 移到最前
+    const [item] = list.splice(idx, 1);
+    list.unshift(item);
+    await saveUserSessions(session.username, list);
+  }
+  res.json({ success: true });
+});
+
+// ---------- 删除会话 ----------
+app.delete('/api/chat/sessions/:id', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const sid = req.params.id;
+  await kvDelete(`chat_session:${session.username}:${sid}`);
+  const list = await getUserSessions(session.username);
+  const newList = list.filter(s => s.id !== sid);
+  await saveUserSessions(session.username, newList);
+  res.json({ success: true });
+});
+
+// ---------- 流式对话（SSE） ----------
+app.post('/api/chat/stream', async (req, res) => {
   try {
     const token = getBearerToken(req);
     const session = await getSession(token);
     if (!session) return res.status(401).json({ error: '请先登录后使用' });
 
     const username = session.username;
+    const cfg = await getChatConfig();
     const limit = await getUserChatLimit(username);
     const used = await getUsedToday(username);
 
@@ -280,25 +466,47 @@ app.post('/api/chat', async (req, res) => {
       return res.status(429).json({ error: `今日对话次数已用完（${limit} 次/天），明天再来吧～` });
     }
 
-    let { messages } = req.body || {};
+    let { messages, sessionId, deepThink, browserInfo } = req.body || {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: '消息不能为空' });
     }
 
-    // 安全限制
-    messages = messages.slice(-20).map((m) => ({
+    // 安全清理
+    messages = messages.slice(-20).map(m => ({
       role: ['system', 'user', 'assistant'].includes(m.role) ? m.role : 'user',
       content: String(m.content || '').slice(0, 4000),
-    })).filter((m) => m.content);
+    })).filter(m => m.content);
 
     if (messages.length === 0) return res.status(400).json({ error: '消息内容为空' });
 
-    if (!messages.some((m) => m.role === 'system')) {
-      messages.unshift({
-        role: 'system',
-        content: '你是 GreenBox 网站的 AI 助手，回答简洁、友好、准确。涉及本站工具（如五子棋、PDF合并器）时可主动介绍。',
-      });
+    // 构造 system prompt
+    let sysPrompt = cfg.systemPrompt || DEFAULT_CHAT_CONFIG.systemPrompt;
+
+    // 追加浏览器环境信息
+    if (cfg.enableBrowserInfo && browserInfo && typeof browserInfo === 'object') {
+      const tpl = cfg.browserInfoTemplate || DEFAULT_CHAT_CONFIG.browserInfoTemplate;
+      const info = tpl
+        .replace('{time}', String(browserInfo.time || '').slice(0, 50))
+        .replace('{timezone}', String(browserInfo.timezone || '').slice(0, 50))
+        .replace('{lang}', String(browserInfo.lang || '').slice(0, 20))
+        .replace('{screen}', String(browserInfo.screen || '').slice(0, 30))
+        .replace('{network}', String(browserInfo.network || '').slice(0, 30));
+      sysPrompt += '\n\n' + info;
     }
+
+    // 深度思考
+    if (deepThink && cfg.enableDeepThink) {
+      sysPrompt += '\n\n' + (cfg.deepThinkPrompt || DEFAULT_CHAT_CONFIG.deepThinkPrompt);
+    }
+
+    messages.unshift({ role: 'system', content: sysPrompt });
+
+    // SSE 头
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
 
     const apiKey = process.env.ZHIPU_API_KEY || '7b77f8d932f243ce99525a7f4194d755.QJNWfoQtfjyVQCLi';
 
@@ -311,47 +519,176 @@ app.post('/api/chat', async (req, res) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: ZHIPU_MODEL,
+          model: cfg.model || DEFAULT_CHAT_CONFIG.model,
           messages,
-          temperature: 0.7,
-          max_tokens: 2000,
+          temperature: typeof cfg.temperature === 'number' ? cfg.temperature : 0.7,
+          max_tokens: cfg.maxTokens || 2000,
+          stream: true,
         }),
       });
     } catch (e) {
       console.error('Zhipu fetch error:', e);
-      return res.status(502).json({ error: 'AI 服务连接失败，请稍后重试' });
+      res.write(`data: ${JSON.stringify({ error: 'AI 服务连接失败' })}\n\n`);
+      res.end();
+      return;
     }
 
     if (!zhipuRes.ok) {
       const errText = await zhipuRes.text().catch(() => '');
       console.error('Zhipu API error:', zhipuRes.status, errText);
-      if (zhipuRes.status === 401) return res.status(500).json({ error: 'AI 服务配置错误' });
-      if (zhipuRes.status === 429) return res.status(503).json({ error: 'AI 服务繁忙，请稍后再试' });
-      return res.status(502).json({ error: 'AI 服务暂时不可用' });
+      let msg = 'AI 服务暂时不可用';
+      if (zhipuRes.status === 401) msg = 'AI 服务配置错误';
+      if (zhipuRes.status === 429) msg = 'AI 服务繁忙，请稍后再试';
+      res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
+      res.end();
+      return;
     }
 
-    const data = await zhipuRes.json();
-    const reply = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-    if (!reply) return res.status(502).json({ error: 'AI 未返回内容' });
+    // 转发流
+    const reader = zhipuRes.body.getReader();
+    const decoder = new TextDecoder();
+    let fullResponse = '';
+    let buffer = '';
 
-    // 消耗一次配额
-    const newUsed = used + 1;
-    await kvPut(`chat_quota:${username}:${todayKey()}`, newUsed, { expirationTtl: 60 * 60 * 48 });
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-    res.json({
-      success: true,
-      reply,
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const json = JSON.parse(data);
+            const content = json.choices?.[0]?.delta?.content || '';
+            if (content) {
+              fullResponse += content;
+              res.write(`data: ${JSON.stringify({ content })}\n\n`);
+            }
+          } catch (e) {}
+        }
+      }
+    } catch (streamErr) {
+      console.error('Stream error:', streamErr);
+    }
+
+    // 消耗配额
+    const newUsed = await consumeQuota(username);
+
+    // 保存到会话
+    if (sessionId && cfg.enableHistory) {
+      try {
+        const data = await kvGet(`chat_session:${username}:${sessionId}`);
+        if (data) {
+          const userMsg = messages[messages.length - 1];
+          if (userMsg && userMsg.role === 'user') {
+            // 提取思考过程
+            let thought = '';
+            let answer = fullResponse;
+            const thoughtMatch = fullResponse.match(/\[THOUGHT\]([\s\S]*?)\[\/THOUGHT\]/);
+            const answerMatch = fullResponse.match(/\[ANSWER\]([\s\S]*?)(\[\/ANSWER\]|$)/);
+            if (thoughtMatch) thought = thoughtMatch[1].trim();
+            if (answerMatch) answer = answerMatch[1].trim();
+
+            if (!data.messages) data.messages = [];
+            data.messages.push({ role: 'user', content: userMsg.content, time: Date.now() });
+            data.messages.push({
+              role: 'assistant',
+              content: answer,
+              thought: thought || undefined,
+              time: Date.now(),
+            });
+            data.messages = data.messages.slice(-100);
+
+            // 自动生成标题
+            if (data.title === '新对话' && data.messages.length <= 2) {
+              data.title = genTitle(userMsg.content);
+            }
+            data.updatedAt = Date.now();
+            await kvPut(`chat_session:${username}:${sessionId}`, data, { expirationTtl: 30 * 24 * 3600 });
+
+            // 更新索引
+            const list = await getUserSessions(username);
+            const idx = list.findIndex(s => s.id === sessionId);
+            if (idx >= 0) {
+              list[idx].title = data.title;
+              list[idx].updatedAt = data.updatedAt;
+              list[idx].count = data.messages.length;
+              const [item] = list.splice(idx, 1);
+              list.unshift(item);
+              await saveUserSessions(username, list);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Save session error:', e);
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({
+      done: true,
+      reply: fullResponse,
       used: newUsed,
       limit,
       remaining: Math.max(0, limit - newUsed),
-    });
+    })}\n\n`);
+    res.end();
+
   } catch (err) {
-    console.error('/api/chat error:', err);
-    res.status(500).json({ error: '服务器内部错误' });
+    console.error('/api/chat/stream error:', err);
+    try {
+      res.write(`data: ${JSON.stringify({ error: '服务器内部错误' })}\n\n`);
+      res.end();
+    } catch (e) {}
   }
 });
 
-// 管理员：查看所有用户配额
+// ---------- 管理员：获取/更新聊天配置 ----------
+app.get('/api/admin/chat/config', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const cfg = await getChatConfig();
+  res.json(cfg);
+});
+
+app.put('/api/admin/chat/config', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const body = req.body || {};
+  const old = await getChatConfig();
+
+  const newCfg = { ...old };
+
+  if (typeof body.systemPrompt === 'string') newCfg.systemPrompt = body.systemPrompt.slice(0, 4000);
+  if (typeof body.welcomeMessage === 'string') newCfg.welcomeMessage = body.welcomeMessage.slice(0, 500);
+  if (Array.isArray(body.presetQuestions)) {
+    newCfg.presetQuestions = body.presetQuestions.slice(0, 10).map(s => String(s).slice(0, 100));
+  }
+  if (Array.isArray(body.quickPhrases)) {
+    newCfg.quickPhrases = body.quickPhrases.slice(0, 10).map(s => String(s).slice(0, 50));
+  }
+  if (typeof body.model === 'string') newCfg.model = body.model.slice(0, 50);
+  if (typeof body.temperature === 'number' && body.temperature >= 0 && body.temperature <= 1) {
+    newCfg.temperature = body.temperature;
+  }
+  if (typeof body.maxTokens === 'number' && body.maxTokens > 0 && body.maxTokens <= 8000) {
+    newCfg.maxTokens = body.maxTokens;
+  }
+  if (typeof body.enableDeepThink === 'boolean') newCfg.enableDeepThink = body.enableDeepThink;
+  if (typeof body.enableHistory === 'boolean') newCfg.enableHistory = body.enableHistory;
+  if (typeof body.enableBrowserInfo === 'boolean') newCfg.enableBrowserInfo = body.enableBrowserInfo;
+  if (typeof body.browserInfoTemplate === 'string') newCfg.browserInfoTemplate = body.browserInfoTemplate.slice(0, 1000);
+  if (typeof body.deepThinkPrompt === 'string') newCfg.deepThinkPrompt = body.deepThinkPrompt.slice(0, 1000);
+
+  await kvPut('chat_config', newCfg);
+  res.json({ success: true, config: newCfg });
+});
+
+// ---------- 管理员：用户配额列表 ----------
 app.get('/api/admin/chat/limits', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
 
@@ -359,25 +696,21 @@ app.get('/api/admin/chat/limits', async (req, res) => {
   if (defaultLimit === null || defaultLimit === undefined) defaultLimit = CHAT_DEFAULT_LIMIT;
 
   const users = (await kvGet('users')) || {};
-  const userList = Object.keys(users).filter((u) => u !== 'admin');
+  const userList = Object.keys(users).filter(u => u !== 'admin');
 
-  // 查询所有 chat_limit:* 覆盖
   const limitKeys = await kvList({ prefix: 'chat_limit:' });
   const overrides = {};
   for (const k of limitKeys.keys) {
     if (k.name === 'chat_limit:default') continue;
     const uname = k.name.replace('chat_limit:', '');
-    const val = await kvGet(k.name);
-    overrides[uname] = val;
+    overrides[uname] = await kvGet(k.name);
   }
 
-  // 查询今日用量
   const today = todayKey();
   const usage = {};
   const quotaKeys = await kvList({ prefix: 'chat_quota:' });
   for (const k of quotaKeys.keys) {
     if (!k.name.endsWith(`:${today}`)) continue;
-    // 格式：chat_quota:用户名:日期
     const parts = k.name.split(':');
     if (parts.length < 3) continue;
     const uname = parts[1];
@@ -385,8 +718,7 @@ app.get('/api/admin/chat/limits', async (req, res) => {
     usage[uname] = parseInt(val, 10) || 0;
   }
 
-  // 组装用户列表
-  const list = userList.map((u) => {
+  const list = userList.map(u => {
     const hasOverride = overrides[u] !== undefined && overrides[u] !== null;
     const effLimit = hasOverride ? parseInt(overrides[u], 10) : parseInt(defaultLimit, 10);
     return {
@@ -403,7 +735,6 @@ app.get('/api/admin/chat/limits', async (req, res) => {
   });
 });
 
-// 管理员：修改限额
 app.put('/api/admin/chat/limit', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { username, limit } = req.body || {};
@@ -422,7 +753,6 @@ app.put('/api/admin/chat/limit', async (req, res) => {
   res.json({ success: true, message: `${username} 限额已设为 ${n} 次/天` });
 });
 
-// 管理员：清除某个用户的个性化限额（恢复默认）
 app.delete('/api/admin/chat/limit/:username', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const username = req.params.username;
@@ -431,7 +761,6 @@ app.delete('/api/admin/chat/limit/:username', async (req, res) => {
   res.json({ success: true, message: `${username} 已恢复默认限额` });
 });
 
-// 管理员：重置某用户今日用量
 app.post('/api/admin/chat/reset-usage', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { username } = req.body || {};
@@ -441,6 +770,8 @@ app.post('/api/admin/chat/reset-usage', async (req, res) => {
 });
 
 // ============================================================
+
+// 上传工具（需管理员）
 
 // 上传工具（需管理员）
 app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
