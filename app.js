@@ -15,9 +15,10 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
+// 文件上传配置
 const upload = multer({ 
   storage: multer.memoryStorage(), 
   limits: { fileSize: 2 * 1024 * 1024 } 
@@ -33,6 +34,7 @@ function isValidPassword(p) { return typeof p === 'string' && p.length >= 6 && p
 function toHex(buffer) { return Array.from(new Uint8Array(buffer)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
 function clientIp(req) { return req.headers['cf-connecting-ip'] || req.ip || 'unknown'; }
 
+// 密码哈希
 async function hashPasswordPBKDF2(password, saltHex, iterations) {
   const salt = Buffer.from(saltHex, 'hex');
   return new Promise((resolve, reject) => {
@@ -47,7 +49,7 @@ async function createUserRecord(password) {
   const salt = crypto.randomBytes(16).toString('hex');
   const iterations = 100000;
   const passwordHash = await hashPasswordPBKDF2(password, salt, iterations);
-  return { passwordHash, salt, iterations, algo: 'pbkdf2-sha256', role: 'user' };
+  return { passwordHash, salt, iterations, algo: 'pbkdf2-sha256', role: 'user', createdAt: Date.now() };
 }
 
 async function verifyUserRecord(user, password) {
@@ -119,8 +121,29 @@ async function checkRateLimit(key, limit, windowSeconds) {
   return count <= limit;
 }
 
+// ======== 用户资料相关辅助 ========
+async function getPublicProfile(username) {
+  const profile = await kvGet(`user_profile:${username}`) || {};
+  const avatar = await kvGet(`user_avatar:${username}`);
+  let role = 'user';
+  if (username === 'admin') role = 'admin';
+  else {
+    const users = await kvGet('users') || {};
+    role = (users[username] && users[username].role) || 'user';
+  }
+  return {
+    username,
+    displayName: profile.displayName || (username === 'admin' ? '管理员' : username),
+    bio: profile.bio || '',
+    role,
+    hasAvatar: !!avatar,
+    updatedAt: profile.updatedAt || null,
+  };
+}
+
 // ======== REST API ========
 
+// 注册
 app.post('/api/register', async (req, res) => {
   const ip = clientIp(req);
   if (!(await checkRateLimit(`rl:register:${ip}`, 5, 3600))) return res.status(429).json({ error: '请求过于频繁' });
@@ -136,6 +159,7 @@ app.post('/api/register', async (req, res) => {
   res.json({ success: true, message: '注册成功' });
 });
 
+// 登录
 app.post('/api/login', async (req, res) => {
   const ip = clientIp(req);
   if (!(await checkRateLimit(`rl:login:${ip}`, 10, 600))) return res.status(429).json({ error: '登录过于频繁' });
@@ -167,26 +191,45 @@ app.post('/api/login', async (req, res) => {
   res.json({ success: true, token, username, role: user.role || 'user', needsUpgrade });
 });
 
+// 验证 token（增强版：返回 profile 信息）
 app.get('/api/verify', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ valid: false });
-  const users = await kvGet('users') || {};
-  const user = users[session.username];
-  const needsUpgrade = user && (!user.encryptedPassword || user.algo !== 'pbkdf2-sha256');
-  res.json({ valid: true, username: session.username, role: session.role, needsUpgrade });
+
+  const profile = await getPublicProfile(session.username);
+
+  let needsUpgrade = false;
+  if (session.username !== 'admin') {
+    const users = await kvGet('users') || {};
+    const user = users[session.username];
+    needsUpgrade = !!(user && (!user.encryptedPassword || user.algo !== 'pbkdf2-sha256'));
+  }
+
+  res.json({
+    valid: true,
+    username: session.username,
+    role: session.role,
+    needsUpgrade,
+    displayName: profile.displayName,
+    bio: profile.bio,
+    hasAvatar: profile.hasAvatar,
+  });
 });
 
+// 登出
 app.post('/api/logout', async (req, res) => {
   const token = getBearerToken(req);
   if (token) await kvDelete(`session:${token}`);
   res.json({ success: true });
 });
 
+// 修改自己的密码
 app.post('/api/change-my-password', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
+  if (session.username === 'admin') return res.status(403).json({ error: '请使用管理后台修改密码' });
   const { newPassword } = req.body;
   if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: '密码至少6位' });
   const users = await kvGet('users') || {};
@@ -195,11 +238,13 @@ app.post('/api/change-my-password', async (req, res) => {
   const newRecord = await createUserRecord(newPassword);
   newRecord.role = user.role || 'user';
   newRecord.encryptedPassword = encryptPassword(newPassword);
+  newRecord.createdAt = user.createdAt || Date.now();
   users[session.username] = newRecord;
   await kvPut('users', users);
   res.json({ success: true });
 });
 
+// 删除账号
 app.post('/api/delete-account', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -209,8 +254,109 @@ app.post('/api/delete-account', async (req, res) => {
   delete users[session.username];
   await kvPut('users', users);
   await kvDelete(`session:${token}`);
+  // 清理相关数据
+  await kvDelete(`user_profile:${session.username}`);
+  await kvDelete(`user_avatar:${session.username}`);
+  await kvDelete(`notif_read:${session.username}`);
+  await kvDelete(`notif_deleted:${session.username}`);
+  await kvDelete(`chat_sessions:${session.username}`);
+  await kvDelete(`chat_limit:${session.username}`);
   res.json({ success: true });
 });
+
+// ======== 用户资料 API ========
+
+// 获取某用户的公开资料
+app.get('/api/user/profile/:username', async (req, res) => {
+  const username = req.params.username;
+  if (!username) return res.status(400).json({ error: '缺少用户名' });
+  const users = await kvGet('users') || {};
+  if (username !== 'admin' && !users[username]) {
+    return res.status(404).json({ error: '用户不存在' });
+  }
+  const profile = await getPublicProfile(username);
+  res.json(profile);
+});
+
+// 获取自己的详细资料
+app.get('/api/user/me', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const profile = await getPublicProfile(session.username);
+  res.json(profile);
+});
+
+// 更新自己的资料（昵称、签名）
+app.put('/api/user/profile', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const { displayName, bio } = req.body || {};
+  const profile = await kvGet(`user_profile:${session.username}`) || {};
+
+  if (typeof displayName === 'string') {
+    const dn = displayName.trim().slice(0, 20);
+    if (dn) profile.displayName = dn;
+    else delete profile.displayName;
+  }
+  if (typeof bio === 'string') {
+    profile.bio = bio.trim().slice(0, 100);
+  }
+  profile.updatedAt = Date.now();
+
+  await kvPut(`user_profile:${session.username}`, profile);
+  res.json({ success: true, profile });
+});
+
+// 上传头像
+app.post('/api/user/avatar', upload.single('avatar'), async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: '请选择图片文件' });
+  if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype)) {
+    return res.status(400).json({ error: '仅支持 JPG/PNG/GIF/WEBP 格式' });
+  }
+  if (file.size > 500 * 1024) {
+    return res.status(400).json({ error: '图片不能超过 500KB' });
+  }
+
+  const base64 = file.buffer.toString('base64');
+  const dataUri = `data:${file.mimetype};base64,${base64}`;
+  await kvPut(`user_avatar:${session.username}`, dataUri);
+  res.json({ success: true });
+});
+
+// 获取头像
+app.get('/api/user/avatar/:username', async (req, res) => {
+  const username = req.params.username;
+  const avatar = await kvGet(`user_avatar:${username}`);
+  if (!avatar || typeof avatar !== 'string') return res.status(404).send('无头像');
+
+  const match = avatar.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return res.status(500).send('头像格式错误');
+
+  const mime = match[1];
+  const buf = Buffer.from(match[2], 'base64');
+  res.set('Content-Type', mime);
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.send(buf);
+});
+
+// 删除头像
+app.delete('/api/user/avatar', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  await kvDelete(`user_avatar:${session.username}`);
+  res.json({ success: true });
+});
+
+// ======== 站点数据 ========
 
 app.get('/api/data', async (req, res) => {
   const data = await kvGet('site_data') || { tools: [], changelogs: [] };
@@ -224,6 +370,7 @@ app.post('/api/update', async (req, res) => {
   res.json({ success: true });
 });
 
+// 上传工具（需管理员）
 app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { name, icon, description, category } = req.body;
@@ -332,7 +479,6 @@ function genTitle(text) {
   return t.length > 20 ? t.slice(0, 20) + '...' : t || '新对话';
 }
 
-// 公开配置
 app.get('/api/chat/config', async (req, res) => {
   const cfg = await getChatConfig();
   res.json({
@@ -345,23 +491,18 @@ app.get('/api/chat/config', async (req, res) => {
   });
 });
 
-// 配额
 app.get('/api/chat/quota', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
-
-  // 👑 管理员无限
   if (session.role === 'admin') {
     return res.json({ limit: -1, used: 0, remaining: -1, unlimited: true });
   }
-
   const limit = await getUserChatLimit(session.username);
   const used = await getUsedToday(session.username);
   res.json({ limit, used, remaining: Math.max(0, limit - used) });
 });
 
-// 会话列表
 app.get('/api/chat/sessions', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -372,7 +513,6 @@ app.get('/api/chat/sessions', async (req, res) => {
   res.json(list);
 });
 
-// 创建会话
 app.post('/api/chat/sessions', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -391,20 +531,13 @@ app.post('/api/chat/sessions', async (req, res) => {
   };
 
   const list = await getUserSessions(session.username);
-  list.unshift({
-    id: sid,
-    title: newSession.title,
-    createdAt: now,
-    updatedAt: now,
-    count: 0,
-  });
+  list.unshift({ id: sid, title: newSession.title, createdAt: now, updatedAt: now, count: 0 });
   await saveUserSessions(session.username, list);
   await kvPut(`chat_session:${session.username}:${sid}`, newSession, { expirationTtl: 30 * 24 * 3600 });
 
   res.json({ success: true, session: newSession });
 });
 
-// 获取会话
 app.get('/api/chat/sessions/:id', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -417,7 +550,6 @@ app.get('/api/chat/sessions/:id', async (req, res) => {
   res.json(data);
 });
 
-// 更新会话
 app.put('/api/chat/sessions/:id', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -455,7 +587,6 @@ app.put('/api/chat/sessions/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// 删除会话
 app.delete('/api/chat/sessions/:id', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -468,7 +599,6 @@ app.delete('/api/chat/sessions/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// 流式对话
 app.post('/api/chat/stream', async (req, res) => {
   try {
     const token = getBearerToken(req);
@@ -664,7 +794,7 @@ app.post('/api/chat/stream', async (req, res) => {
   }
 });
 
-// 管理员：配置
+// 管理员：AI 配置
 app.get('/api/admin/chat/config', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const cfg = await getChatConfig();
@@ -702,7 +832,6 @@ app.put('/api/admin/chat/config', async (req, res) => {
   res.json({ success: true, config: newCfg });
 });
 
-// 管理员：配额列表
 app.get('/api/admin/chat/limits', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
 
@@ -783,12 +912,178 @@ app.post('/api/admin/chat/reset-usage', async (req, res) => {
   res.json({ success: true });
 });
 
-// ======== 后台管理 API ========
+// ============================================================
+//  通知系统
+// ============================================================
+function genNotifId() {
+  return 'N' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+async function getUserNotifications(username) {
+  const all = (await kvGet('notifications')) || [];
+  const readList = (await kvGet(`notif_read:${username}`)) || [];
+  const deletedList = (await kvGet(`notif_deleted:${username}`)) || [];
+  const readSet = new Set(readList);
+  const deletedSet = new Set(deletedList);
+
+  return all
+    .filter(n => {
+      if (n.target !== 'all' && n.target !== username) return false;
+      if (deletedSet.has(n.id)) return false;
+      return true;
+    })
+    .map(n => ({
+      id: n.id,
+      title: n.title,
+      content: n.content,
+      type: n.type || 'info',
+      createdAt: n.createdAt,
+      sender: n.sender || 'admin',
+      read: readSet.has(n.id),
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// 获取通知列表
+app.get('/api/notifications', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const list = await getUserNotifications(session.username);
+  res.json(list);
+});
+
+// 未读数
+app.get('/api/notifications/unread-count', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const list = await getUserNotifications(session.username);
+  const unread = list.filter(n => !n.read).length;
+  res.json({ count: unread });
+});
+
+// 标记已读（支持单个或多个）
+app.post('/api/notifications/read', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const { ids } = req.body || {};
+  const readList = (await kvGet(`notif_read:${session.username}`)) || [];
+  const set = new Set(readList);
+  if (Array.isArray(ids)) {
+    ids.forEach(id => set.add(String(id)));
+  } else if (typeof ids === 'string') {
+    set.add(ids);
+  }
+  await kvPut(`notif_read:${session.username}`, Array.from(set).slice(-500));
+  res.json({ success: true });
+});
+
+// 全部标记已读
+app.post('/api/notifications/read-all', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const list = await getUserNotifications(session.username);
+  const readList = (await kvGet(`notif_read:${session.username}`)) || [];
+  const set = new Set(readList);
+  list.forEach(n => set.add(n.id));
+  await kvPut(`notif_read:${session.username}`, Array.from(set).slice(-500));
+  res.json({ success: true });
+});
+
+// 删除某条通知（软删除）
+app.delete('/api/notifications/:id', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const id = req.params.id;
+  const deletedList = (await kvGet(`notif_deleted:${session.username}`)) || [];
+  const set = new Set(deletedList);
+  set.add(id);
+  await kvPut(`notif_deleted:${session.username}`, Array.from(set).slice(-500));
+  res.json({ success: true });
+});
+
+// 清空所有通知（软删除所有当前可见的）
+app.delete('/api/notifications', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const list = await getUserNotifications(session.username);
+  const deletedList = (await kvGet(`notif_deleted:${session.username}`)) || [];
+  const set = new Set(deletedList);
+  list.forEach(n => set.add(n.id));
+  await kvPut(`notif_deleted:${session.username}`, Array.from(set).slice(-500));
+  res.json({ success: true });
+});
+
+// 管理员：查看所有通知
+app.get('/api/admin/notifications', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const list = (await kvGet('notifications')) || [];
+  res.json(list.slice().sort((a, b) => b.createdAt - a.createdAt));
+});
+
+// 管理员：发送通知
+app.post('/api/admin/notifications', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { title, content, type, target } = req.body || {};
+
+  if (!title || !String(title).trim()) return res.status(400).json({ error: '标题不能为空' });
+  if (!content || !String(content).trim()) return res.status(400).json({ error: '内容不能为空' });
+
+  const notif = {
+    id: genNotifId(),
+    title: String(title).trim().slice(0, 100),
+    content: String(content).trim().slice(0, 2000),
+    type: ['info', 'success', 'warning', 'error'].includes(type) ? type : 'info',
+    target: target || 'all',
+    sender: 'admin',
+    createdAt: Date.now(),
+  };
+
+  if (notif.target !== 'all') {
+    const users = await kvGet('users') || {};
+    if (!users[notif.target]) return res.status(404).json({ error: '目标用户不存在' });
+  }
+
+  const list = (await kvGet('notifications')) || [];
+  list.push(notif);
+  const trimmed = list.slice(-500);
+  await kvPut('notifications', trimmed);
+  res.json({ success: true, notification: notif });
+});
+
+// 管理员：删除通知（彻底删除，所有用户都不可见）
+app.delete('/api/admin/notifications/:id', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const id = req.params.id;
+  const list = (await kvGet('notifications')) || [];
+  const newList = list.filter(n => n.id !== id);
+  await kvPut('notifications', newList);
+  res.json({ success: true });
+});
+
+// ============================================================
+//  后台管理 API
+// ============================================================
 
 app.get('/api/admin/users', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const users = await kvGet('users') || {};
-  const list = Object.entries(users).map(([username, data]) => ({ username, role: data.role || 'user' }));
+  const list = await Promise.all(Object.entries(users).map(async ([username, data]) => {
+    const avatar = await kvGet(`user_avatar:${username}`);
+    const profile = await kvGet(`user_profile:${username}`) || {};
+    return {
+      username,
+      role: data.role || 'user',
+      displayName: profile.displayName || username,
+      hasAvatar: !!avatar,
+      createdAt: data.createdAt || null,
+    };
+  }));
   res.json(list);
 });
 
@@ -801,6 +1096,12 @@ app.delete('/api/admin/users', async (req, res) => {
   if (!users[username]) return res.status(404).json({ error: '用户不存在' });
   delete users[username];
   await kvPut('users', users);
+  await kvDelete(`user_profile:${username}`);
+  await kvDelete(`user_avatar:${username}`);
+  await kvDelete(`notif_read:${username}`);
+  await kvDelete(`notif_deleted:${username}`);
+  await kvDelete(`chat_sessions:${username}`);
+  await kvDelete(`chat_limit:${username}`);
   res.json({ success: true });
 });
 
@@ -828,6 +1129,7 @@ app.post('/api/admin/reset-password', async (req, res) => {
   const newRecord = await createUserRecord(newPassword);
   newRecord.role = users[username].role || 'user';
   newRecord.encryptedPassword = encryptPassword(newPassword);
+  newRecord.createdAt = users[username].createdAt || Date.now();
   users[username] = newRecord;
   await kvPut('users', users);
   res.json({ success: true });
@@ -1013,7 +1315,7 @@ app.get('/api/room/:roomId', async (req, res) => {
   res.json(safe);
 });
 
-// ======== WebSocket ========
+// ======== WebSocket 实时联机 ========
 const roomCache = new Map();
 
 async function getRoom(roomId) {
@@ -1169,6 +1471,7 @@ function checkWin(row, col, player, board) {
   return false;
 }
 
+// ======== 启动服务器 ========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
