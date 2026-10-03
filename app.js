@@ -15,17 +15,6 @@ const io = new Server(server, {
 });
 
 app.use(cors());
-
-// ============================================================
-//  强制 HTTPS 跳转（Render 环境使用 x-forwarded-proto 判断）
-// ============================================================
-app.use((req, res, next) => {
-  if (req.headers['x-forwarded-proto'] === 'http') {
-    return res.redirect(301, 'https://' + req.headers.host + req.originalUrl);
-  }
-  next();
-});
-
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
