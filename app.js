@@ -1281,6 +1281,148 @@ app.post('/api/admin/view-password', async (req, res) => {
 });
 
 // ======== 五子棋 REST 辅助接口 ========
+// 创建房间
+app.post('/api/room/create', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const { color, password, invite } = req.body;
+  if (color !== 1 && color !== 2) return res.status(400).json({ error: '请选择执子颜色' });
+  const roomId = crypto.randomUUID().slice(0, 6).toUpperCase();
+  const now = Date.now();
+  const room = {
+    board: Array(15).fill().map(() => Array(15).fill(0)),
+    currentPlayer: 1,
+    gameOver: false,
+    history: [],
+    players: { [color]: { username: session.username, online: true, color: color } },
+    creator: session.username,
+    creatorColor: color,
+    password: password || null,
+    inviteToken: invite ? crypto.randomUUID() : null,
+    status: 'waiting',
+    lastActive: now,
+    created: now,
+    messages: [],
+  };
+  try {
+    await kvPut(`gomoku:${roomId}`, room, { expirationTtl: 7200 });
+    res.json({ success: true, roomId, color, inviteToken: room.inviteToken });
+  } catch (err) {
+    console.error('创建房间失败:', err);
+    res.status(500).json({ error: '房间创建失败' });
+  }
+});
+
+// 加入房间
+app.post('/api/room/join', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const { roomId, password, inviteToken } = req.body;
+  if (!roomId) return res.status(400).json({ error: '缺少房间号' });
+  const key = `gomoku:${roomId}`;
+  const room = await kvGet(key);
+  if (!room) return res.status(404).json({ error: '房间不存在' });
+  if (room.status === 'closed' || room.status === 'finished') return res.status(400).json({ error: '房间已结束' });
+
+  let validInvite = false;
+  if (inviteToken && room.inviteToken && inviteToken === room.inviteToken) validInvite = true;
+  if (!validInvite && room.password && room.password !== password) return res.status(403).json({ error: '密码错误' });
+
+  const existingPlayer = Object.values(room.players).find(p => p.username === session.username);
+  if (existingPlayer) {
+    existingPlayer.online = true;
+    room.lastActive = Date.now();
+    const total = Object.keys(room.players).length;
+    const online = Object.values(room.players).filter(p => p.online).length;
+    room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
+    await kvPut(key, room, { expirationTtl: 7200 });
+    return res.json({ success: true, roomId, color: existingPlayer.color, action: 'reconnect' });
+  }
+
+  const occupiedColors = Object.keys(room.players).map(Number);
+  let availableColor = null;
+  if (room.status === 'waiting' || room.status === 'paused') {
+    if (occupiedColors.length < 2) availableColor = occupiedColors.includes(1) ? 2 : 1;
+    else return res.status(409).json({ error: '房间已满' });
+  } else if (room.status === 'playing') {
+    const offlinePlayer = Object.values(room.players).find(p => !p.online);
+    if (offlinePlayer) {
+      availableColor = offlinePlayer.color;
+      delete room.players[offlinePlayer.color];
+    } else return res.status(409).json({ error: '房间已满且无人离线' });
+  } else return res.status(400).json({ error: '房间状态异常' });
+  if (availableColor === null) return res.status(400).json({ error: '无法加入房间' });
+
+  room.players[availableColor] = { username: session.username, online: true, color: availableColor };
+  room.lastActive = Date.now();
+  for (const p of Object.values(room.players)) p.online = true;
+  const total = Object.keys(room.players).length;
+  const online = Object.values(room.players).filter(p => p.online).length;
+  room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
+  await kvPut(key, room, { expirationTtl: 7200 });
+  res.json({ success: true, roomId, color: availableColor, action: 'join' });
+});
+
+// 离开房间
+app.post('/api/room/leave', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const { roomId } = req.body;
+  if (!roomId) return res.status(400).json({ error: '缺少房间号' });
+  const key = `gomoku:${roomId}`;
+  const room = await kvGet(key);
+  if (!room) return res.status(404).json({ error: '房间不存在' });
+  let playerFound = false;
+  for (const color of Object.keys(room.players)) {
+    if (room.players[color].username === session.username) {
+      room.players[color].online = false;
+      playerFound = true;
+      break;
+    }
+  }
+  if (!playerFound) return res.status(403).json({ error: '你不在该房间中' });
+  const onlineCount = Object.values(room.players).filter(p => p.online).length;
+  if (onlineCount === 0) {
+    room.status = 'closed';
+    await kvPut(key, room, { expirationTtl: 60 });
+  } else {
+    const total = Object.keys(room.players).length;
+    room.status = (total === 1) ? 'waiting' : 'paused';
+    await kvPut(key, room, { expirationTtl: 7200 });
+  }
+  res.json({ success: true });
+});
+
+// 心跳（保持房间活跃）
+app.post('/api/room/heartbeat', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const { roomId } = req.body;
+  if (!roomId) return res.status(400).json({ error: '缺少房间号' });
+  const key = `gomoku:${roomId}`;
+  const room = await kvGet(key);
+  if (!room) return res.status(404).json({ error: '房间不存在' });
+  let updated = false;
+  for (const color of Object.keys(room.players)) {
+    if (room.players[color].username === session.username) {
+      room.players[color].online = true;
+      room.lastActive = Date.now();
+      updated = true;
+      break;
+    }
+  }
+  if (!updated) return res.status(400).json({ error: '你不在该房间中' });
+  const total = Object.keys(room.players).length;
+  const online = Object.values(room.players).filter(p => p.online).length;
+  room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
+  await kvPut(key, room, { expirationTtl: 7200 });
+  res.json({ success: true });
+});
+
 app.get('/api/rooms', async (req, res) => {
   try {
     const list = await kvList({ prefix: 'gomoku:' });
