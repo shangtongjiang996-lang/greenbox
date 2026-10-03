@@ -7,6 +7,9 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <style>
+    @media (max-width: 900px) {
+      .navbar { position: static !important; top: auto !important; }
+    }
     .profile-wrap {
       max-width: 720px;
       margin: 3rem auto;
@@ -183,6 +186,7 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      text-decoration: none;
     }
     .pbtn-primary {
       background: linear-gradient(135deg, #16a34a, #15803d);
@@ -209,13 +213,15 @@
       color: #b91c1c;
     }
     .pbtn-danger:hover { background: #fecaca; }
-    .pbtn-ghost {
-      background: transparent;
-      color: var(--muted, #64748b);
-      text-decoration: underline;
-      padding: 0.5rem;
+    .pbtn-admin {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: white;
+      box-shadow: 0 4px 12px rgba(245,158,11,0.35);
     }
-    .pbtn-ghost:hover { color: var(--text, #0f172a); }
+    .pbtn-admin:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(245,158,11,0.5);
+    }
 
     .profile-stats {
       display: grid;
@@ -239,6 +245,22 @@
       font-size: 0.78rem;
       color: var(--muted, #64748b);
       margin-top: 4px;
+    }
+
+    /* 管理员专属卡片（金色边框） */
+    .admin-card {
+      border: 2px solid #fbbf24;
+      background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    }
+    .admin-card .profile-section-title {
+      color: #92400e;
+    }
+    [data-theme="dark"] .admin-card {
+      background: linear-gradient(135deg, #422006, #78350f);
+      border-color: #d97706;
+    }
+    [data-theme="dark"] .admin-card .profile-section-title {
+      color: #fbbf24;
     }
 
     /* 头像上传弹窗 */
@@ -324,6 +346,13 @@
       flex-wrap: wrap;
     }
 
+    /* 用户头像（导航栏） */
+    .user-avatar-mini {
+      width: 28px; height: 28px; border-radius: 50%;
+      object-fit: cover; border: 2px solid var(--primary, #16a34a);
+      vertical-align: middle; margin-right: 6px;
+    }
+
     @media (max-width: 600px) {
       .profile-hero { padding: 2.5rem 1rem 1.5rem; }
       .avatar-big { width: 90px; height: 90px; font-size: 42px; }
@@ -353,7 +382,6 @@
   </nav>
 
   <main class="profile-wrap" id="profileMain" style="display:none;">
-    <!-- 头部卡片 -->
     <div class="profile-card">
       <div class="profile-hero">
         <div class="avatar-container">
@@ -379,6 +407,16 @@
           <div class="stat-box">
             <div class="num" id="statDays">-</div>
             <div class="lbl">📅 天</div>
+          </div>
+        </div>
+
+        <!-- 管理员专属：后台入口 -->
+        <div class="profile-section admin-card" id="adminSection" style="display:none;padding:1.2rem;border-radius:14px;">
+          <div class="profile-section-title">👑 管理员专属</div>
+          <div class="btn-row">
+            <a href="/admin.html" class="pbtn pbtn-admin" style="width:100%;justify-content:center;">
+              ⚙️ 打开管理后台
+            </a>
           </div>
         </div>
 
@@ -424,7 +462,7 @@
   <!-- 未登录提示 -->
   <div class="profile-wrap" id="notLoggedIn" style="display:none;text-align:center;padding:4rem 1rem;">
     <h2 style="color:var(--text);margin-bottom:1rem;">请先登录</h2>
-    <a href="/login.html?redirect=/profile.html" class="pbtn pbtn-primary" style="text-decoration:none;display:inline-flex;">前往登录</a>
+    <a href="/login.html?redirect=/profile.html" class="pbtn pbtn-primary" style="display:inline-flex;">前往登录</a>
   </div>
 
   <!-- 头像上传弹窗 -->
@@ -473,9 +511,6 @@
 
   <script src="script.js"></script>
   <script>
-    // ============================================================
-    //  认证检查
-    // ============================================================
     let currentUser = null;
     let originalProfile = { displayName: '', bio: '' };
     let selectedAvatarFile = null;
@@ -501,8 +536,6 @@
         currentUser = data;
         renderProfile(data);
         document.getElementById('profileMain').style.display = 'block';
-
-        // 副加载统计数据
         loadStats(data.username);
       } catch (e) {
         console.error(e);
@@ -511,11 +544,9 @@
     }
 
     function renderProfile(data) {
-      // 显示昵称 / 用户名
       document.getElementById('displayNameEl').textContent = data.displayName || data.username;
       document.getElementById('usernameEl').textContent = '@' + data.username;
 
-      // 角色标签
       const roleBadge = document.getElementById('roleBadge');
       if (data.role === 'admin') {
         roleBadge.textContent = '👑 管理员';
@@ -524,24 +555,23 @@
         roleBadge.textContent = '✨ 普通用户';
       }
 
-      // 头像
       renderAvatar(data.username, data.hasAvatar);
 
-      // 输入框
       document.getElementById('inputDisplayName').value = data.displayName || '';
       document.getElementById('inputBio').value = data.bio || '';
       updateCounters();
 
-      // 保存原始值
       originalProfile = {
         displayName: data.displayName || '',
         bio: data.bio || '',
       };
 
-      // 管理员不显示注销按钮
+      // 管理员显示后台入口
       if (data.role === 'admin') {
+        document.getElementById('adminSection').style.display = 'block';
         document.getElementById('deleteAccountBtn').style.display = 'none';
       } else {
+        document.getElementById('adminSection').style.display = 'none';
         document.getElementById('deleteAccountBtn').style.display = 'inline-flex';
       }
     }
@@ -561,10 +591,8 @@
       document.getElementById('bioCount').textContent = document.getElementById('inputBio').value.length;
     }
 
-    // 加载统计数据
     async function loadStats(username) {
       try {
-        // 会话数
         const sessionsRes = await fetch('/api/chat/sessions', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -586,13 +614,10 @@
         document.getElementById('statTools').textContent = '-';
       }
 
-      // 天数：从用户创建时间算起（暂时先显示 1）
       document.getElementById('statDays').textContent = '1';
     }
 
-    // ============================================================
-    //  保存资料
-    // ============================================================
+    // ---------- 保存资料 ----------
     document.getElementById('saveProfileBtn').addEventListener('click', async () => {
       const displayName = document.getElementById('inputDisplayName').value.trim();
       const bio = document.getElementById('inputBio').value.trim();
@@ -635,9 +660,7 @@
     document.getElementById('inputDisplayName').addEventListener('input', updateCounters);
     document.getElementById('inputBio').addEventListener('input', updateCounters);
 
-    // ============================================================
-    //  头像上传
-    // ============================================================
+    // ---------- 头像上传 ----------
     const avatarModal = document.getElementById('avatarModal');
     const avatarPreviewBox = document.getElementById('avatarPreviewBox');
     const avatarFileInput = document.getElementById('avatarFileInput');
@@ -648,7 +671,6 @@
       selectedAvatarFile = null;
       avatarFileInput.value = '';
       avatarPreviewBox.classList.remove('has-image');
-      // 显示当前头像
       if (currentUser.hasAvatar) {
         avatarPreviewBox.innerHTML = `<img src="/api/user/avatar/${encodeURIComponent(currentUser.username)}?t=${Date.now()}" alt="">`;
         avatarPreviewBox.classList.add('has-image');
@@ -668,8 +690,6 @@
     avatarFileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
-      // 校验
       if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.type)) {
         showToast('仅支持 JPG/PNG/GIF/WEBP 格式', 'error');
         return;
@@ -739,9 +759,7 @@
       }
     });
 
-    // ============================================================
-    //  修改密码
-    // ============================================================
+    // ---------- 修改密码 ----------
     const pwdModal = document.getElementById('pwdModal');
 
     document.getElementById('changePwdBtn').addEventListener('click', () => {
@@ -802,9 +820,7 @@
       }
     });
 
-    // ============================================================
-    //  退出 / 注销
-    // ============================================================
+    // ---------- 退出 / 注销 ----------
     document.getElementById('logoutBtn').addEventListener('click', async () => {
       if (!confirm('确定要退出登录吗？')) return;
       if (token) {
@@ -843,9 +859,7 @@
       }
     });
 
-    // ============================================================
-    //  顶部导航栏用户区（保持一致）
-    // ============================================================
+    // ---------- 顶部导航栏 ----------
     async function renderUserArea() {
       const userArea = document.getElementById('userArea');
       if (!currentUser) {
@@ -865,9 +879,6 @@
       `;
     }
 
-    // ============================================================
-    //  简单 Toast
-    // ============================================================
     function showToast(message, type) {
       let toast = document.getElementById('__toast__');
       if (!toast) {
@@ -895,9 +906,917 @@
       }, 2400);
     }
 
-    // ============================================================
-    //  初始化
-    // ============================================================
+    loadProfile().then(renderUserArea);
+  </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>个人中心 · GreenBox</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    @media (max-width: 900px) {
+      .navbar { position: static !important; top: auto !important; }
+    }
+    .profile-wrap {
+      max-width: 720px;
+      margin: 3rem auto;
+      padding: 0 1rem;
+    }
+    .profile-card {
+      background: var(--card-bg, #fff);
+      border-radius: 24px;
+      box-shadow: 0 8px 32px rgba(15,23,42,0.08);
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+      border: 1px solid var(--border, #e2e8f0);
+    }
+    .profile-hero {
+      position: relative;
+      padding: 3rem 2rem 2rem;
+      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      color: white;
+      text-align: center;
+      overflow: hidden;
+    }
+    .profile-hero::before {
+      content: '';
+      position: absolute;
+      top: -50%; right: -20%;
+      width: 60%; height: 100%;
+      background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .profile-hero::after {
+      content: '';
+      position: absolute;
+      bottom: -50%; left: -20%;
+      width: 60%; height: 100%;
+      background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .avatar-container {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 1rem;
+      z-index: 1;
+    }
+    .avatar-big {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.25);
+      border: 4px solid rgba(255,255,255,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 52px;
+      object-fit: cover;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      transition: transform .3s;
+    }
+    .avatar-big:hover { transform: scale(1.03); }
+    .avatar-edit-btn {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: white;
+      color: #16a34a;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transition: all .2s;
+    }
+    .avatar-edit-btn:hover { transform: scale(1.1); background: #f0fdf4; }
+
+    .profile-display-name {
+      font-size: 1.7rem;
+      font-weight: 800;
+      margin-bottom: 0.3rem;
+      position: relative;
+      z-index: 1;
+    }
+    .profile-username {
+      font-size: 0.9rem;
+      opacity: 0.85;
+      margin-bottom: 0.6rem;
+      position: relative;
+      z-index: 1;
+    }
+    .profile-role-badge {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: rgba(255,255,255,0.25);
+      color: white;
+      position: relative;
+      z-index: 1;
+      backdrop-filter: blur(4px);
+    }
+
+    .profile-body {
+      padding: 1.8rem 2rem;
+    }
+    .profile-section {
+      margin-bottom: 1.6rem;
+    }
+    .profile-section:last-child { margin-bottom: 0; }
+    .profile-section-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--muted, #64748b);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .profile-field {
+      margin-bottom: 1rem;
+    }
+    .profile-field label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text, #0f172a);
+      margin-bottom: 0.4rem;
+    }
+    .profile-field input,
+    .profile-field textarea {
+      width: 100%;
+      padding: 0.7rem 0.9rem;
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      background: var(--bg, #fff);
+      color: var(--text, #0f172a);
+      outline: none;
+      transition: border .2s, box-shadow .2s;
+      resize: vertical;
+    }
+    .profile-field input:focus,
+    .profile-field textarea:focus {
+      border-color: #16a34a;
+      box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+    }
+    .profile-field .hint {
+      font-size: 0.75rem;
+      color: var(--muted, #94a3b8);
+      margin-top: 0.3rem;
+      text-align: right;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+    .pbtn {
+      padding: 0.65rem 1.4rem;
+      border-radius: 12px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      transition: all .2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+    }
+    .pbtn-primary {
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      color: white;
+      box-shadow: 0 4px 12px rgba(22,163,74,0.3);
+    }
+    .pbtn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(22,163,74,0.4);
+    }
+    .pbtn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .pbtn-outline {
+      background: transparent;
+      border: 1.5px solid var(--border, #e2e8f0);
+      color: var(--text, #0f172a);
+    }
+    .pbtn-outline:hover { background: var(--bg-alt, #f8fafc); }
+    .pbtn-danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .pbtn-danger:hover { background: #fecaca; }
+    .pbtn-admin {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: white;
+      box-shadow: 0 4px 12px rgba(245,158,11,0.35);
+    }
+    .pbtn-admin:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(245,158,11,0.5);
+    }
+
+    .profile-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.8rem;
+      margin-bottom: 1.2rem;
+    }
+    .stat-box {
+      text-align: center;
+      padding: 1rem 0.5rem;
+      background: var(--bg-alt, #f8fafc);
+      border-radius: 14px;
+      border: 1px solid var(--border, #e2e8f0);
+    }
+    .stat-box .num {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #16a34a;
+    }
+    .stat-box .lbl {
+      font-size: 0.78rem;
+      color: var(--muted, #64748b);
+      margin-top: 4px;
+    }
+
+    /* 管理员专属卡片（金色边框） */
+    .admin-card {
+      border: 2px solid #fbbf24;
+      background: linear-gradient(135deg, #fffbeb, #fef3c7);
+    }
+    .admin-card .profile-section-title {
+      color: #92400e;
+    }
+    [data-theme="dark"] .admin-card {
+      background: linear-gradient(135deg, #422006, #78350f);
+      border-color: #d97706;
+    }
+    [data-theme="dark"] .admin-card .profile-section-title {
+      color: #fbbf24;
+    }
+
+    /* 头像上传弹窗 */
+    .avatar-modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,0.6);
+      backdrop-filter: blur(4px);
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .avatar-modal-overlay.show { display: flex; }
+    .avatar-modal {
+      background: var(--card-bg, #fff);
+      border-radius: 22px;
+      padding: 2rem;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.25);
+      animation: modalIn .25s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .avatar-modal h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 1.2rem;
+      color: var(--text, #0f172a);
+      text-align: center;
+    }
+    .avatar-preview-box {
+      width: 160px;
+      height: 160px;
+      margin: 0 auto 1.2rem;
+      border-radius: 50%;
+      overflow: hidden;
+      background: var(--bg-alt, #f1f5f9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 60px;
+      border: 3px dashed var(--border, #cbd5e1);
+      transition: border-color .2s;
+    }
+    .avatar-preview-box img {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .avatar-preview-box.has-image { border-style: solid; border-color: #16a34a; }
+
+    .file-pick-btn {
+      display: block;
+      width: 100%;
+      padding: 0.8rem;
+      text-align: center;
+      border: 2px dashed var(--border, #cbd5e1);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all .2s;
+      color: var(--muted, #64748b);
+      font-size: 0.9rem;
+      font-weight: 500;
+      background: transparent;
+    }
+    .file-pick-btn:hover {
+      border-color: #16a34a;
+      color: #16a34a;
+      background: rgba(22,163,74,0.04);
+    }
+    .avatar-modal-tips {
+      font-size: 0.78rem;
+      color: var(--muted, #94a3b8);
+      text-align: center;
+      margin: 0.8rem 0 1.2rem;
+    }
+    .avatar-modal-actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    /* 用户头像（导航栏） */
+    .user-avatar-mini {
+      width: 28px; height: 28px; border-radius: 50%;
+      object-fit: cover; border: 2px solid var(--primary, #16a34a);
+      vertical-align: middle; margin-right: 6px;
+    }
+
+    @media (max-width: 600px) {
+      .profile-hero { padding: 2.5rem 1rem 1.5rem; }
+      .avatar-big { width: 90px; height: 90px; font-size: 42px; }
+      .profile-display-name { font-size: 1.4rem; }
+      .profile-body { padding: 1.4rem 1.2rem; }
+      .profile-stats { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+      .stat-box .num { font-size: 1.2rem; }
+      .stat-box .lbl { font-size: 0.7rem; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="logo">🌱 GreenBox</a>
+      <ul class="nav-links">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="tools.html">工具</a></li>
+        <li><a href="changelog.html">更新日志</a></li>
+        <li><a href="/profile.html" class="active">个人中心</a></li>
+      </ul>
+      <div class="navbar-right">
+        <button id="theme-toggle" aria-label="切换主题">🌙</button>
+        <div class="user-area" id="userArea"></div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="profile-wrap" id="profileMain" style="display:none;">
+    <div class="profile-card">
+      <div class="profile-hero">
+        <div class="avatar-container">
+          <div class="avatar-big" id="avatarBig">👤</div>
+          <button class="avatar-edit-btn" id="avatarEditBtn" title="更换头像">📷</button>
+        </div>
+        <div class="profile-display-name" id="displayNameEl">加载中...</div>
+        <div class="profile-username" id="usernameEl">@username</div>
+        <span class="profile-role-badge" id="roleBadge">用户</span>
+      </div>
+
+      <div class="profile-body">
+        <!-- 使用统计 -->
+        <div class="profile-stats" id="profileStats">
+          <div class="stat-box">
+            <div class="num" id="statSessions">-</div>
+            <div class="lbl">💬 对话</div>
+          </div>
+          <div class="stat-box">
+            <div class="num" id="statTools">-</div>
+            <div class="lbl">🔧 工具</div>
+          </div>
+          <div class="stat-box">
+            <div class="num" id="statDays">-</div>
+            <div class="lbl">📅 天</div>
+          </div>
+        </div>
+
+        <!-- 管理员专属：后台入口 -->
+        <div class="profile-section admin-card" id="adminSection" style="display:none;padding:1.2rem;border-radius:14px;">
+          <div class="profile-section-title">👑 管理员专属</div>
+          <div class="btn-row">
+            <a href="/admin.html" class="pbtn pbtn-admin" style="width:100%;justify-content:center;">
+              ⚙️ 打开管理后台
+            </a>
+          </div>
+        </div>
+
+        <!-- 编辑资料 -->
+        <div class="profile-section">
+          <div class="profile-section-title">✏️ 编辑资料</div>
+          <div class="profile-field">
+            <label>昵称</label>
+            <input type="text" id="inputDisplayName" placeholder="取一个响亮的名字吧" maxlength="20">
+            <div class="hint"><span id="dnCount">0</span>/20</div>
+          </div>
+          <div class="profile-field">
+            <label>个性签名</label>
+            <textarea id="inputBio" rows="3" placeholder="介绍一下自己，让大家更了解你～" maxlength="100"></textarea>
+            <div class="hint"><span id="bioCount">0</span>/100</div>
+          </div>
+          <div class="btn-row">
+            <button class="pbtn pbtn-primary" id="saveProfileBtn">💾 保存修改</button>
+            <button class="pbtn pbtn-outline" id="resetProfileBtn">重置</button>
+          </div>
+        </div>
+
+        <!-- 账号安全 -->
+        <div class="profile-section">
+          <div class="profile-section-title">🔒 账号安全</div>
+          <div class="btn-row">
+            <button class="pbtn pbtn-outline" id="changePwdBtn">🔑 修改密码</button>
+          </div>
+        </div>
+
+        <!-- 危险操作 -->
+        <div class="profile-section">
+          <div class="profile-section-title">⚠️ 危险操作</div>
+          <div class="btn-row">
+            <button class="pbtn pbtn-outline" id="logoutBtn">🚪 退出登录</button>
+            <button class="pbtn pbtn-danger" id="deleteAccountBtn" style="display:none;">🗑️ 注销账号</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 未登录提示 -->
+  <div class="profile-wrap" id="notLoggedIn" style="display:none;text-align:center;padding:4rem 1rem;">
+    <h2 style="color:var(--text);margin-bottom:1rem;">请先登录</h2>
+    <a href="/login.html?redirect=/profile.html" class="pbtn pbtn-primary" style="display:inline-flex;">前往登录</a>
+  </div>
+
+  <!-- 头像上传弹窗 -->
+  <div class="avatar-modal-overlay" id="avatarModal">
+    <div class="avatar-modal">
+      <h3>📷 更换头像</h3>
+      <div class="avatar-preview-box" id="avatarPreviewBox">👤</div>
+      <label class="file-pick-btn" for="avatarFileInput">📁 选择图片文件</label>
+      <input type="file" id="avatarFileInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;">
+      <div class="avatar-modal-tips">
+        支持 JPG / PNG / GIF / WEBP，大小不超过 500KB
+      </div>
+      <div class="avatar-modal-actions">
+        <button class="pbtn pbtn-outline" id="avatarRemoveBtn" style="display:none;">🗑️ 移除头像</button>
+        <button class="pbtn pbtn-outline" id="avatarCancelBtn">取消</button>
+        <button class="pbtn pbtn-primary" id="avatarUploadBtn" disabled>上传</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改密码弹窗 -->
+  <div class="avatar-modal-overlay" id="pwdModal">
+    <div class="avatar-modal">
+      <h3>🔑 修改密码</h3>
+      <div class="profile-field">
+        <label>新密码</label>
+        <input type="password" id="pwdNew" placeholder="至少6位" autocomplete="new-password">
+      </div>
+      <div class="profile-field">
+        <label>确认新密码</label>
+        <input type="password" id="pwdConfirm" placeholder="再次输入" autocomplete="new-password">
+      </div>
+      <div id="pwdError" style="color:#ef4444;font-size:0.85rem;margin-bottom:0.6rem;display:none;"></div>
+      <div class="avatar-modal-actions">
+        <button class="pbtn pbtn-outline" id="pwdCancelBtn">取消</button>
+        <button class="pbtn pbtn-primary" id="pwdSaveBtn">确认修改</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 GreenBox · 用心制作</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+  <script>
+    let currentUser = null;
+    let originalProfile = { displayName: '', bio: '' };
+    let selectedAvatarFile = null;
+
+    const token = localStorage.getItem('greenbox_token');
+
+    async function loadProfile() {
+      if (!token) {
+        document.getElementById('notLoggedIn').style.display = 'block';
+        return;
+      }
+      try {
+        const res = await fetch('/api/user/me', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) {
+          localStorage.removeItem('greenbox_token');
+          localStorage.removeItem('greenbox_user');
+          document.getElementById('notLoggedIn').style.display = 'block';
+          return;
+        }
+        const data = await res.json();
+        currentUser = data;
+        renderProfile(data);
+        document.getElementById('profileMain').style.display = 'block';
+        loadStats(data.username);
+      } catch (e) {
+        console.error(e);
+        document.getElementById('notLoggedIn').style.display = 'block';
+      }
+    }
+
+    function renderProfile(data) {
+      document.getElementById('displayNameEl').textContent = data.displayName || data.username;
+      document.getElementById('usernameEl').textContent = '@' + data.username;
+
+      const roleBadge = document.getElementById('roleBadge');
+      if (data.role === 'admin') {
+        roleBadge.textContent = '👑 管理员';
+        roleBadge.style.background = 'rgba(250,204,21,0.35)';
+      } else {
+        roleBadge.textContent = '✨ 普通用户';
+      }
+
+      renderAvatar(data.username, data.hasAvatar);
+
+      document.getElementById('inputDisplayName').value = data.displayName || '';
+      document.getElementById('inputBio').value = data.bio || '';
+      updateCounters();
+
+      originalProfile = {
+        displayName: data.displayName || '',
+        bio: data.bio || '',
+      };
+
+      // 管理员显示后台入口
+      if (data.role === 'admin') {
+        document.getElementById('adminSection').style.display = 'block';
+        document.getElementById('deleteAccountBtn').style.display = 'none';
+      } else {
+        document.getElementById('adminSection').style.display = 'none';
+        document.getElementById('deleteAccountBtn').style.display = 'inline-flex';
+      }
+    }
+
+    function renderAvatar(username, hasAvatar) {
+      const box = document.getElementById('avatarBig');
+      if (hasAvatar) {
+        const url = `/api/user/avatar/${encodeURIComponent(username)}?t=` + Date.now();
+        box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentNode.textContent='👤';">`;
+      } else {
+        box.textContent = username === 'admin' ? '🛡️' : '👤';
+      }
+    }
+
+    function updateCounters() {
+      document.getElementById('dnCount').textContent = document.getElementById('inputDisplayName').value.length;
+      document.getElementById('bioCount').textContent = document.getElementById('inputBio').value.length;
+    }
+
+    async function loadStats(username) {
+      try {
+        const sessionsRes = await fetch('/api/chat/sessions', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (sessionsRes.ok) {
+          const sessions = await sessionsRes.json();
+          document.getElementById('statSessions').textContent = Array.isArray(sessions) ? sessions.length : 0;
+        } else {
+          document.getElementById('statSessions').textContent = 0;
+        }
+      } catch (e) {
+        document.getElementById('statSessions').textContent = '-';
+      }
+
+      try {
+        const dataRes = await fetch('/api/data');
+        const data = await dataRes.json();
+        document.getElementById('statTools').textContent = (data.tools || []).length;
+      } catch (e) {
+        document.getElementById('statTools').textContent = '-';
+      }
+
+      document.getElementById('statDays').textContent = '1';
+    }
+
+    // ---------- 保存资料 ----------
+    document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+      const displayName = document.getElementById('inputDisplayName').value.trim();
+      const bio = document.getElementById('inputBio').value.trim();
+
+      const btn = document.getElementById('saveProfileBtn');
+      btn.disabled = true;
+      btn.textContent = '保存中...';
+
+      try {
+        const res = await fetch('/api/user/profile', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ displayName, bio })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('displayNameEl').textContent = displayName || currentUser.username;
+          originalProfile = { displayName, bio };
+          showToast('✅ 资料已保存', 'success');
+        } else {
+          showToast('保存失败：' + (data.error || '未知错误'), 'error');
+        }
+      } catch (e) {
+        showToast('网络错误，请稍后重试', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '💾 保存修改';
+      }
+    });
+
+    document.getElementById('resetProfileBtn').addEventListener('click', () => {
+      document.getElementById('inputDisplayName').value = originalProfile.displayName;
+      document.getElementById('inputBio').value = originalProfile.bio;
+      updateCounters();
+    });
+
+    document.getElementById('inputDisplayName').addEventListener('input', updateCounters);
+    document.getElementById('inputBio').addEventListener('input', updateCounters);
+
+    // ---------- 头像上传 ----------
+    const avatarModal = document.getElementById('avatarModal');
+    const avatarPreviewBox = document.getElementById('avatarPreviewBox');
+    const avatarFileInput = document.getElementById('avatarFileInput');
+    const avatarUploadBtn = document.getElementById('avatarUploadBtn');
+    const avatarRemoveBtn = document.getElementById('avatarRemoveBtn');
+
+    document.getElementById('avatarEditBtn').addEventListener('click', () => {
+      selectedAvatarFile = null;
+      avatarFileInput.value = '';
+      avatarPreviewBox.classList.remove('has-image');
+      if (currentUser.hasAvatar) {
+        avatarPreviewBox.innerHTML = `<img src="/api/user/avatar/${encodeURIComponent(currentUser.username)}?t=${Date.now()}" alt="">`;
+        avatarPreviewBox.classList.add('has-image');
+        avatarRemoveBtn.style.display = 'inline-flex';
+      } else {
+        avatarPreviewBox.textContent = currentUser.username === 'admin' ? '🛡️' : '👤';
+        avatarRemoveBtn.style.display = 'none';
+      }
+      avatarUploadBtn.disabled = true;
+      avatarModal.classList.add('show');
+    });
+
+    document.getElementById('avatarCancelBtn').addEventListener('click', () => {
+      avatarModal.classList.remove('show');
+    });
+
+    avatarFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.type)) {
+        showToast('仅支持 JPG/PNG/GIF/WEBP 格式', 'error');
+        return;
+      }
+      if (file.size > 500 * 1024) {
+        showToast('图片不能超过 500KB', 'error');
+        return;
+      }
+
+      selectedAvatarFile = file;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        avatarPreviewBox.innerHTML = `<img src="${ev.target.result}" alt="">`;
+        avatarPreviewBox.classList.add('has-image');
+        avatarUploadBtn.disabled = false;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    avatarUploadBtn.addEventListener('click', async () => {
+      if (!selectedAvatarFile) return;
+      avatarUploadBtn.disabled = true;
+      avatarUploadBtn.textContent = '上传中...';
+
+      const fd = new FormData();
+      fd.append('avatar', selectedAvatarFile);
+
+      try {
+        const res = await fetch('/api/user/avatar', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: fd
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ 头像已更新', 'success');
+          avatarModal.classList.remove('show');
+          currentUser.hasAvatar = true;
+          renderAvatar(currentUser.username, true);
+        } else {
+          showToast('上传失败：' + (data.error || '未知错误'), 'error');
+        }
+      } catch (e) {
+        showToast('网络错误，请稍后重试', 'error');
+      } finally {
+        avatarUploadBtn.disabled = false;
+        avatarUploadBtn.textContent = '上传';
+      }
+    });
+
+    avatarRemoveBtn.addEventListener('click', async () => {
+      if (!confirm('确定要移除当前头像吗？')) return;
+      try {
+        const res = await fetch('/api/user/avatar', {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('已移除头像', 'success');
+          avatarModal.classList.remove('show');
+          currentUser.hasAvatar = false;
+          renderAvatar(currentUser.username, false);
+        }
+      } catch (e) {
+        showToast('网络错误', 'error');
+      }
+    });
+
+    // ---------- 修改密码 ----------
+    const pwdModal = document.getElementById('pwdModal');
+
+    document.getElementById('changePwdBtn').addEventListener('click', () => {
+      document.getElementById('pwdNew').value = '';
+      document.getElementById('pwdConfirm').value = '';
+      document.getElementById('pwdError').style.display = 'none';
+      pwdModal.classList.add('show');
+    });
+
+    document.getElementById('pwdCancelBtn').addEventListener('click', () => {
+      pwdModal.classList.remove('show');
+    });
+
+    document.getElementById('pwdSaveBtn').addEventListener('click', async () => {
+      const newPwd = document.getElementById('pwdNew').value;
+      const confirmPwd = document.getElementById('pwdConfirm').value;
+      const errEl = document.getElementById('pwdError');
+      errEl.style.display = 'none';
+
+      if (!newPwd || newPwd.length < 6) {
+        errEl.textContent = '密码至少6位';
+        errEl.style.display = 'block';
+        return;
+      }
+      if (newPwd !== confirmPwd) {
+        errEl.textContent = '两次密码不一致';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      const btn = document.getElementById('pwdSaveBtn');
+      btn.disabled = true;
+      btn.textContent = '保存中...';
+
+      try {
+        const res = await fetch('/api/change-my-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ newPassword: newPwd })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ 密码已修改', 'success');
+          pwdModal.classList.remove('show');
+        } else {
+          errEl.textContent = data.error || '修改失败';
+          errEl.style.display = 'block';
+        }
+      } catch (e) {
+        errEl.textContent = '网络错误，请稍后重试';
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '确认修改';
+      }
+    });
+
+    // ---------- 退出 / 注销 ----------
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      if (!confirm('确定要退出登录吗？')) return;
+      if (token) {
+        try {
+          await fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        } catch (e) {}
+      }
+      localStorage.removeItem('greenbox_token');
+      localStorage.removeItem('greenbox_user');
+      window.location.href = '/';
+    });
+
+    document.getElementById('deleteAccountBtn').addEventListener('click', async () => {
+      if (!confirm('⚠️ 确定要注销账号吗？此操作将永久删除您的所有数据，不可恢复！')) return;
+      if (!confirm('二次确认：真的要注销吗？')) return;
+
+      try {
+        const res = await fetch('/api/delete-account', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          localStorage.removeItem('greenbox_token');
+          localStorage.removeItem('greenbox_user');
+          alert('账号已成功注销。');
+          window.location.href = '/';
+        } else {
+          alert('注销失败：' + (data.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('网络错误，请稍后重试。');
+      }
+    });
+
+    // ---------- 顶部导航栏 ----------
+    async function renderUserArea() {
+      const userArea = document.getElementById('userArea');
+      if (!currentUser) {
+        userArea.innerHTML = `
+          <a href="/login.html" class="btn-primary-sm">登录</a>
+          <a href="/register.html" class="btn-outline">注册</a>
+        `;
+        return;
+      }
+      const avatarUrl = `/api/user/avatar/${encodeURIComponent(currentUser.username)}?t=` + Date.now();
+      const avatarHtml = currentUser.hasAvatar
+        ? `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`
+        : '';
+      userArea.innerHTML = `
+        ${avatarHtml}
+        <span class="user-name">${currentUser.displayName || currentUser.username}</span>
+      `;
+    }
+
+    function showToast(message, type) {
+      let toast = document.getElementById('__toast__');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = '__toast__';
+        toast.style.cssText = `
+          position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(30px);
+          background: #0f172a; color: white; padding: 12px 22px; border-radius: 30px;
+          font-size: 14px; font-weight: 500; box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+          z-index: 99999; opacity: 0; transition: all .3s ease;
+          pointer-events: none; max-width: 90vw;
+        `;
+        document.body.appendChild(toast);
+      }
+      toast.textContent = message;
+      toast.style.background = type === 'error' ? '#dc2626' : type === 'success' ? '#16a34a' : '#0f172a';
+      requestAnimationFrame(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(-50%) translateY(0)';
+      });
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(30px)';
+      }, 2400);
+    }
+
     loadProfile().then(renderUserArea);
   </script>
 </body>
