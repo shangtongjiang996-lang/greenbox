@@ -59,13 +59,27 @@
       color: #64748b;
       cursor: pointer;
       transition: all 0.2s;
+      position: relative;
     }
     .tab-btn.active { background: #16a34a; color: white; }
     .tab-btn:hover:not(.active) { background: #e2e8f0; }
+    .tab-btn .tab-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: #ef4444;
+      color: white;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-weight: 700;
+      display: none;
+    }
+    .tab-btn .tab-badge.show { display: inline-block; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
-    .tool-item, .log-item, .user-item, .file-item, .room-item {
+    .tool-item, .log-item, .user-item, .file-item, .room-item, .notif-item {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -73,7 +87,7 @@
       padding: 0.8rem 0;
       border-bottom: 1px solid #f1f5f9;
     }
-    .tool-item:last-child, .log-item:last-child, .user-item:last-child, .file-item:last-child, .room-item:last-child { border-bottom: none; }
+    .tool-item:last-child, .log-item:last-child, .user-item:last-child, .file-item:last-child, .room-item:last-child, .notif-item:last-child { border-bottom: none; }
     .tool-item input, .log-item input, .tool-item textarea, .log-item textarea {
       border: 1px solid #e2e8f0;
       border-radius: 10px;
@@ -97,6 +111,7 @@
       align-items: center;
       gap: 0.3rem;
       font-size: 0.9rem;
+      font-family: inherit;
     }
     .btn-primary {
       background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
@@ -154,6 +169,22 @@
     .room-info span { margin-right: 8px; }
     .room-meta { font-size: 12px; color: #999; margin-top: 4px; }
 
+    /* 用户头像小图标 */
+    .user-avatar-sm {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #e2e8f0;
+      background: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    /* 图标选择器 */
     .icon-mode-toggle {
       display: flex;
       gap: 0;
@@ -333,6 +364,94 @@
     }
     .cfg-checks input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
 
+    /* 通知中心样式 */
+    .notif-type-badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 700;
+      margin-right: 8px;
+    }
+    .notif-type-badge.info { background: #dbeafe; color: #1e40af; }
+    .notif-type-badge.success { background: #dcfce7; color: #166534; }
+    .notif-type-badge.warning { background: #fef3c7; color: #854d0e; }
+    .notif-type-badge.error { background: #fee2e2; color: #b91c1c; }
+
+    .notif-item {
+      background: white;
+      border-radius: 14px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.8rem;
+      border-left: 4px solid #16a34a;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.5rem;
+    }
+    .notif-item.info { border-left-color: #3b82f6; }
+    .notif-item.success { border-left-color: #16a34a; }
+    .notif-item.warning { border-left-color: #f59e0b; }
+    .notif-item.error { border-left-color: #ef4444; }
+
+    .notif-item-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .notif-item-title {
+      font-weight: 700;
+      font-size: 0.98rem;
+      color: #0f172a;
+      flex: 1;
+    }
+    .notif-item-meta {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .notif-item-content {
+      font-size: 0.88rem;
+      color: #475569;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .notif-item-actions {
+      display: flex;
+      gap: 0.4rem;
+      justify-content: flex-end;
+      margin-top: 0.4rem;
+    }
+
+    /* 通知发送表单 */
+    .notif-form-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .notif-target-row {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .notif-target-row input[type=text],
+    .notif-target-row select {
+      padding: 0.65rem 0.85rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      background: white;
+    }
+
     @media (max-width: 640px) {
       .card { padding: 1.2rem; }
       .tool-item, .log-item, .user-item, .file-item, .room-item { flex-direction: column; align-items: stretch; }
@@ -341,6 +460,7 @@
       .emoji-grid { grid-template-columns: repeat(6, 1fr); }
       .icon-cell { min-width: unset; width: 100%; }
       .cfg-grid { grid-template-columns: 1fr; }
+      .notif-form-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -357,6 +477,7 @@
       <div class="stat-item"><div class="number" id="log-count">0</div><div class="label">📝 更新日志</div></div>
       <div class="stat-item"><div class="number" id="total-items">0</div><div class="label">📦 总条目</div></div>
       <div class="stat-item"><div class="number" id="active-rooms">0</div><div class="label">🏠 活跃房间</div></div>
+      <div class="stat-item"><div class="number" id="notif-count">0</div><div class="label">📢 通知</div></div>
     </div>
 
     <div class="tab-bar">
@@ -366,6 +487,7 @@
       <button class="tab-btn" data-tab="files">📁 文件管理</button>
       <button class="tab-btn" data-tab="rooms">🏠 房间管理</button>
       <button class="tab-btn" data-tab="chat">💬 AI 助手</button>
+      <button class="tab-btn" data-tab="notify">📢 通知管理</button>
       <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
     </div>
 
@@ -453,7 +575,7 @@
       </div>
     </div>
 
-    <!-- AI 助手配置 + 配额管理 -->
+    <!-- AI 助手配置 -->
     <div id="tab-chat" class="tab-content">
       <div class="card">
         <h2>⚙️ AI 助手 - 基础配置</h2>
@@ -548,6 +670,56 @@
       </div>
     </div>
 
+    <!-- 通知管理 -->
+    <div id="tab-notify" class="tab-content">
+      <div class="card">
+        <h2>📤 发送新通知</h2>
+        <div class="notif-form-grid">
+          <div class="cfg-field">
+            <label>标题 *</label>
+            <input type="text" id="notif-title" placeholder="例如：系统更新通知" maxlength="100">
+          </div>
+          <div class="cfg-field">
+            <label>类型</label>
+            <select id="notif-type">
+              <option value="info">ℹ️ 普通通知</option>
+              <option value="success">✅ 成功/好消息</option>
+              <option value="warning">⚠️ 提醒</option>
+              <option value="error">🚨 重要警告</option>
+            </select>
+          </div>
+        </div>
+        <div class="cfg-field" style="margin-bottom:1rem;">
+          <label>内容 *</label>
+          <textarea id="notif-content" rows="4" placeholder="输入要发送的内容..." maxlength="2000"></textarea>
+          <div class="hint"><span id="notif-content-count">0</span>/2000</div>
+        </div>
+        <div class="cfg-field" style="margin-bottom:1rem;">
+          <label>接收者</label>
+          <div class="notif-target-row">
+            <select id="notif-target-type" style="flex: 1; min-width: 150px;">
+              <option value="all">🌐 所有用户</option>
+              <option value="specific">👤 指定用户</option>
+            </select>
+            <select id="notif-target-user" style="flex: 1; min-width: 150px; display: none;">
+              <option value="">-- 选择用户 --</option>
+            </select>
+          </div>
+          <div class="hint">选择「所有用户」会群发，选择「指定用户」只发给一个人</div>
+        </div>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+          <button class="btn btn-primary" id="notif-send-btn" style="padding: 0.7rem 2rem;">📨 发送通知</button>
+          <button class="btn btn-outline" id="notif-clear-form-btn">清空表单</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📋 已发送通知 <span style="font-size:0.8rem;font-weight:400;color:#94a3b8;">（点击删除按钮可移除）</span></h2>
+        <div id="admin-notif-list"><p style="color:#94a3b8;">加载中...</p></div>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadAdminNotifications()">🔄 刷新列表</button>
+      </div>
+    </div>
+
     <!-- 设置 -->
     <div id="tab-settings" class="tab-content">
       <div class="card">
@@ -578,7 +750,7 @@
   </div>
 </div>
 
-<!-- Toast 通知 -->
+<!-- Toast -->
 <div id="toast" class="toast"></div>
 
 <!-- 图标编辑模态框 -->
@@ -623,6 +795,7 @@ let token = localStorage.getItem('greenbox_token');
 let currentData = { tools: [], changelogs: [] };
 let iconModalTarget = null;
 let currentModalMode = 'emoji';
+let allUsers = [];
 
 (async function init() {
   if (!token) { redirectToLogin(); return; }
@@ -637,7 +810,9 @@ let currentModalMode = 'emoji';
     document.getElementById('dashboard').classList.remove('hidden');
     loadUsers(); loadFiles(); loadAdminRooms(); updateRoomCount();
     loadChatLimits(); loadChatConfig();
+    loadAdminNotifications();
     setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
+    setupNotifyForm();
   } catch (e) { redirectToLogin(); }
 })();
 
@@ -656,6 +831,7 @@ function setupTabs() {
       document.getElementById(`tab-${tabId}`).classList.add('active');
       if (tabId === 'rooms') { loadAdminRooms(); updateRoomCount(); }
       if (tabId === 'chat') { loadChatLimits(); loadChatConfig(); }
+      if (tabId === 'notify') { loadAdminNotifications(); }
     });
   });
 }
@@ -777,7 +953,7 @@ function openIconModal(target) {
   const urlInput = document.getElementById('modal-icon-url');
   const preview = document.getElementById('modal-icon-preview');
   const uploadFileInput = document.getElementById('modal-icon-file');
-  
+
   let currentIcon = '🔧';
   if (target !== 'upload') {
     const tool = currentData.tools[target];
@@ -804,7 +980,7 @@ function applyIconChange() {
     const val = document.getElementById('modal-icon-emoji').value;
     newIcon = val.startsWith('data:image') ? val : '🔧';
   } else if (mode === 'url') newIcon = document.getElementById('modal-icon-url').value.trim() || '🔧';
-  
+
   if (iconModalTarget === 'upload') {
     document.getElementById('tool-icon-emoji').value = newIcon;
     document.getElementById('icon-preview').textContent = newIcon.startsWith('data:') ? '🖼️' : newIcon;
@@ -980,14 +1156,24 @@ async function loadUsers() {
     const res = await fetch('/api/admin/users', { headers: { 'Authorization': `Bearer ${token}` } });
     if (!res.ok) { container.innerHTML = '<p style="color:#ef4444;">加载失败，请检查权限</p>'; return; }
     let users = await res.json();
+    allUsers = users;
+    updateNotifyUserSelect();
+
     if (users.length === 0) { container.innerHTML = '<p style="color:#94a3b8;">暂无用户</p>'; return; }
     users.sort((a, b) => a.username === 'admin' ? -1 : b.username === 'admin' ? 1 : a.username.localeCompare(b.username));
 
     container.innerHTML = users.map(u => {
       const isAdmin = u.username === 'admin';
+      const avatarHtml = u.hasAvatar
+        ? `<img class="user-avatar-sm" src="/api/user/avatar/${encodeURIComponent(u.username)}?t=${Date.now()}" alt="" onerror="this.textContent='👤';this.removeAttribute('src');">`
+        : `<div class="user-avatar-sm">${isAdmin ? '🛡️' : '👤'}</div>`;
       return `
         <div class="user-item">
-          <span style="font-weight:600;">${u.username}</span>
+          ${avatarHtml}
+          <div style="display:flex;flex-direction:column;min-width:120px;">
+            <span style="font-weight:600;">${u.displayName || u.username}</span>
+            <span style="color:#94a3b8;font-size:0.78rem;">@${u.username}</span>
+          </div>
           <span style="color:#64748b;font-size:0.9rem;">角色：</span>
           ${isAdmin ? '<span style="font-weight:600;color:#16a34a;">管理员（系统）</span>' : `
             <select onchange="changeUserRole('${u.username}', this.value)" style="border:1px solid #e2e8f0;border-radius:6px;padding:0.2rem 0.5rem;">
@@ -998,6 +1184,7 @@ async function loadUsers() {
           ${!isAdmin ? `
             <button class="btn btn-outline btn-sm" onclick="viewPassword('${u.username}')">👁️ 查看密码</button>
             <button class="btn btn-outline btn-sm" onclick="resetPassword('${u.username}')">🔑 重置密码</button>
+            <button class="btn btn-outline btn-sm" onclick="sendNotifTo('${u.username}')">📢 发通知</button>
             <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">删除</button>
           ` : ''}
         </div>
@@ -1007,7 +1194,7 @@ async function loadUsers() {
 }
 
 window.deleteUser = async function(username) {
-  if (!confirm(`确定要删除用户 "${username}" 吗？`)) return;
+  if (!confirm(`确定要删除用户 "${username}" 吗？此操作将同时删除其所有数据。`)) return;
   try {
     const res = await fetch('/api/admin/users', { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ username }) });
     const data = await res.json();
@@ -1039,7 +1226,6 @@ window.resetPassword = async function(username) {
   } catch (err) { showToast('错误：' + err.message, 'error'); }
 };
 
-// ---------- 查看密码（二次验证） ----------
 window.viewPassword = async function(username) {
   const adminPwd = prompt(`验证管理员身份：请输入你的管理员密码以查看用户 ${username} 的密码`);
   if (!adminPwd) return;
@@ -1051,7 +1237,7 @@ window.viewPassword = async function(username) {
     });
     const verifyData = await verifyRes.json();
     if (!verifyData.success) { alert('验证失败：' + (verifyData.error || '密码错误')); return; }
-    
+
     const viewRes = await fetch('/api/admin/view-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -1064,6 +1250,23 @@ window.viewPassword = async function(username) {
       alert('获取密码失败：' + (viewData.error || '未知错误'));
     }
   } catch (err) { alert('网络错误：' + err.message); }
+};
+
+// 快速给某用户发通知
+window.sendNotifTo = function(username) {
+  // 切到通知标签
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.tab-btn[data-tab="notify"]').classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-notify').classList.add('active');
+  loadAdminNotifications();
+
+  // 预填目标
+  document.getElementById('notif-target-type').value = 'specific';
+  document.getElementById('notif-target-user').style.display = '';
+  document.getElementById('notif-target-user').value = username;
+  document.getElementById('notif-title').focus();
+  showToast(`已切到通知页，目标：${username}`, 'success');
 };
 
 // ---------- 文件管理 ----------
@@ -1334,6 +1537,163 @@ window.resetChatUsage = async function(username) {
     else showToast('失败：' + data.error, 'error');
   } catch (e) { showToast('网络错误', 'error'); }
 }
+
+// ============================================================
+//  通知管理
+// ============================================================
+function setupNotifyForm() {
+  const targetType = document.getElementById('notif-target-type');
+  const targetUser = document.getElementById('notif-target-user');
+  const contentEl = document.getElementById('notif-content');
+  const countEl = document.getElementById('notif-content-count');
+  const clearBtn = document.getElementById('notif-clear-form-btn');
+  const sendBtn = document.getElementById('notif-send-btn');
+
+  targetType.addEventListener('change', () => {
+    if (targetType.value === 'specific') {
+      targetUser.style.display = '';
+    } else {
+      targetUser.style.display = 'none';
+    }
+  });
+
+  contentEl.addEventListener('input', () => {
+    countEl.textContent = contentEl.value.length;
+  });
+
+  clearBtn.addEventListener('click', () => {
+    document.getElementById('notif-title').value = '';
+    contentEl.value = '';
+    countEl.textContent = '0';
+    document.getElementById('notif-type').value = 'info';
+    targetType.value = 'all';
+    targetUser.style.display = 'none';
+    targetUser.value = '';
+  });
+
+  sendBtn.addEventListener('click', async () => {
+    const title = document.getElementById('notif-title').value.trim();
+    const content = contentEl.value.trim();
+    const type = document.getElementById('notif-type').value;
+    const targetTypeValue = targetType.value;
+    let target = 'all';
+
+    if (!title) { showToast('请填写标题', 'error'); return; }
+    if (!content) { showToast('请填写内容', 'error'); return; }
+
+    if (targetTypeValue === 'specific') {
+      target = targetUser.value;
+      if (!target) { showToast('请选择目标用户', 'error'); return; }
+    }
+
+    if (!confirm(`确认发送通知给「${target === 'all' ? '所有用户' : target}」？`)) return;
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = '发送中...';
+
+    try {
+      const res = await fetch('/api/admin/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ title, content, type, target })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('✅ 通知已发送', 'success');
+        // 清空表单
+        document.getElementById('notif-title').value = '';
+        contentEl.value = '';
+        countEl.textContent = '0';
+        // 刷新列表
+        loadAdminNotifications();
+      } else {
+        showToast('发送失败：' + (data.error || '未知错误'), 'error');
+      }
+    } catch (e) {
+      showToast('网络错误：' + e.message, 'error');
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = '📨 发送通知';
+    }
+  });
+}
+
+function updateNotifyUserSelect() {
+  const sel = document.getElementById('notif-target-user');
+  if (!sel) return;
+  const currentVal = sel.value;
+  sel.innerHTML = '<option value="">-- 选择用户 --</option>' +
+    allUsers.filter(u => u.username !== 'admin').map(u =>
+      `<option value="${u.username}">${u.displayName || u.username} (@${u.username})</option>`
+    ).join('');
+  if (currentVal) sel.value = currentVal;
+}
+
+async function loadAdminNotifications() {
+  const container = document.getElementById('admin-notif-list');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/admin/notifications', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) { container.innerHTML = '<p style="color:#ef4444;">加载失败</p>'; return; }
+    const list = await res.json();
+
+    document.getElementById('notif-count').textContent = list.length;
+
+    if (!list || list.length === 0) {
+      container.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:2rem 0;">暂无已发送的通知</p>';
+      return;
+    }
+
+    const typeLabel = { info: '通知', success: '好消息', warning: '提醒', error: '警告' };
+
+    container.innerHTML = list.map(n => {
+      const time = new Date(n.createdAt).toLocaleString('zh-CN');
+      const targetText = n.target === 'all' ? '🌐 所有用户' : `👤 ${n.target}`;
+      return `
+        <div class="notif-item ${n.type}">
+          <div class="notif-item-head">
+            <div class="notif-item-title">
+              <span class="notif-type-badge ${n.type}">${typeLabel[n.type] || '通知'}</span>
+              ${escapeHtmlAdmin(n.title)}
+            </div>
+            <div class="notif-item-meta">
+              <span>${targetText}</span>
+              <span>·</span>
+              <span>${time}</span>
+            </div>
+          </div>
+          <div class="notif-item-content">${escapeHtmlAdmin(n.content)}</div>
+          <div class="notif-item-actions">
+            <button class="btn btn-danger btn-sm" onclick="deleteAdminNotif('${n.id}')">🗑️ 删除</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = '<p style="color:#ef4444;">加载失败：' + err.message + '</p>';
+  }
+}
+
+function escapeHtmlAdmin(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+window.deleteAdminNotif = async function(id) {
+  if (!confirm('确定删除这条通知吗？删除后所有用户都将看不到。')) return;
+  try {
+    const res = await fetch(`/api/admin/notifications/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (data.success) { showToast('通知已删除', 'success'); loadAdminNotifications(); }
+    else showToast('删除失败：' + data.error, 'error');
+  } catch (e) { showToast('网络错误', 'error'); }
+};
 
 // ---------- 修改管理员密码 ----------
 window.changePassword = async function() {

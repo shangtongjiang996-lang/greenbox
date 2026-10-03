@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
   <style>
+    /* ===== 页面基础优化 ===== */
     @media (max-width: 700px) {
       .navbar .container { flex-direction: row; flex-wrap: wrap; justify-content: center; }
       .logo { font-size: 1.2rem; }
@@ -29,6 +30,16 @@
       .navbar .container { flex-direction: column; align-items: stretch; }
       .nav-links { justify-content: center; }
     }
+
+    /* ✨ 小屏时导航栏随页面滚动消失（不固定） */
+    @media (max-width: 900px) {
+      .navbar {
+        position: static !important;
+        top: auto !important;
+      }
+    }
+
+    /* 房间列表样式 */
     .online-rooms { margin: 2rem 0; }
     .online-rooms .room-item {
       display: flex; justify-content: space-between; align-items: center;
@@ -39,6 +50,7 @@
     .online-rooms .room-item .info span { font-size: 0.95rem; }
     .online-rooms .room-item .btn-primary-sm { padding: 0.2rem 1rem; font-size: 0.85rem; }
 
+    /* ===== 密码升级弹窗 ===== */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(15,23,42,0.6); backdrop-filter: blur(4px);
@@ -67,7 +79,253 @@
     .error-text { color: #ef4444; font-size: 0.9rem; margin-bottom: 0.8rem; }
     .hidden { display: none !important; }
 
-    /* ===== AI 聊天助手 ===== */
+    /* ============================================================ */
+    /*  通知按钮 + 小红点                                            */
+    /* ============================================================ */
+    .notif-btn {
+      position: relative;
+      background: var(--bg-alt);
+      border: none;
+      border-radius: 30px;
+      width: 38px;
+      height: 38px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      transition: all .2s;
+      color: var(--text);
+    }
+    .notif-btn:hover { background: var(--border); transform: translateY(-1px); }
+    .notif-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 10px;
+      background: #ef4444;
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.5);
+      animation: notifBadgePulse 1.8s infinite;
+      border: 2px solid var(--bg);
+    }
+    .notif-badge.show { display: flex; }
+    @keyframes notifBadgePulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+    }
+
+    /* ============================================================ */
+    /*  通知中心面板                                                 */
+    /* ============================================================ */
+    .notif-panel-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: rgba(15, 23, 42, 0.35);
+      backdrop-filter: blur(3px);
+      display: none;
+      animation: notifFadeIn .2s ease-out;
+    }
+    .notif-panel-overlay.show { display: block; }
+    @keyframes notifFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .notif-panel {
+      position: fixed;
+      top: 70px;
+      right: 20px;
+      width: 380px;
+      max-width: calc(100vw - 24px);
+      max-height: calc(100vh - 100px);
+      background: var(--card-bg, #fff);
+      border-radius: 20px;
+      box-shadow: 0 25px 60px rgba(15, 23, 42, 0.3),
+                  0 0 0 1px rgba(15, 23, 42, 0.06);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 9999;
+      animation: notifSlideIn .25s cubic-bezier(.34, 1.56, .64, 1);
+    }
+    .notif-panel.show { display: flex; }
+    @keyframes notifSlideIn {
+      from { opacity: 0; transform: translateY(-12px) scale(.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .notif-header {
+      padding: 16px 18px;
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .notif-header-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .notif-header-actions { display: flex; gap: 6px; align-items: center; }
+    .notif-header-btn {
+      background: rgba(255,255,255,0.18);
+      border: none;
+      color: white;
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+      font-family: inherit;
+    }
+    .notif-header-btn:hover { background: rgba(255,255,255,0.3); }
+    .notif-close-btn {
+      background: rgba(255,255,255,0.18);
+      border: none;
+      color: white;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s;
+    }
+    .notif-close-btn:hover { background: rgba(255,255,255,0.3); transform: rotate(90deg); }
+
+    .notif-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      background: var(--bg-alt, #f8fafc);
+    }
+    .notif-list::-webkit-scrollbar { width: 6px; }
+    .notif-list::-webkit-scrollbar-thumb { background: var(--border, #e2e8f0); border-radius: 6px; }
+
+    .notif-empty {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--muted, #94a3b8);
+      font-size: 13px;
+    }
+    .notif-empty-icon { font-size: 42px; display: block; margin-bottom: 12px; opacity: .5; }
+
+    .notif-item {
+      position: relative;
+      padding: 13px 15px;
+      background: var(--card-bg, #fff);
+      border-radius: 12px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all .18s;
+      border: 1px solid transparent;
+    }
+    .notif-item:hover {
+      border-color: var(--primary, #16a34a);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);
+    }
+    .notif-item.unread {
+      background: linear-gradient(135deg, rgba(22,163,74,0.08), rgba(22,163,74,0.03));
+      border-left: 3px solid var(--primary, #16a34a);
+    }
+    .notif-item-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+    .notif-item-title {
+      font-weight: 700;
+      font-size: 13.5px;
+      color: var(--text, #0f172a);
+      flex: 1;
+      line-height: 1.4;
+    }
+    .notif-item-time {
+      font-size: 11px;
+      color: var(--muted, #94a3b8);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .notif-item-content {
+      font-size: 12.5px;
+      color: var(--muted, #64748b);
+      line-height: 1.55;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .notif-item-del {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.1);
+      border: none;
+      color: #ef4444;
+      font-size: 11px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s;
+    }
+    .notif-item:hover .notif-item-del { display: flex; }
+    .notif-item-del:hover { background: #ef4444; color: white; }
+
+    .notif-item-type {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 7px;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .notif-item-type.info { background: #dbeafe; color: #1e40af; }
+    .notif-item-type.success { background: #dcfce7; color: #166534; }
+    .notif-item-type.warning { background: #fef3c7; color: #854d0e; }
+    .notif-item-type.error { background: #fee2e2; color: #b91c1c; }
+
+    [data-theme="dark"] .notif-item.unread {
+      background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.04));
+    }
+    [data-theme="dark"] .notif-item-type.info { background: #1e3a8a; color: #bfdbfe; }
+    [data-theme="dark"] .notif-item-type.success { background: #14532d; color: #bbf7d0; }
+    [data-theme="dark"] .notif-item-type.warning { background: #78350f; color: #fde68a; }
+    [data-theme="dark"] .notif-item-type.error { background: #7f1d1d; color: #fecaca; }
+
+    @media (max-width: 480px) {
+      .notif-panel {
+        top: 12px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+        max-width: none;
+        max-height: calc(100vh - 24px);
+      }
+    }
+
+    /* ============================================================ */
+    /*  AI 聊天助手样式                                              */
+    /* ============================================================ */
     :root {
       --ai-primary: #16a34a;
       --ai-primary-dark: #15803d;
@@ -406,102 +664,63 @@
       .ai-chat-btn { bottom: 18px; right: 18px; width: 54px; height: 54px; }
     }
 
-    /* ===== AI 助手更新提示 ===== */
+    /* ============================================================ */
+    /*  AI 助手更新提示弹窗                                          */
+    /* ============================================================ */
     .ai-update-modal {
-      position: fixed;
-      inset: 0;
-      z-index: 10000;
-      display: none;
-      align-items: center;
-      justify-content: center;
+      position: fixed; inset: 0; z-index: 10000;
+      display: none; align-items: center; justify-content: center;
       padding: 20px;
     }
-    .ai-update-modal.show {
-      display: flex;
-      animation: aiUpdateFadeIn .3s ease-out;
-    }
-    @keyframes aiUpdateFadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
+    .ai-update-modal.show { display: flex; animation: aiUpdateFadeIn .3s ease-out; }
+    @keyframes aiUpdateFadeIn { from { opacity: 0; } to { opacity: 1; } }
     .ai-update-backdrop {
-      position: absolute;
-      inset: 0;
+      position: absolute; inset: 0;
       background: rgba(15, 23, 42, 0.55);
       backdrop-filter: blur(8px);
     }
     .ai-update-card {
-      position: relative;
-      width: 100%;
-      max-width: 460px;
+      position: relative; width: 100%; max-width: 460px;
       background: linear-gradient(160deg, #ffffff 0%, #f0fdf4 100%);
-      border-radius: 26px;
-      padding: 34px 28px 24px;
+      border-radius: 26px; padding: 34px 28px 24px;
       box-shadow: 0 30px 80px rgba(15, 23, 42, 0.35),
                   0 0 0 1px rgba(22, 163, 74, 0.12),
                   inset 0 1px 0 rgba(255,255,255,0.8);
       animation: aiUpdateSlideIn .45s cubic-bezier(.34, 1.56, .64, 1);
-      overflow: hidden;
-      text-align: center;
+      overflow: hidden; text-align: center;
     }
     @keyframes aiUpdateSlideIn {
       from { opacity: 0; transform: translateY(40px) scale(.9); }
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .ai-update-glow {
-      position: absolute;
-      top: -60%;
-      right: -30%;
-      width: 340px;
-      height: 340px;
+      position: absolute; top: -60%; right: -30%;
+      width: 340px; height: 340px;
       background: radial-gradient(circle, rgba(22,163,74,0.22) 0%, transparent 70%);
       pointer-events: none;
     }
     .ai-update-glow-2 {
-      position: absolute;
-      bottom: -50%;
-      left: -30%;
-      width: 300px;
-      height: 300px;
+      position: absolute; bottom: -50%; left: -30%;
+      width: 300px; height: 300px;
       background: radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%);
       pointer-events: none;
     }
     .ai-update-close {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: rgba(15, 23, 42, 0.05);
-      border: none;
-      color: #64748b;
-      font-size: 15px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all .2s;
-      z-index: 2;
+      position: absolute; top: 16px; right: 16px;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(15, 23, 42, 0.05); border: none;
+      color: #64748b; font-size: 15px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .2s; z-index: 2;
     }
-    .ai-update-close:hover {
-      background: rgba(15, 23, 42, 0.12);
-      color: #0f172a;
-      transform: rotate(90deg);
-    }
+    .ai-update-close:hover { background: rgba(15, 23, 42, 0.12); color: #0f172a; transform: rotate(90deg); }
     .ai-update-icon {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 78px;
-      height: 78px;
-      border-radius: 24px;
+      position: relative; display: inline-flex;
+      align-items: center; justify-content: center;
+      width: 78px; height: 78px; border-radius: 24px;
       background: linear-gradient(135deg, #16a34a, #15803d);
-      font-size: 40px;
-      margin-bottom: 18px;
-      box-shadow: 0 12px 32px rgba(22, 163, 74, 0.4),
-                  inset 0 -3px 0 rgba(0,0,0,0.1);
+      font-size: 40px; margin-bottom: 18px;
+      box-shadow: 0 12px 32px rgba(22, 163, 74, 0.4), inset 0 -3px 0 rgba(0,0,0,0.1);
       animation: aiUpdateBounce 2s ease-in-out infinite;
       z-index: 1;
     }
@@ -510,107 +729,64 @@
       50% { transform: translateY(-8px) rotate(-4deg); }
     }
     .ai-update-badge {
-      position: absolute;
-      top: -8px;
-      right: -8px;
-      background: #ef4444;
-      color: white;
-      font-size: 10px;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 10px;
+      position: absolute; top: -8px; right: -8px;
+      background: #ef4444; color: white;
+      font-size: 10px; font-weight: 700;
+      padding: 3px 8px; border-radius: 10px;
       letter-spacing: .5px;
       box-shadow: 0 4px 10px rgba(239, 68, 68, 0.4);
       animation: aiUpdatePulseBadge 1.5s infinite;
     }
-    @keyframes aiUpdatePulseBadge {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-    }
+    @keyframes aiUpdatePulseBadge { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
     .ai-update-title {
-      position: relative;
-      font-size: 22px;
-      font-weight: 800;
-      color: #0f172a;
-      margin-bottom: 8px;
-      letter-spacing: -0.3px;
-      z-index: 1;
+      position: relative; font-size: 22px; font-weight: 800;
+      color: #0f172a; margin-bottom: 8px;
+      letter-spacing: -0.3px; z-index: 1;
     }
     .ai-update-title .new-tag {
       display: inline-block;
       background: linear-gradient(135deg, #16a34a, #15803d);
-      color: white;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 8px;
-      margin-left: 6px;
-      vertical-align: middle;
+      color: white; font-size: 11px; font-weight: 700;
+      padding: 2px 8px; border-radius: 8px;
+      margin-left: 6px; vertical-align: middle;
       letter-spacing: 0.5px;
     }
     .ai-update-desc {
-      position: relative;
-      font-size: 14px;
-      color: #64748b;
-      line-height: 1.6;
-      margin-bottom: 20px;
-      z-index: 1;
+      position: relative; font-size: 14px;
+      color: #64748b; line-height: 1.6;
+      margin-bottom: 20px; z-index: 1;
     }
     .ai-update-features {
-      position: relative;
-      list-style: none;
-      padding: 0;
-      margin: 0 0 24px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      z-index: 1;
+      position: relative; list-style: none;
+      padding: 0; margin: 0 0 24px;
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; z-index: 1;
     }
     .ai-update-features li {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      display: flex; align-items: center; gap: 8px;
       padding: 10px 12px;
       background: rgba(255, 255, 255, 0.7);
       border: 1px solid rgba(22, 163, 74, 0.15);
-      border-radius: 12px;
-      font-size: 12.5px;
-      font-weight: 500;
-      color: #334155;
-      text-align: left;
-      transition: all .2s;
+      border-radius: 12px; font-size: 12.5px;
+      font-weight: 500; color: #334155;
+      text-align: left; transition: all .2s;
     }
     .ai-update-features li:hover {
-      background: white;
-      border-color: rgba(22, 163, 74, 0.35);
+      background: white; border-color: rgba(22, 163, 74, 0.35);
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(22, 163, 74, 0.1);
     }
-    .ai-update-features .feat-icon {
-      font-size: 16px;
-      flex-shrink: 0;
-    }
+    .ai-update-features .feat-icon { font-size: 16px; flex-shrink: 0; }
     .ai-update-actions {
-      position: relative;
-      display: flex;
-      gap: 10px;
-      margin-bottom: 16px;
-      z-index: 1;
+      position: relative; display: flex;
+      gap: 10px; margin-bottom: 16px; z-index: 1;
     }
     .ai-update-btn {
-      flex: 1;
-      padding: 13px 20px;
-      border-radius: 14px;
-      font-size: 14.5px;
-      font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      transition: all .25s;
-      border: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
+      flex: 1; padding: 13px 20px; border-radius: 14px;
+      font-size: 14.5px; font-weight: 700;
+      font-family: inherit; cursor: pointer;
+      transition: all .25s; border: none;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
     }
     .ai-update-btn.primary {
       background: linear-gradient(135deg, #16a34a, #15803d);
@@ -622,9 +798,7 @@
       transform: translateY(-2px);
       box-shadow: 0 12px 28px rgba(22, 163, 74, 0.45);
     }
-    .ai-update-btn.primary:active {
-      transform: translateY(0);
-    }
+    .ai-update-btn.primary:active { transform: translateY(0); }
     .ai-update-btn.secondary {
       background: rgba(15, 23, 42, 0.05);
       color: #64748b;
@@ -634,30 +808,20 @@
       color: #334155;
     }
     .ai-update-checkbox {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12.5px;
-      color: #94a3b8;
-      cursor: pointer;
-      user-select: none;
-      z-index: 1;
+      position: relative; display: inline-flex;
+      align-items: center; gap: 8px;
+      font-size: 12.5px; color: #94a3b8;
+      cursor: pointer; user-select: none; z-index: 1;
     }
     .ai-update-checkbox input[type="checkbox"] {
-      width: 15px;
-      height: 15px;
-      accent-color: #16a34a;
-      cursor: pointer;
+      width: 15px; height: 15px;
+      accent-color: #16a34a; cursor: pointer;
     }
-    .ai-update-checkbox:hover {
-      color: #64748b;
-    }
+    .ai-update-checkbox:hover { color: #64748b; }
 
     [data-theme="dark"] .ai-update-card {
       background: linear-gradient(160deg, #1e293b 0%, #16213a 100%);
-      box-shadow: 0 30px 80px rgba(0,0,0,0.6),
-                  0 0 0 1px rgba(34, 197, 94, 0.15);
+      box-shadow: 0 30px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(34, 197, 94, 0.15);
     }
     [data-theme="dark"] .ai-update-title { color: #eef2f7; }
     [data-theme="dark"] .ai-update-desc { color: #93a2b8; }
@@ -666,24 +830,18 @@
       border-color: rgba(34, 197, 94, 0.15);
       color: #cbd5e1;
     }
-    [data-theme="dark"] .ai-update-features li:hover {
-      background: rgba(255,255,255,0.08);
-    }
+    [data-theme="dark"] .ai-update-features li:hover { background: rgba(255,255,255,0.08); }
     [data-theme="dark"] .ai-update-close {
-      background: rgba(255,255,255,0.08);
-      color: #94a3b8;
+      background: rgba(255,255,255,0.08); color: #94a3b8;
     }
     [data-theme="dark"] .ai-update-close:hover {
-      background: rgba(255,255,255,0.15);
-      color: #eef2f7;
+      background: rgba(255,255,255,0.15); color: #eef2f7;
     }
     [data-theme="dark"] .ai-update-btn.secondary {
-      background: rgba(255,255,255,0.06);
-      color: #94a3b8;
+      background: rgba(255,255,255,0.06); color: #94a3b8;
     }
     [data-theme="dark"] .ai-update-btn.secondary:hover {
-      background: rgba(255,255,255,0.12);
-      color: #cbd5e1;
+      background: rgba(255,255,255,0.12); color: #cbd5e1;
     }
 
     @media (max-width: 480px) {
@@ -693,6 +851,13 @@
       .ai-update-features { grid-template-columns: 1fr; }
       .ai-update-actions { flex-direction: column; }
       .ai-update-btn { flex: 1 !important; }
+    }
+
+    /* 用户头像（导航栏） */
+    .user-avatar-mini {
+      width: 28px; height: 28px; border-radius: 50%;
+      object-fit: cover; border: 2px solid var(--primary, #16a34a);
+      vertical-align: middle; margin-right: 6px;
     }
   </style>
 </head>
@@ -708,6 +873,10 @@
       </ul>
       <div class="navbar-right">
         <button id="theme-toggle" aria-label="切换主题">🌙</button>
+        <button class="notif-btn" id="notifBtn" title="消息中心" style="display:none;">
+          🔔
+          <span class="notif-badge" id="notifBadge"></span>
+        </button>
         <div class="user-area" id="userArea"></div>
       </div>
     </div>
@@ -741,6 +910,7 @@
     </div>
   </footer>
 
+  <!-- 密码升级弹窗 -->
   <div id="passwordModal" class="modal-overlay hidden">
     <div class="modal-card">
       <div class="modal-title">🔐 安全升级</div>
@@ -755,33 +925,29 @@
     </div>
   </div>
 
-  <!-- ===== AI 助手更新提示弹窗 ===== -->
+  <!-- AI 助手更新提示弹窗 -->
   <div id="aiUpdateModal" class="ai-update-modal">
     <div class="ai-update-backdrop" id="aiUpdateBackdrop"></div>
     <div class="ai-update-card">
       <div class="ai-update-glow"></div>
       <div class="ai-update-glow-2"></div>
       <button class="ai-update-close" id="aiUpdateClose" title="关闭">✕</button>
-      
       <div class="ai-update-icon">
         🤖
         <span class="ai-update-badge">NEW</span>
       </div>
-      
       <h2 class="ai-update-title">
         AI 助手全新上线<span class="new-tag">升级</span>
       </h2>
       <p class="ai-update-desc">
         GreenBox 现在有智能 AI 助手啦！可以帮你解答问题、编写代码、查找资料，随时随地提供帮助。
       </p>
-      
       <ul class="ai-update-features">
         <li><span class="feat-icon">💬</span> 实时对话</li>
         <li><span class="feat-icon">🧠</span> 深度思考</li>
         <li><span class="feat-icon">💾</span> 云端记录</li>
         <li><span class="feat-icon">📚</span> 预设问题</li>
       </ul>
-      
       <div class="ai-update-actions">
         <button class="ai-update-btn primary" id="aiUpdateOpen">
           <span>✨</span> 立即体验
@@ -790,7 +956,6 @@
           稍后再说
         </button>
       </div>
-      
       <label class="ai-update-checkbox">
         <input type="checkbox" id="aiUpdateNoShow">
         <span>不再提示</span>
@@ -798,7 +963,29 @@
     </div>
   </div>
 
-  <!-- ===== AI 聊天助手 ===== -->
+  <!-- 通知中心面板 -->
+  <div class="notif-panel-overlay" id="notifOverlay"></div>
+  <div class="notif-panel" id="notifPanel">
+    <div class="notif-header">
+      <div class="notif-header-title">
+        <span>🔔</span>
+        <span>消息中心</span>
+      </div>
+      <div class="notif-header-actions">
+        <button class="notif-header-btn" id="notifReadAllBtn" title="全部标记为已读">全部已读</button>
+        <button class="notif-header-btn" id="notifClearBtn" title="清空消息">清空</button>
+        <button class="notif-close-btn" id="notifCloseBtn" title="关闭">✕</button>
+      </div>
+    </div>
+    <div class="notif-list" id="notifList">
+      <div class="notif-empty">
+        <span class="notif-empty-icon">📭</span>
+        <div>加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI 聊天助手 -->
   <button class="ai-chat-btn" id="aiChatBtn" title="打开 AI 助手">💬</button>
   <div class="ai-chat-panel" id="aiChatPanel">
     <aside class="ai-sidebar" id="aiSidebar">
@@ -853,6 +1040,11 @@
 
   <script src="script.js"></script>
   <script>
+    // ============================================================
+    //  用户认证
+    // ============================================================
+    let currentUser = null;
+
     async function checkAuth() {
       const token = localStorage.getItem('greenbox_token');
       if (!token) return null;
@@ -860,6 +1052,7 @@
         const res = await fetch('/api/verify', { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await res.json();
         if (data.valid) {
+          currentUser = data;
           if (data.needsUpgrade) showPasswordUpgradeModal();
           return data;
         } else {
@@ -873,19 +1066,30 @@
     async function renderUserArea() {
       const userArea = document.getElementById('userArea');
       const profileNav = document.getElementById('profile-nav');
+      const notifBtn = document.getElementById('notifBtn');
       const user = await checkAuth();
       if (user) {
+        // 是否已有头像
+        const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + Date.now();
+        // 尝试加载头像（如果 404 就显示默认 emoji）
+        const avatarHtml = `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`;
+
         userArea.innerHTML = `
-          <span class="user-name">${user.username}</span>
+          ${avatarHtml}
+          <a href="/profile.html" class="user-name" style="text-decoration:none;color:inherit;" title="个人中心">${user.displayName || user.username}</a>
           <button onclick="logout()" class="btn-outline">退出</button>
         `;
         if (profileNav) profileNav.style.display = 'list-item';
+        if (notifBtn) notifBtn.style.display = 'flex';
+        // 启动通知轮询
+        updateUnreadCount();
       } else {
         userArea.innerHTML = `
           <a href="/login.html" class="btn-primary-sm">登录</a>
           <a href="/register.html" class="btn-outline">注册</a>
         `;
         if (profileNav) profileNav.style.display = 'none';
+        if (notifBtn) notifBtn.style.display = 'none';
       }
     }
 
@@ -897,6 +1101,7 @@
       location.reload();
     };
 
+    // ---------- 密码升级弹窗 ----------
     function showPasswordUpgradeModal() { document.getElementById('passwordModal').classList.remove('hidden'); }
     window.skipUpgrade = function() { document.getElementById('passwordModal').classList.add('hidden'); };
     window.submitPasswordUpgrade = async function() {
@@ -919,6 +1124,9 @@
       } catch (e) { errorEl.textContent = '网络错误，请稍后重试'; errorEl.style.display = 'block'; }
     };
 
+    // ============================================================
+    //  首页数据 + 房间列表
+    // ============================================================
     (async function() {
       try {
         const res = await fetch('/api/data');
@@ -977,6 +1185,192 @@
     renderUserArea();
     loadRoomList();
     setInterval(loadRoomList, 30000);
+
+    // ============================================================
+    //  通知中心
+    // ============================================================
+    (function() {
+      const notifBtn = document.getElementById('notifBtn');
+      const badge = document.getElementById('notifBadge');
+      const panel = document.getElementById('notifPanel');
+      const overlay = document.getElementById('notifOverlay');
+      const listEl = document.getElementById('notifList');
+      const closeBtn = document.getElementById('notifCloseBtn');
+      const readAllBtn = document.getElementById('notifReadAllBtn');
+      const clearBtn = document.getElementById('notifClearBtn');
+
+      if (!notifBtn) return;
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+      }
+
+      function timeAgo(ts) {
+        const d = Date.now() - ts;
+        if (d < 60000) return '刚刚';
+        if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前';
+        if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前';
+        if (d < 604800000) return Math.floor(d / 86400000) + ' 天前';
+        const date = new Date(ts);
+        return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2,'0')}`;
+      }
+
+      async function updateUnreadCount() {
+        const token = localStorage.getItem('greenbox_token');
+        if (!token) { badge.classList.remove('show'); return; }
+        try {
+          const res = await fetch('/api/notifications/unread-count', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.count > 0) {
+            badge.textContent = data.count > 99 ? '99+' : data.count;
+            badge.classList.add('show');
+          } else {
+            badge.classList.remove('show');
+          }
+        } catch (e) {}
+      }
+      window.updateUnreadCount = updateUnreadCount;
+
+      async function loadNotifications() {
+        const token = localStorage.getItem('greenbox_token');
+        if (!token) {
+          listEl.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">🔐</span><div>请先登录</div></div>';
+          return;
+        }
+        listEl.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">📭</span><div>加载中...</div></div>';
+        try {
+          const res = await fetch('/api/notifications', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error('加载失败');
+          const list = await res.json();
+          renderNotifications(list);
+        } catch (e) {
+          listEl.innerHTML = `<div class="notif-empty"><span class="notif-empty-icon">⚠️</span><div>加载失败</div></div>`;
+        }
+      }
+
+      function renderNotifications(list) {
+        if (!list || list.length === 0) {
+          listEl.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">📭</span><div>暂无消息</div></div>';
+          return;
+        }
+        const typeLabel = { info: '通知', success: '成功', warning: '注意', error: '警告' };
+        listEl.innerHTML = list.map(n => `
+          <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}">
+            <button class="notif-item-del" data-del="${n.id}" title="删除">✕</button>
+            <div class="notif-item-head">
+              <div class="notif-item-title">
+                <span class="notif-item-type ${n.type}">${typeLabel[n.type] || '通知'}</span>
+                ${escapeHtml(n.title)}
+              </div>
+              <div class="notif-item-time">${timeAgo(n.createdAt)}</div>
+            </div>
+            <div class="notif-item-content">${escapeHtml(n.content)}</div>
+          </div>
+        `).join('');
+
+        // 点击已读
+        listEl.querySelectorAll('.notif-item').forEach(item => {
+          item.addEventListener('click', async (e) => {
+            if (e.target.closest('.notif-item-del')) return;
+            const id = item.dataset.id;
+            if (item.classList.contains('unread')) {
+              item.classList.remove('unread');
+              await markRead([id]);
+              updateUnreadCount();
+            }
+          });
+        });
+
+        // 删除
+        listEl.querySelectorAll('.notif-item-del').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.del;
+            await deleteNotif(id);
+            loadNotifications();
+            updateUnreadCount();
+          });
+        });
+      }
+
+      async function markRead(ids) {
+        const token = localStorage.getItem('greenbox_token');
+        if (!token) return;
+        try {
+          await fetch('/api/notifications/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ ids })
+          });
+        } catch (e) {}
+      }
+
+      async function deleteNotif(id) {
+        const token = localStorage.getItem('greenbox_token');
+        if (!token) return;
+        try {
+          await fetch(`/api/notifications/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+        } catch (e) {}
+      }
+
+      function openPanel() {
+        panel.classList.add('show');
+        overlay.classList.add('show');
+        loadNotifications();
+      }
+      function closePanel() {
+        panel.classList.remove('show');
+        overlay.classList.remove('show');
+      }
+
+      notifBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (panel.classList.contains('show')) closePanel();
+        else openPanel();
+      });
+      closeBtn.addEventListener('click', closePanel);
+      overlay.addEventListener('click', closePanel);
+
+      readAllBtn.addEventListener('click', async () => {
+        const token = localStorage.getItem('greenbox_token');
+        if (!token) return;
+        try {
+          await fetch('/api/notifications/read-all', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          loadNotifications();
+          updateUnreadCount();
+        } catch (e) {}
+      });
+
+      clearBtn.addEventListener('click', async () => {
+        if (!confirm('清空所有消息？')) return;
+        const token = localStorage.getItem('greenbox_token');
+        if (!token) return;
+        try {
+          await fetch('/api/notifications', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          loadNotifications();
+          updateUnreadCount();
+        } catch (e) {}
+      });
+
+      // 每 30 秒轮询未读数
+      setInterval(updateUnreadCount, 30000);
+    })();
 
     // ============================================================
     //  AI 聊天助手
