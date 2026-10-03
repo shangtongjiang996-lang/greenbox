@@ -15,6 +15,17 @@ const io = new Server(server, {
 });
 
 app.use(cors());
+
+// ============================================================
+//  强制 HTTPS 跳转（Render 环境使用 x-forwarded-proto 判断）
+// ============================================================
+app.use((req, res, next) => {
+  if (req.headers['x-forwarded-proto'] === 'http') {
+    return res.redirect(301, 'https://' + req.headers.host + req.originalUrl);
+  }
+  next();
+});
+
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
@@ -52,12 +63,14 @@ async function createUserRecord(password) {
   return { passwordHash, salt, iterations, algo: 'pbkdf2-sha256', role: 'user', createdAt: Date.now() };
 }
 
+// 验证用户密码（支持升级）
 async function verifyUserRecord(user, password) {
   if (user.algo === 'pbkdf2-sha256' && user.iterations) {
     const candidate = await hashPasswordPBKDF2(password, user.salt, user.iterations);
     if (candidate === user.passwordHash) return { ok: true, needsUpgrade: false };
     return { ok: false };
   }
+  // 旧版 SHA256（兼容）
   const hash = crypto.createHash('sha256').update(password + user.salt).digest('hex');
   if (hash !== user.passwordHash) return { ok: false };
   const upgraded = await createUserRecord(password);
@@ -65,6 +78,7 @@ async function verifyUserRecord(user, password) {
   return { ok: true, needsUpgrade: true, upgradedRecord: upgraded };
 }
 
+// 加密/解密
 function getEncryptionKey() {
   const key = process.env.ENCRYPTION_KEY;
   if (!key) throw new Error('ENCRYPTION_KEY 未配置');
@@ -87,6 +101,7 @@ function decryptPassword(encObj) {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
 }
 
+// 会话管理
 async function getSession(token) {
   if (!token) return null;
   const session = await kvGet(`session:${token}`);
@@ -166,6 +181,7 @@ app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
   
+  // 管理员登录
   if (username === 'admin') {
     let adminPwd = await kvGet('admin_password') || process.env.ADMIN;
     if (!adminPwd) return res.status(503).json({ error: '管理员未配置' });
@@ -174,6 +190,7 @@ app.post('/api/login', async (req, res) => {
     return res.json({ success: true, token, username: 'admin', role: 'admin', needsUpgrade: false });
   }
   
+  // 普通用户登录
   const users = await kvGet('users') || {};
   const user = users[username];
   if (!user) return res.status(401).json({ error: '用户名或密码错误' });
@@ -388,6 +405,7 @@ app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   res.json({ success: true, id, url: `/tool/${id}` });
 });
 
+// 获取工具内容
 app.get('/tool/:id', async (req, res) => {
   const html = await kvGet(`tool_content:${req.params.id}`);
   if (!html) return res.status(404).send('工具不存在');
@@ -944,7 +962,6 @@ async function getUserNotifications(username) {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-// 获取通知列表
 app.get('/api/notifications', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -953,7 +970,6 @@ app.get('/api/notifications', async (req, res) => {
   res.json(list);
 });
 
-// 未读数
 app.get('/api/notifications/unread-count', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -963,7 +979,6 @@ app.get('/api/notifications/unread-count', async (req, res) => {
   res.json({ count: unread });
 });
 
-// 标记已读（支持单个或多个）
 app.post('/api/notifications/read', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -980,7 +995,6 @@ app.post('/api/notifications/read', async (req, res) => {
   res.json({ success: true });
 });
 
-// 全部标记已读
 app.post('/api/notifications/read-all', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -993,7 +1007,6 @@ app.post('/api/notifications/read-all', async (req, res) => {
   res.json({ success: true });
 });
 
-// 删除某条通知（软删除）
 app.delete('/api/notifications/:id', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -1006,7 +1019,6 @@ app.delete('/api/notifications/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// 清空所有通知（软删除所有当前可见的）
 app.delete('/api/notifications', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -1019,14 +1031,12 @@ app.delete('/api/notifications', async (req, res) => {
   res.json({ success: true });
 });
 
-// 管理员：查看所有通知
 app.get('/api/admin/notifications', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const list = (await kvGet('notifications')) || [];
   res.json(list.slice().sort((a, b) => b.createdAt - a.createdAt));
 });
 
-// 管理员：发送通知
 app.post('/api/admin/notifications', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { title, content, type, target } = req.body || {};
@@ -1056,7 +1066,6 @@ app.post('/api/admin/notifications', async (req, res) => {
   res.json({ success: true, notification: notif });
 });
 
-// 管理员：删除通知（彻底删除，所有用户都不可见）
 app.delete('/api/admin/notifications/:id', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const id = req.params.id;
@@ -1282,7 +1291,7 @@ app.post('/api/admin/view-password', async (req, res) => {
   res.json({ success: true, password: plainPassword });
 });
 
-// ======== 五子棋 REST ========
+// ======== 五子棋 REST 辅助接口 ========
 app.get('/api/rooms', async (req, res) => {
   try {
     const list = await kvList({ prefix: 'gomoku:' });
