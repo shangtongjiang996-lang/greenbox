@@ -30,16 +30,10 @@
       .navbar .container { flex-direction: column; align-items: stretch; }
       .nav-links { justify-content: center; }
     }
-
-    /* ✨ 小屏时导航栏随页面滚动消失（不固定） */
     @media (max-width: 900px) {
-      .navbar {
-        position: static !important;
-        top: auto !important;
-      }
+      .navbar { position: static !important; top: auto !important; }
     }
 
-    /* 房间列表样式 */
     .online-rooms { margin: 2rem 0; }
     .online-rooms .room-item {
       display: flex; justify-content: space-between; align-items: center;
@@ -307,10 +301,6 @@
     [data-theme="dark"] .notif-item.unread {
       background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.04));
     }
-    [data-theme="dark"] .notif-item-type.info { background: #1e3a8a; color: #bfdbfe; }
-    [data-theme="dark"] .notif-item-type.success { background: #14532d; color: #bbf7d0; }
-    [data-theme="dark"] .notif-item-type.warning { background: #78350f; color: #fde68a; }
-    [data-theme="dark"] .notif-item-type.error { background: #7f1d1d; color: #fecaca; }
 
     @media (max-width: 480px) {
       .notif-panel {
@@ -653,15 +643,80 @@
     .ai-input-wrap button:hover:not(:disabled) { transform: scale(1.08); }
     .ai-input-wrap button:disabled { background: #cbd5e1; cursor: not-allowed; opacity: .5; }
 
+    /* ============ 全屏 & 拖动 ============ */
+    .ai-chat-panel.fullscreen {
+      width: 100vw !important;
+      max-width: 100vw !important;
+      height: 100vh !important;
+      max-height: 100vh !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      border-radius: 0 !important;
+      animation: none !important;
+    }
+    .ai-chat-panel.dragging {
+      animation: none !important;
+      transition: none !important;
+    }
+    .ai-chat-header {
+      cursor: move;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .ai-chat-header .ai-hbtn { cursor: pointer; }
+
+    /* ============ 移动端 ============ */
     @media (max-width: 640px) {
       .ai-chat-panel {
-        width: 100vw; max-width: 100vw;
-        height: 100vh; max-height: 100vh;
-        right: 0; bottom: 0; border-radius: 0;
+        width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        right: 0;
+        bottom: 0;
+        top: 0;
+        left: 0;
+        border-radius: 0;
+        flex-direction: row;
       }
-      .ai-sidebar { position: absolute; z-index: 10; height: 100%; }
-      .ai-sidebar.collapsed { display: none; }
-      .ai-chat-btn { bottom: 18px; right: 18px; width: 54px; height: 54px; }
+      .ai-sidebar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        z-index: 12;
+        width: 260px;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease-out;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      }
+      .ai-sidebar.collapsed {
+        display: flex;
+        width: 260px;
+        transform: translateX(-100%);
+      }
+      .ai-sidebar:not(.collapsed) {
+        transform: translateX(0);
+      }
+      .ai-sidebar:not(.collapsed)::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        left: 260px;
+        background: rgba(0,0,0,0.35);
+        z-index: -1;
+      }
+      .ai-main { width: 100%; }
+      .ai-chat-btn {
+        bottom: 18px;
+        right: 18px;
+        width: 54px;
+        height: 54px;
+      }
+      .ai-chat-header { cursor: default !important; }
     }
 
     /* ============================================================ */
@@ -782,12 +837,26 @@
       gap: 10px; margin-bottom: 16px; z-index: 1;
     }
     .ai-update-btn {
-      flex: 1; padding: 13px 20px; border-radius: 14px;
-      font-size: 14.5px; font-weight: 700;
-      font-family: inherit; cursor: pointer;
-      transition: all .25s; border: none;
-      display: flex; align-items: center; justify-content: center; gap: 6px;
+      flex: 1;
+      min-height: 52px;
+      padding: 14px 22px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .25s;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
     }
+    .ai-update-btn:active { transform: scale(0.97); }
     .ai-update-btn.primary {
       background: linear-gradient(135deg, #16a34a, #15803d);
       color: white;
@@ -845,12 +914,41 @@
     }
 
     @media (max-width: 480px) {
-      .ai-update-card { padding: 28px 20px 20px; border-radius: 22px; }
+      .ai-update-modal { padding: 12px; }
+      .ai-update-card {
+        padding: 32px 22px 24px;
+        border-radius: 22px;
+        max-height: 92vh;
+        overflow-y: auto;
+      }
+      .ai-update-close {
+        top: 12px;
+        right: 12px;
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+      }
       .ai-update-icon { width: 66px; height: 66px; font-size: 34px; }
       .ai-update-title { font-size: 19px; }
       .ai-update-features { grid-template-columns: 1fr; }
-      .ai-update-actions { flex-direction: column; }
-      .ai-update-btn { flex: 1 !important; }
+      .ai-update-actions {
+        flex-direction: column;
+        gap: 12px;
+      }
+      .ai-update-btn {
+        flex: 1 !important;
+        width: 100%;
+        min-height: 54px;
+        font-size: 16px;
+      }
+      .ai-update-checkbox {
+        padding: 10px 0;
+        font-size: 13.5px;
+      }
+      .ai-update-checkbox input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+      }
     }
 
     /* 用户头像（导航栏） */
@@ -1012,6 +1110,10 @@
             <span class="icon">🧠</span>
             <span class="label">深度思考</span>
           </button>
+          <button class="ai-hbtn" id="aiFullscreenBtn" title="全屏/退出全屏">
+            <span class="icon">⛶</span>
+            <span class="label">全屏</span>
+          </button>
           <button class="ai-hbtn" id="aiExportBtn" title="导出当前对话为 JSON">
             <span class="icon">⬇️</span>
             <span class="label">导出</span>
@@ -1069,11 +1171,10 @@
       const notifBtn = document.getElementById('notifBtn');
       const user = await checkAuth();
       if (user) {
-        // 是否已有头像
         const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + Date.now();
-        // 尝试加载头像（如果 404 就显示默认 emoji）
-        const avatarHtml = `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`;
-
+        const avatarHtml = user.hasAvatar
+          ? `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`
+          : '';
         userArea.innerHTML = `
           ${avatarHtml}
           <a href="/profile.html" class="user-name" style="text-decoration:none;color:inherit;" title="个人中心">${user.displayName || user.username}</a>
@@ -1081,7 +1182,6 @@
         `;
         if (profileNav) profileNav.style.display = 'list-item';
         if (notifBtn) notifBtn.style.display = 'flex';
-        // 启动通知轮询
         updateUnreadCount();
       } else {
         userArea.innerHTML = `
@@ -1275,7 +1375,6 @@
           </div>
         `).join('');
 
-        // 点击已读
         listEl.querySelectorAll('.notif-item').forEach(item => {
           item.addEventListener('click', async (e) => {
             if (e.target.closest('.notif-item-del')) return;
@@ -1288,7 +1387,6 @@
           });
         });
 
-        // 删除
         listEl.querySelectorAll('.notif-item-del').forEach(btn => {
           btn.addEventListener('click', async (e) => {
             e.stopPropagation();
@@ -1368,7 +1466,6 @@
         } catch (e) {}
       });
 
-      // 每 30 秒轮询未读数
       setInterval(updateUnreadCount, 30000);
     })();
 
@@ -1973,6 +2070,88 @@
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 110) + 'px';
       });
+
+      // ============================================================
+      //  全屏 & 拖动
+      // ============================================================
+      const fullscreenBtn = document.getElementById('aiFullscreenBtn');
+      const panelEl = document.getElementById('aiChatPanel');
+      const headerEl = document.querySelector('.ai-chat-header');
+
+      if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', () => {
+          const isFull = panelEl.classList.toggle('fullscreen');
+          if (!isFull) {
+            panelEl.style.left = '';
+            panelEl.style.top = '';
+            panelEl.style.right = '';
+            panelEl.style.bottom = '';
+          }
+          const label = fullscreenBtn.querySelector('.label');
+          if (label) label.textContent = isFull ? '退出' : '全屏';
+        });
+      }
+
+      let dragState = null;
+
+      function isDesktop() {
+        return window.innerWidth > 640 && !('ontouchstart' in window || navigator.maxTouchPoints > 0);
+      }
+
+      if (headerEl) {
+        headerEl.addEventListener('pointerdown', (e) => {
+          if (e.target.closest('button')) return;
+          if (panelEl.classList.contains('fullscreen')) return;
+          if (!isDesktop()) return;
+
+          const rect = panelEl.getBoundingClientRect();
+          dragState = {
+            startX: e.clientX,
+            startY: e.clientY,
+            startLeft: rect.left,
+            startTop: rect.top,
+            width: rect.width,
+            height: rect.height,
+            pointerId: e.pointerId,
+          };
+          panelEl.classList.add('dragging');
+          panelEl.style.left = rect.left + 'px';
+          panelEl.style.top = rect.top + 'px';
+          panelEl.style.right = 'auto';
+          panelEl.style.bottom = 'auto';
+
+          try { headerEl.setPointerCapture(e.pointerId); } catch (err) {}
+        });
+
+        headerEl.addEventListener('pointermove', (e) => {
+          if (!dragState) return;
+          e.preventDefault();
+
+          const dx = e.clientX - dragState.startX;
+          const dy = e.clientY - dragState.startY;
+
+          let newLeft = dragState.startLeft + dx;
+          let newTop = dragState.startTop + dy;
+
+          const maxLeft = window.innerWidth - dragState.width;
+          const maxTop = window.innerHeight - dragState.height;
+          newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+          newTop = Math.max(0, Math.min(newTop, maxTop));
+
+          panelEl.style.left = newLeft + 'px';
+          panelEl.style.top = newTop + 'px';
+        });
+
+        function endDrag(e) {
+          if (!dragState) return;
+          dragState = null;
+          panelEl.classList.remove('dragging');
+          try { headerEl.releasePointerCapture(e.pointerId); } catch (err) {}
+        }
+
+        headerEl.addEventListener('pointerup', endDrag);
+        headerEl.addEventListener('pointercancel', endDrag);
+      }
 
       (async function initChat() {
         try {
