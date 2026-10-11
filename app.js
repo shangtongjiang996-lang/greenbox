@@ -18,7 +18,6 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
-// 文件上传配置
 const upload = multer({ 
   storage: multer.memoryStorage(), 
   limits: { fileSize: 2 * 1024 * 1024 } 
@@ -34,7 +33,6 @@ function isValidPassword(p) { return typeof p === 'string' && p.length >= 6 && p
 function toHex(buffer) { return Array.from(new Uint8Array(buffer)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
 function clientIp(req) { return req.headers['cf-connecting-ip'] || req.ip || 'unknown'; }
 
-// 密码哈希
 async function hashPasswordPBKDF2(password, saltHex, iterations) {
   const salt = Buffer.from(saltHex, 'hex');
   return new Promise((resolve, reject) => {
@@ -52,14 +50,12 @@ async function createUserRecord(password) {
   return { passwordHash, salt, iterations, algo: 'pbkdf2-sha256', role: 'user', createdAt: Date.now() };
 }
 
-// 验证用户密码（支持升级）
 async function verifyUserRecord(user, password) {
   if (user.algo === 'pbkdf2-sha256' && user.iterations) {
     const candidate = await hashPasswordPBKDF2(password, user.salt, user.iterations);
     if (candidate === user.passwordHash) return { ok: true, needsUpgrade: false };
     return { ok: false };
   }
-  // 旧版 SHA256（兼容）
   const hash = crypto.createHash('sha256').update(password + user.salt).digest('hex');
   if (hash !== user.passwordHash) return { ok: false };
   const upgraded = await createUserRecord(password);
@@ -67,7 +63,6 @@ async function verifyUserRecord(user, password) {
   return { ok: true, needsUpgrade: true, upgradedRecord: upgraded };
 }
 
-// 加密/解密
 function getEncryptionKey() {
   const key = process.env.ENCRYPTION_KEY;
   if (!key) throw new Error('ENCRYPTION_KEY 未配置');
@@ -90,7 +85,6 @@ function decryptPassword(encObj) {
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
 }
 
-// 会话管理
 async function getSession(token) {
   if (!token) return null;
   const session = await kvGet(`session:${token}`);
@@ -125,7 +119,6 @@ async function checkRateLimit(key, limit, windowSeconds) {
   return count <= limit;
 }
 
-// ======== 用户资料相关辅助 ========
 async function getPublicProfile(username) {
   const profile = await kvGet(`user_profile:${username}`) || {};
   const avatar = await kvGet(`user_avatar:${username}`);
@@ -147,7 +140,6 @@ async function getPublicProfile(username) {
 
 // ======== REST API ========
 
-// 注册
 app.post('/api/register', async (req, res) => {
   const ip = clientIp(req);
   if (!(await checkRateLimit(`rl:register:${ip}`, 5, 3600))) return res.status(429).json({ error: '请求过于频繁' });
@@ -163,14 +155,12 @@ app.post('/api/register', async (req, res) => {
   res.json({ success: true, message: '注册成功' });
 });
 
-// 登录
 app.post('/api/login', async (req, res) => {
   const ip = clientIp(req);
   if (!(await checkRateLimit(`rl:login:${ip}`, 10, 600))) return res.status(429).json({ error: '登录过于频繁' });
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
   
-  // 管理员登录
   if (username === 'admin') {
     let adminPwd = await kvGet('admin_password') || process.env.ADMIN;
     if (!adminPwd) return res.status(503).json({ error: '管理员未配置' });
@@ -179,7 +169,6 @@ app.post('/api/login', async (req, res) => {
     return res.json({ success: true, token, username: 'admin', role: 'admin', needsUpgrade: false });
   }
   
-  // 普通用户登录
   const users = await kvGet('users') || {};
   const user = users[username];
   if (!user) return res.status(401).json({ error: '用户名或密码错误' });
@@ -197,7 +186,6 @@ app.post('/api/login', async (req, res) => {
   res.json({ success: true, token, username, role: user.role || 'user', needsUpgrade });
 });
 
-// 验证 token（增强版：返回 profile 信息）
 app.get('/api/verify', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -223,14 +211,12 @@ app.get('/api/verify', async (req, res) => {
   });
 });
 
-// 登出
 app.post('/api/logout', async (req, res) => {
   const token = getBearerToken(req);
   if (token) await kvDelete(`session:${token}`);
   res.json({ success: true });
 });
 
-// 修改自己的密码
 app.post('/api/change-my-password', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -250,7 +236,6 @@ app.post('/api/change-my-password', async (req, res) => {
   res.json({ success: true });
 });
 
-// 删除账号
 app.post('/api/delete-account', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -260,7 +245,6 @@ app.post('/api/delete-account', async (req, res) => {
   delete users[session.username];
   await kvPut('users', users);
   await kvDelete(`session:${token}`);
-  // 清理相关数据
   await kvDelete(`user_profile:${session.username}`);
   await kvDelete(`user_avatar:${session.username}`);
   await kvDelete(`notif_read:${session.username}`);
@@ -272,7 +256,6 @@ app.post('/api/delete-account', async (req, res) => {
 
 // ======== 用户资料 API ========
 
-// 获取某用户的公开资料
 app.get('/api/user/profile/:username', async (req, res) => {
   const username = req.params.username;
   if (!username) return res.status(400).json({ error: '缺少用户名' });
@@ -284,7 +267,6 @@ app.get('/api/user/profile/:username', async (req, res) => {
   res.json(profile);
 });
 
-// 获取自己的详细资料
 app.get('/api/user/me', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -293,7 +275,6 @@ app.get('/api/user/me', async (req, res) => {
   res.json(profile);
 });
 
-// 更新自己的资料（昵称、签名）
 app.put('/api/user/profile', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -316,7 +297,6 @@ app.put('/api/user/profile', async (req, res) => {
   res.json({ success: true, profile });
 });
 
-// 上传头像
 app.post('/api/user/avatar', upload.single('avatar'), async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -337,7 +317,6 @@ app.post('/api/user/avatar', upload.single('avatar'), async (req, res) => {
   res.json({ success: true });
 });
 
-// 获取头像
 app.get('/api/user/avatar/:username', async (req, res) => {
   const username = req.params.username;
   const avatar = await kvGet(`user_avatar:${username}`);
@@ -353,7 +332,6 @@ app.get('/api/user/avatar/:username', async (req, res) => {
   res.send(buf);
 });
 
-// 删除头像
 app.delete('/api/user/avatar', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -376,7 +354,6 @@ app.post('/api/update', async (req, res) => {
   res.json({ success: true });
 });
 
-// 上传工具（需管理员）
 app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { name, icon, description, category } = req.body;
@@ -394,13 +371,11 @@ app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   res.json({ success: true, id, url: `/tool/${id}` });
 });
 
-// 获取工具内容
 app.get('/tool/:id', async (req, res) => {
   const html = await kvGet(`tool_content:${req.params.id}`);
   if (!html) return res.status(404).send('工具不存在');
   res.set('Content-Type', 'text/html; charset=utf-8').send(html);
 });
-
 // ============================================================
 //  AI 聊天助手
 // ============================================================
@@ -801,7 +776,6 @@ app.post('/api/chat/stream', async (req, res) => {
   }
 });
 
-// 管理员：AI 配置
 app.get('/api/admin/chat/config', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const cfg = await getChatConfig();
@@ -918,7 +892,6 @@ app.post('/api/admin/chat/reset-usage', async (req, res) => {
   await kvDelete(`chat_quota:${username}:${todayKey()}`);
   res.json({ success: true });
 });
-
 // ============================================================
 //  通知系统
 // ============================================================
@@ -1280,8 +1253,393 @@ app.post('/api/admin/view-password', async (req, res) => {
   res.json({ success: true, password: plainPassword });
 });
 
+// ============================================================
+//  论坛系统
+// ============================================================
+
+const FORUM_CATEGORIES = [
+  { id: 'general', name: '综合讨论', icon: '💬' },
+  { id: 'tech', name: '技术交流', icon: '💻' },
+  { id: 'share', name: '资源分享', icon: '🎁' },
+  { id: 'help', name: '求助问答', icon: '❓' },
+  { id: 'show', name: '作品展示', icon: '🎨' },
+  { id: 'chat', name: '灌水闲聊', icon: '☕' },
+];
+
+function genPostId() { return 'P' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function genCommentId() { return 'C' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function extractLinks(text) {
+  if (!text) return [];
+  const re = /https?:\/\/[^\s<>"'\\)\]]+/gi;
+  const matches = String(text).match(re) || [];
+  return [...new Set(matches)].slice(0, 10);
+}
+
+async function getForumIndex() {
+  const list = await kvGet('forum_index');
+  return Array.isArray(list) ? list : [];
+}
+async function saveForumIndex(list) {
+  await kvPut('forum_index', list.slice(0, 500));
+}
+
+app.get('/api/forum/categories', async (req, res) => {
+  res.json(FORUM_CATEGORIES);
+});
+
+app.get('/api/forum/stats', async (req, res) => {
+  const index = await getForumIndex();
+  res.json({
+    totalPosts: index.length,
+    totalViews: index.reduce((s, p) => s + (p.views || 0), 0),
+    totalComments: index.reduce((s, p) => s + (p.commentCount || 0), 0),
+  });
+});
+
+app.get('/api/forum/posts', async (req, res) => {
+  const { category, q, sort = 'new', page = 1, limit = 15 } = req.query;
+  let list = await getForumIndex();
+
+  if (category && category !== 'all') {
+    list = list.filter(p => p.category === category);
+  }
+
+  if (q && String(q).trim()) {
+    const keyword = String(q).trim().toLowerCase();
+    list = list.filter(p =>
+      (p.title && p.title.toLowerCase().includes(keyword)) ||
+      (p.excerpt && p.excerpt.toLowerCase().includes(keyword)) ||
+      (p.authorDisplay && p.authorDisplay.toLowerCase().includes(keyword))
+    );
+  }
+
+  if (sort === 'hot') {
+    list.sort((a, b) => (b.likes || 0) - (a.likes || 0) || (b.commentCount || 0) - (a.commentCount || 0));
+  } else if (sort === 'views') {
+    list.sort((a, b) => (b.views || 0) - (a.views || 0));
+  } else {
+    list.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  const pinned = list.filter(p => p.pinned);
+  const normal = list.filter(p => !p.pinned);
+  list = [...pinned, ...normal];
+
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const pageSize = Math.min(50, Math.max(5, parseInt(limit, 10) || 15));
+  const start = (pageNum - 1) * pageSize;
+  const items = list.slice(start, start + pageSize);
+
+  res.json({
+    total: list.length,
+    page: pageNum,
+    pageSize,
+    totalPages: Math.ceil(list.length / pageSize),
+    items,
+  });
+});
+
+app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const { title, content, category = 'general', tags = '' } = req.body;
+  if (!title || !String(title).trim()) return res.status(400).json({ error: '标题不能为空' });
+  if (!content || !String(content).trim()) return res.status(400).json({ error: '内容不能为空' });
+
+  const cleanTitle = String(title).trim().slice(0, 100);
+  const cleanContent = String(content).trim().slice(0, 10000);
+  const cleanCategory = FORUM_CATEGORIES.find(c => c.id === category) ? category : 'general';
+  const cleanTags = String(tags).split(/[,\s，]+/).map(t => t.trim()).filter(Boolean).slice(0, 5);
+
+  const images = [];
+  if (req.files && req.files.length) {
+    for (const file of req.files) {
+      if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype)) continue;
+      if (file.size > 500 * 1024) continue;
+      images.push(`data:${file.mimetype};base64,${file.buffer.toString('base64')}`);
+    }
+  }
+
+  const links = extractLinks(cleanContent);
+  const profile = await getPublicProfile(session.username);
+  const avatar = await kvGet(`user_avatar:${session.username}`);
+
+  const now = Date.now();
+  const post = {
+    id: genPostId(),
+    title: cleanTitle,
+    content: cleanContent,
+    excerpt: cleanContent.replace(/https?:\/\/\S+/g, '[链接]').slice(0, 150),
+    author: session.username,
+    authorDisplay: profile.displayName || session.username,
+    authorAvatar: avatar ? `/api/user/avatar/${encodeURIComponent(session.username)}` : null,
+    category: cleanCategory,
+    tags: cleanTags,
+    images,
+    links,
+    likes: [],
+    views: 0,
+    commentCount: 0,
+    pinned: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await kvPut(`forum_post:${post.id}`, post, { expirationTtl: 90 * 24 * 3600 });
+
+  const index = await getForumIndex();
+  index.unshift({
+    id: post.id,
+    title: post.title,
+    excerpt: post.excerpt,
+    author: post.author,
+    authorDisplay: post.authorDisplay,
+    category: post.category,
+    tags: post.tags,
+    hasImages: images.length > 0,
+    hasLinks: links.length > 0,
+    coverImage: images[0] || null,
+    likes: 0,
+    views: 0,
+    commentCount: 0,
+    pinned: false,
+    createdAt: now,
+  });
+  await saveForumIndex(index);
+
+  const userScore = (await kvGet(`forum_score:${session.username}`)) || 0;
+  await kvPut(`forum_score:${session.username}`, userScore + 10);
+
+  res.json({ success: true, postId: post.id });
+});
+
+app.get('/api/forum/posts/:id', async (req, res) => {
+  const post = await kvGet(`forum_post:${req.params.id}`);
+  if (!post) return res.status(404).json({ error: '帖子不存在' });
+  res.json(post);
+});
+
+app.post('/api/forum/posts/:id/view', async (req, res) => {
+  const key = `forum_post:${req.params.id}`;
+  const post = await kvGet(key);
+  if (!post) return res.status(404).json({ error: '帖子不存在' });
+  post.views = (post.views || 0) + 1;
+  await kvPut(key, post, { expirationTtl: 90 * 24 * 3600 });
+
+  const index = await getForumIndex();
+  const idx = index.findIndex(p => p.id === post.id);
+  if (idx >= 0) {
+    index[idx].views = post.views;
+    await saveForumIndex(index);
+  }
+  res.json({ success: true, views: post.views });
+});
+
+app.post('/api/forum/posts/:id/like', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const key = `forum_post:${req.params.id}`;
+  const post = await kvGet(key);
+  if (!post) return res.status(404).json({ error: '帖子不存在' });
+
+  if (!post.likes) post.likes = [];
+  const idx = post.likes.indexOf(session.username);
+  let liked;
+  if (idx >= 0) {
+    post.likes.splice(idx, 1);
+    liked = false;
+  } else {
+    post.likes.push(session.username);
+    liked = true;
+  }
+  await kvPut(key, post, { expirationTtl: 90 * 24 * 3600 });
+
+  const index = await getForumIndex();
+  const i = index.findIndex(p => p.id === post.id);
+  if (i >= 0) {
+    index[i].likes = post.likes.length;
+    await saveForumIndex(index);
+  }
+
+  res.json({ success: true, liked, count: post.likes.length });
+});
+
+app.put('/api/forum/posts/:id', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const key = `forum_post:${req.params.id}`;
+  const post = await kvGet(key);
+  if (!post) return res.status(404).json({ error: '帖子不存在' });
+  if (post.author !== session.username && session.role !== 'admin') {
+    return res.status(403).json({ error: '没有权限' });
+  }
+
+  const { title, content, tags } = req.body;
+  if (title) post.title = String(title).trim().slice(0, 100);
+  if (content) {
+    post.content = String(content).trim().slice(0, 10000);
+    post.excerpt = post.content.replace(/https?:\/\/\S+/g, '[链接]').slice(0, 150);
+    post.links = extractLinks(post.content);
+  }
+  if (Array.isArray(tags)) post.tags = tags.slice(0, 5);
+  post.updatedAt = Date.now();
+
+  await kvPut(key, post, { expirationTtl: 90 * 24 * 3600 });
+
+  const index = await getForumIndex();
+  const i = index.findIndex(p => p.id === post.id);
+  if (i >= 0) {
+    index[i].title = post.title;
+    index[i].excerpt = post.excerpt;
+    index[i].tags = post.tags;
+    index[i].hasLinks = post.links.length > 0;
+    await saveForumIndex(index);
+  }
+
+  res.json({ success: true });
+});
+
+app.delete('/api/forum/posts/:id', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const key = `forum_post:${req.params.id}`;
+  const post = await kvGet(key);
+  if (!post) return res.status(404).json({ error: '帖子不存在' });
+  if (post.author !== session.username && session.role !== 'admin') {
+    return res.status(403).json({ error: '没有权限' });
+  }
+
+  await kvDelete(key);
+  await kvDelete(`forum_comments:${req.params.id}`);
+
+  const index = await getForumIndex();
+  await saveForumIndex(index.filter(p => p.id !== req.params.id));
+
+  res.json({ success: true });
+});
+
+app.post('/api/forum/posts/:id/pin', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+
+  const key = `forum_post:${req.params.id}`;
+  const post = await kvGet(key);
+  if (!post) return res.status(404).json({ error: '帖子不存在' });
+
+  post.pinned = !post.pinned;
+  await kvPut(key, post, { expirationTtl: 90 * 24 * 3600 });
+
+  const index = await getForumIndex();
+  const i = index.findIndex(p => p.id === post.id);
+  if (i >= 0) {
+    index[i].pinned = post.pinned;
+    await saveForumIndex(index);
+  }
+
+  res.json({ success: true, pinned: post.pinned });
+});
+
+app.get('/api/forum/posts/:id/comments', async (req, res) => {
+  const comments = (await kvGet(`forum_comments:${req.params.id}`)) || [];
+  res.json(comments);
+});
+
+app.post('/api/forum/posts/:id/comments', upload.array('images', 2), async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const { content } = req.body;
+  if (!content || !String(content).trim()) return res.status(400).json({ error: '内容不能为空' });
+
+  const postKey = `forum_post:${req.params.id}`;
+  const post = await kvGet(postKey);
+  if (!post) return res.status(404).json({ error: '帖子不存在' });
+
+  const images = [];
+  if (req.files && req.files.length) {
+    for (const file of req.files) {
+      if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype)) continue;
+      if (file.size > 300 * 1024) continue;
+      images.push(`data:${file.mimetype};base64,${file.buffer.toString('base64')}`);
+    }
+  }
+
+  const profile = await getPublicProfile(session.username);
+  const avatar = await kvGet(`user_avatar:${session.username}`);
+
+  const comment = {
+    id: genCommentId(),
+    content: String(content).trim().slice(0, 2000),
+    links: extractLinks(String(content)),
+    images,
+    author: session.username,
+    authorDisplay: profile.displayName || session.username,
+    authorAvatar: avatar ? `/api/user/avatar/${encodeURIComponent(session.username)}` : null,
+    createdAt: Date.now(),
+  };
+
+  const comments = (await kvGet(`forum_comments:${req.params.id}`)) || [];
+  comments.push(comment);
+  await kvPut(`forum_comments:${req.params.id}`, comments.slice(-500), { expirationTtl: 90 * 24 * 3600 });
+
+  post.commentCount = comments.length;
+  await kvPut(postKey, post, { expirationTtl: 90 * 24 * 3600 });
+
+  const index = await getForumIndex();
+  const i = index.findIndex(p => p.id === post.id);
+  if (i >= 0) {
+    index[i].commentCount = comments.length;
+    await saveForumIndex(index);
+  }
+
+  const userScore = (await kvGet(`forum_score:${session.username}`)) || 0;
+  await kvPut(`forum_score:${session.username}`, userScore + 2);
+
+  res.json({ success: true, comment });
+});
+
+app.delete('/api/forum/comments/:postId/:commentId', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const comments = (await kvGet(`forum_comments:${req.params.postId}`)) || [];
+  const idx = comments.findIndex(c => c.id === req.params.commentId);
+  if (idx < 0) return res.status(404).json({ error: '评论不存在' });
+
+  if (comments[idx].author !== session.username && session.role !== 'admin') {
+    return res.status(403).json({ error: '没有权限' });
+  }
+
+  comments.splice(idx, 1);
+  await kvPut(`forum_comments:${req.params.postId}`, comments, { expirationTtl: 90 * 24 * 3600 });
+
+  const postKey = `forum_post:${req.params.postId}`;
+  const post = await kvGet(postKey);
+  if (post) {
+    post.commentCount = comments.length;
+    await kvPut(postKey, post, { expirationTtl: 90 * 24 * 3600 });
+  }
+
+  res.json({ success: true });
+});
+
+app.get('/api/forum/score/:username', async (req, res) => {
+  const score = (await kvGet(`forum_score:${req.params.username}`)) || 0;
+  res.json({ username: req.params.username, score });
+});
+
 // ======== 五子棋 REST 辅助接口 ========
-// 创建房间
+
 app.post('/api/room/create', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -1314,7 +1672,6 @@ app.post('/api/room/create', async (req, res) => {
   }
 });
 
-// 加入房间
 app.post('/api/room/join', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -1365,7 +1722,6 @@ app.post('/api/room/join', async (req, res) => {
   res.json({ success: true, roomId, color: availableColor, action: 'join' });
 });
 
-// 离开房间
 app.post('/api/room/leave', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -1396,7 +1752,6 @@ app.post('/api/room/leave', async (req, res) => {
   res.json({ success: true });
 });
 
-// 心跳（保持房间活跃）
 app.post('/api/room/heartbeat', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
