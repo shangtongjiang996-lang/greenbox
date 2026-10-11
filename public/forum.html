@@ -1,0 +1,1957 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>论坛 · GreenBox</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<style>
+  :root {
+    --forum-bg: var(--bg, #f6f8f7);
+    --forum-card: var(--card-bg, #fff);
+    --forum-border: var(--border, #e2e8f0);
+    --forum-text: var(--text, #0f172a);
+    --forum-muted: var(--muted, #64748b);
+    --forum-primary: #16a34a;
+    --forum-primary-light: #dcfce7;
+  }
+  body { background: var(--forum-bg); }
+
+  @media (max-width: 900px) {
+    .navbar { position: static !important; top: auto !important; }
+  }
+
+  .forum-wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 24px 16px 80px;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .forum-wrap { grid-template-columns: 1fr; padding: 16px 12px 80px; }
+  }
+
+  /* 侧栏 */
+  .sidebar {
+    background: var(--forum-card);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 2px 12px rgba(15,23,42,0.05);
+    border: 1px solid var(--forum-border);
+    position: sticky;
+    top: 80px;
+  }
+  @media (max-width: 900px) {
+    .sidebar { position: static; }
+  }
+  .sidebar-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--forum-muted);
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+  .cat-list { display: flex; flex-direction: column; gap: 4px; }
+  @media (max-width: 900px) {
+    .cat-list { flex-direction: row; flex-wrap: wrap; }
+  }
+  .cat-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--forum-text);
+    transition: all 0.15s;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    text-align: left;
+    width: 100%;
+  }
+  .cat-item:hover { background: var(--forum-bg); }
+  .cat-item.active {
+    background: var(--forum-primary-light);
+    color: #15803d;
+    font-weight: 700;
+  }
+  [data-theme="dark"] .cat-item.active {
+    background: rgba(34,197,94,0.15);
+    color: #4ade80;
+  }
+  .cat-item .ci { font-size: 16px; }
+
+  .forum-stats {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--forum-border);
+    font-size: 12.5px;
+    color: var(--forum-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .forum-stats b { color: var(--forum-text); font-size: 14px; }
+
+  /* 主内容 */
+  .main-area { min-width: 0; }
+
+  .forum-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .search-box {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+  }
+  .search-box input {
+    width: 100%;
+    padding: 11px 42px 11px 40px;
+    border: 1px solid var(--forum-border);
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    background: var(--forum-card);
+    color: var(--forum-text);
+    outline: none;
+    transition: border 0.2s, box-shadow 0.2s;
+  }
+  .search-box input:focus {
+    border-color: var(--forum-primary);
+    box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+  }
+  .search-box .si {
+    position: absolute;
+    left: 14px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    opacity: 0.5;
+  }
+  .search-box .clear {
+    position: absolute;
+    right: 10px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    cursor: pointer; font-size: 14px;
+    color: var(--forum-muted);
+    padding: 4px 8px;
+    display: none;
+  }
+  .search-box .clear.show { display: block; }
+
+  .sort-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--forum-card);
+    border-radius: 12px;
+    padding: 4px;
+    border: 1px solid var(--forum-border);
+  }
+  .sort-tab {
+    padding: 7px 14px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--forum-muted);
+    font-weight: 500;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .sort-tab.active {
+    background: var(--forum-primary);
+    color: white;
+    font-weight: 700;
+  }
+  .sort-tab:hover:not(.active) { color: var(--forum-text); }
+
+  .new-post-btn {
+    padding: 11px 22px;
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(22,163,74,0.35);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .new-post-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(22,163,74,0.45);
+  }
+
+  /* 帖子列表 */
+  .post-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .post-card {
+    background: var(--forum-card);
+    border-radius: 16px;
+    padding: 18px 20px;
+    border: 1px solid var(--forum-border);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    box-shadow: 0 1px 4px rgba(15,23,42,0.03);
+  }
+  .post-card:hover {
+    border-color: var(--forum-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(22,163,74,0.1);
+  }
+  .post-card.pinned {
+    background: linear-gradient(135deg, #fffbeb, #fff7ed);
+    border-color: #fbbf24;
+  }
+  [data-theme="dark"] .post-card.pinned {
+    background: linear-gradient(135deg, #422006, #3a1d05);
+    border-color: #d97706;
+  }
+
+  .post-main { flex: 1; min-width: 0; }
+  .post-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .post-avatar {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--forum-border);
+    flex-shrink: 0;
+    background: var(--forum-primary-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+  }
+  .post-author {
+    font-size: 12.5px;
+    color: var(--forum-muted);
+    font-weight: 500;
+  }
+  .post-time {
+    font-size: 11.5px;
+    color: var(--forum-muted);
+    margin-left: auto;
+  }
+  .pin-badge {
+    font-size: 10px;
+    background: #fef3c7;
+    color: #92400e;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+  }
+  .post-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--forum-text);
+    line-height: 1.4;
+    margin-bottom: 6px;
+    word-wrap: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .post-excerpt {
+    font-size: 13.5px;
+    color: var(--forum-muted);
+    line-height: 1.6;
+    margin-bottom: 10px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-wrap: break-word;
+  }
+  .post-meta {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    font-size: 12px;
+    color: var(--forum-muted);
+    flex-wrap: wrap;
+  }
+  .post-meta span { display: inline-flex; align-items: center; gap: 4px; }
+  .post-cat {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--forum-primary-light);
+    color: #15803d;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  [data-theme="dark"] .post-cat {
+    background: rgba(34,197,94,0.15);
+    color: #4ade80;
+  }
+  .post-tag {
+    font-size: 11.5px;
+    color: var(--forum-muted);
+    background: var(--forum-bg);
+    padding: 2px 8px;
+    border-radius: 8px;
+  }
+
+  .post-cover {
+    width: 100px;
+    height: 100px;
+    border-radius: 12px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--forum-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--forum-muted);
+    font-size: 28px;
+    border: 1px solid var(--forum-border);
+  }
+  .post-cover img {
+    width: 100%; height: 100%; object-fit: cover;
+  }
+  @media (max-width: 640px) {
+    .post-cover { width: 70px; height: 70px; }
+    .post-card { padding: 14px 16px; gap: 12px; }
+    .post-title { font-size: 15.5px; }
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--forum-muted);
+  }
+  .empty-state .icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+
+  /* 分页 */
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  .page-btn {
+    min-width: 38px;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--forum-border);
+    background: var(--forum-card);
+    color: var(--forum-text);
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+  .page-btn:hover:not(:disabled) {
+    border-color: var(--forum-primary);
+    color: var(--forum-primary);
+  }
+  .page-btn.active {
+    background: var(--forum-primary);
+    color: white;
+    border-color: var(--forum-primary);
+    font-weight: 700;
+  }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* 悬浮发帖按钮（移动端） */
+  .fab {
+    position: fixed;
+    right: 20px;
+    bottom: 90px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: white;
+    border: none;
+    font-size: 26px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(22,163,74,0.4);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .fab:active { transform: scale(0.92); }
+  @media (max-width: 900px) {
+    .fab { display: flex; }
+    .new-post-btn { display: none; }
+  }
+
+  /* ============ 弹窗 ============ */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.6);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 1000;
+    overflow-y: auto;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--forum-card);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 680px;
+    max-height: calc(100vh - 40px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.3);
+    animation: modalIn 0.3s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(20px) scale(.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .modal-head {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--forum-border);
+    flex-shrink: 0;
+  }
+  .modal-head h2 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--forum-text);
+  }
+  .modal-close {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--forum-bg);
+    color: var(--forum-muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+  .modal-close:hover {
+    background: var(--forum-border);
+    color: var(--forum-text);
+    transform: rotate(90deg);
+  }
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .modal-foot {
+    padding: 14px 20px;
+    border-top: 1px solid var(--forum-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  /* 表单 */
+  .form-field { margin-bottom: 16px; }
+  .form-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--forum-text);
+    margin-bottom: 6px;
+  }
+  .form-field input,
+  .form-field textarea,
+  .form-field select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--forum-border);
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    background: var(--forum-bg);
+    color: var(--forum-text);
+    outline: none;
+    transition: border 0.2s, box-shadow 0.2s;
+  }
+  .form-field textarea { resize: vertical; min-height: 140px; }
+  .form-field input:focus,
+  .form-field textarea:focus,
+  .form-field select:focus {
+    border-color: var(--forum-primary);
+    box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+  }
+
+  .cat-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .cat-pill {
+    padding: 7px 14px;
+    border: 1.5px solid var(--forum-border);
+    border-radius: 20px;
+    background: transparent;
+    color: var(--forum-muted);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+  .cat-pill:hover { border-color: var(--forum-primary); color: var(--forum-primary); }
+  .cat-pill.active {
+    background: var(--forum-primary);
+    color: white;
+    border-color: var(--forum-primary);
+    font-weight: 700;
+  }
+
+  /* 图片上传预览 */
+  .img-upload-area {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .img-preview {
+    position: relative;
+    width: 90px;
+    height: 90px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--forum-border);
+    background: var(--forum-bg);
+  }
+  .img-preview img {
+    width: 100%; height: 100%; object-fit: cover;
+  }
+  .img-preview .remove {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .upload-btn {
+    width: 90px;
+    height: 90px;
+    border: 2px dashed var(--forum-border);
+    border-radius: 12px;
+    background: transparent;
+    cursor: pointer;
+    color: var(--forum-muted);
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .upload-btn:hover {
+    border-color: var(--forum-primary);
+    color: var(--forum-primary);
+    background: rgba(22,163,74,0.04);
+  }
+  .upload-btn .icon { font-size: 22px; }
+
+  /* 帖子详情 */
+  .post-detail-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--forum-text);
+    line-height: 1.4;
+    margin-bottom: 12px;
+    word-wrap: break-word;
+  }
+  .post-detail-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--forum-border);
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--forum-muted);
+  }
+  .post-detail-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--forum-primary-light);
+    background: var(--forum-primary-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .post-detail-content {
+    font-size: 15px;
+    line-height: 1.8;
+    color: var(--forum-text);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin-bottom: 20px;
+  }
+  .post-detail-content a {
+    color: #3b82f6;
+    text-decoration: none;
+    border-bottom: 1px dashed #3b82f6;
+    cursor: pointer;
+    word-break: break-all;
+  }
+  .post-detail-content a:hover { color: #1d4ed8; }
+
+  .post-detail-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .post-detail-images img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    border: 1px solid var(--forum-border);
+  }
+  .post-detail-images img:hover { transform: scale(1.02); }
+
+  .link-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--forum-bg);
+    border: 1px solid var(--forum-border);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    color: var(--forum-text);
+  }
+  .link-card:hover {
+    border-color: var(--forum-primary);
+    background: var(--forum-primary-light);
+  }
+  [data-theme="dark"] .link-card:hover {
+    background: rgba(34,197,94,0.1);
+  }
+  .link-card .licon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--forum-card);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .link-card .ltext {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    color: var(--forum-muted);
+  }
+  .link-card .lgo { font-size: 14px; opacity: 0.5; }
+
+  /* 操作栏 */
+  .post-actions {
+    display: flex;
+    gap: 10px;
+    padding: 14px 0;
+    border-top: 1px solid var(--forum-border);
+    border-bottom: 1px solid var(--forum-border);
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .action-btn {
+    padding: 8px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--forum-border);
+    background: transparent;
+    color: var(--forum-muted);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+  }
+  .action-btn:hover {
+    border-color: var(--forum-primary);
+    color: var(--forum-primary);
+  }
+  .action-btn.active {
+    background: var(--forum-primary-light);
+    color: #15803d;
+    border-color: var(--forum-primary);
+    font-weight: 700;
+  }
+  [data-theme="dark"] .action-btn.active {
+    background: rgba(34,197,94,0.15);
+    color: #4ade80;
+  }
+  .action-btn.danger:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+
+  /* 评论区 */
+  .comments-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--forum-text);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .comment-item {
+    display: flex;
+    gap: 10px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--forum-border);
+  }
+  .comment-item:last-child { border-bottom: none; }
+  .comment-avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--forum-primary-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    border: 2px solid var(--forum-border);
+  }
+  .comment-body { flex: 1; min-width: 0; }
+  .comment-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+  }
+  .comment-author {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--forum-text);
+  }
+  .comment-time {
+    font-size: 11.5px;
+    color: var(--forum-muted);
+    margin-left: auto;
+  }
+  .comment-content {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--forum-text);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .comment-content a {
+    color: #3b82f6;
+    text-decoration: none;
+    border-bottom: 1px dashed #3b82f6;
+    cursor: pointer;
+    word-break: break-all;
+  }
+  .comment-content a:hover { color: #1d4ed8; }
+  .comment-images {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .comment-images img {
+    width: 80px; height: 80px;
+    object-fit: cover;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid var(--forum-border);
+  }
+  .comment-actions {
+    margin-top: 6px;
+    display: flex;
+    gap: 8px;
+  }
+  .comment-del {
+    background: none;
+    border: none;
+    color: var(--forum-muted);
+    font-size: 11.5px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-family: inherit;
+  }
+  .comment-del:hover { color: #ef4444; background: #fee2e2; }
+
+  .comment-input-area {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--forum-border);
+  }
+  .comment-input-area textarea {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--forum-border);
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: none;
+    background: var(--forum-bg);
+    color: var(--forum-text);
+    outline: none;
+    min-height: 44px;
+    max-height: 200px;
+    transition: border 0.2s;
+  }
+  .comment-input-area textarea:focus {
+    border-color: var(--forum-primary);
+    box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+  }
+  .comment-send {
+    align-self: flex-end;
+    padding: 10px 22px;
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    height: 44px;
+  }
+  .comment-send:hover:not(:disabled) { transform: translateY(-1px); }
+  .comment-send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #0f172a;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 30px;
+    font-size: 14px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 10000;
+    pointer-events: none;
+    max-width: 90vw;
+    white-space: nowrap;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast.success { background: #16a34a; }
+  .toast.error { background: #dc2626; }
+
+  /* 链接确认弹窗 */
+  .ext-link-confirm {
+    text-align: center;
+    padding: 8px 4px;
+  }
+  .ext-link-confirm .icon {
+    font-size: 48px;
+    margin-bottom: 14px;
+    display: block;
+  }
+  .ext-link-confirm h3 {
+    font-size: 18px;
+    color: var(--forum-text);
+    margin-bottom: 8px;
+  }
+  .ext-link-confirm p {
+    font-size: 14px;
+    color: var(--forum-muted);
+    line-height: 1.6;
+    margin-bottom: 8px;
+  }
+  .ext-link-confirm .url {
+    display: block;
+    padding: 10px 14px;
+    background: var(--forum-bg);
+    border: 1px solid var(--forum-border);
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-family: ui-monospace, monospace;
+    color: #3b82f6;
+    word-break: break-all;
+    margin: 12px 0 20px;
+    text-align: left;
+  }
+
+  /* 图片灯箱 */
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 10001;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    cursor: zoom-out;
+  }
+  .lightbox.show { display: flex; }
+  .lightbox img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 4px;
+  }
+  .lightbox .lb-close {
+    position: absolute;
+    top: 20px; right: 20px;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* 加载状态 */
+  .loading-spinner {
+    display: inline-block;
+    width: 20px; height: 20px;
+    border: 2.5px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .user-avatar-mini {
+    width: 28px; height: 28px; border-radius: 50%;
+    object-fit: cover; border: 2px solid var(--forum-primary);
+    vertical-align: middle; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="container">
+    <a href="index.html" class="logo">🌱 GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="index.html">首页</a></li>
+      <li><a href="tools.html">工具</a></li>
+      <li><a href="changelog.html">更新日志</a></li>
+      <li><a href="forum.html" class="active">论坛</a></li>
+      <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题">🌙</button>
+      <div class="user-area" id="userArea"></div>
+    </div>
+  </div>
+</nav>
+
+<main class="forum-wrap">
+  <aside class="sidebar">
+    <div class="sidebar-title">📂 板块</div>
+    <div class="cat-list" id="catList"></div>
+    <div class="forum-stats">
+      <div>📝 帖子：<b id="statPosts">-</b></div>
+      <div>💬 评论：<b id="statComments">-</b></div>
+      <div>👁️ 浏览：<b id="statViews">-</b></div>
+    </div>
+  </aside>
+
+  <div class="main-area">
+    <div class="forum-toolbar">
+      <div class="search-box">
+        <span class="si">🔍</span>
+        <input type="text" id="searchInput" placeholder="搜索帖子...">
+        <button class="clear" id="searchClear" title="清除">✕</button>
+      </div>
+      <div class="sort-tabs">
+        <button class="sort-tab active" data-sort="new">🕐 最新</button>
+        <button class="sort-tab" data-sort="hot">🔥 最热</button>
+        <button class="sort-tab" data-sort="views">👁️ 最多浏览</button>
+      </div>
+      <button class="new-post-btn" id="newPostBtn">
+        <span>✏️</span> 发帖
+      </button>
+    </div>
+
+    <div class="post-list" id="postList">
+      <div class="empty-state">
+        <span class="icon">⏳</span>
+        <div>加载中...</div>
+      </div>
+    </div>
+
+    <div class="pagination" id="pagination"></div>
+  </div>
+</main>
+
+<button class="fab" id="fabBtn" title="发帖">✏️</button>
+
+<!-- 发帖弹窗 -->
+<div class="modal-overlay" id="newPostModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>✏️ 发布新帖</h2>
+      <button class="modal-close" id="newPostClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field">
+        <label>选择板块</label>
+        <div class="cat-pills" id="newPostCats"></div>
+      </div>
+      <div class="form-field">
+        <label>标题 <span style="color:#ef4444">*</span></label>
+        <input type="text" id="newPostTitle" placeholder="请输入标题（最多100字）" maxlength="100">
+      </div>
+      <div class="form-field">
+        <label>内容 <span style="color:#ef4444">*</span></label>
+        <textarea id="newPostContent" placeholder="分享你的想法...&#10;&#10;提示：直接粘贴链接，系统会自动识别&#10;如：https://www.example.com"></textarea>
+      </div>
+      <div class="form-field">
+        <label>图片（最多 3 张，每张 ≤ 500KB）</label>
+        <div class="img-upload-area" id="postImagesArea">
+          <button class="upload-btn" id="postUploadBtn" type="button">
+            <span class="icon">📷</span>
+            <span>添加图片</span>
+          </button>
+        </div>
+        <input type="file" id="postImageInput" accept="image/*" multiple style="display:none">
+      </div>
+      <div class="form-field">
+        <label>标签（可选，最多 5 个，用逗号或空格分隔）</label>
+        <input type="text" id="newPostTags" placeholder="例如：闲聊 分享 求助">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="action-btn" id="newPostCancel">取消</button>
+      <button class="comment-send" id="newPostSubmit">发布</button>
+    </div>
+  </div>
+</div>
+
+<!-- 帖子详情弹窗 -->
+<div class="modal-overlay" id="postDetailModal">
+  <div class="modal-box" style="max-width: 780px;">
+    <div class="modal-head">
+      <h2 id="postDetailTitle" style="font-size:15px;">帖子详情</h2>
+      <button class="modal-close" id="postDetailClose">✕</button>
+    </div>
+    <div class="modal-body" id="postDetailBody">
+      <div class="empty-state"><span class="icon">⏳</span><div>加载中...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 外链确认弹窗 -->
+<div class="modal-overlay" id="extLinkModal">
+  <div class="modal-box" style="max-width: 460px;">
+    <div class="modal-body">
+      <div class="ext-link-confirm">
+        <span class="icon">🔗</span>
+        <h3>即将离开 GreenBox</h3>
+        <p>你正在访问一个外部链接，请注意账户和信息安全。</p>
+        <span class="url" id="extLinkUrl"></span>
+        <p style="font-size:12px;color:#94a3b8;">该链接由用户发布，GreenBox 不对外部内容负责</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="action-btn" id="extLinkCancel">取消</button>
+      <button class="comment-send" id="extLinkConfirm">继续访问</button>
+    </div>
+  </div>
+</div>
+
+<!-- 图片灯箱 -->
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" id="lightboxClose">✕</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="script.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  // ============================================================
+  //  状态
+  // ============================================================
+  let currentUser = null;
+  let currentCategory = 'all';
+  let currentSort = 'new';
+  let currentSearch = '';
+  let currentPage = 1;
+  let totalPages = 1;
+  let categories = [];
+  let selectedPostCategory = 'general';
+  let postImages = []; // { file, dataUri }
+  let currentPostId = null;
+  let currentComments = [];
+
+  const token = localStorage.getItem('greenbox_token');
+
+  // ============================================================
+  //  工具
+  // ============================================================
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  // 把文本中的链接转成可点击的 a 标签
+  function linkify(text) {
+    const escaped = escapeHtml(text);
+    return escaped.replace(
+      /https?:\/\/[^\s<>"']+/gi,
+      (url) => `<a href="#" data-ext-link="${escapeHtml(url)}" class="ext-link">${escapeHtml(url)}</a>`
+    );
+  }
+
+  function timeAgo(ts) {
+    const d = Date.now() - ts;
+    if (d < 60000) return '刚刚';
+    if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前';
+    if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前';
+    if (d < 604800000) return Math.floor(d / 86400000) + ' 天前';
+    const date = new Date(ts);
+    return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+  }
+
+  function formatTime(ts) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (type ? ' ' + type : '');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  function avatarHtml(username, displayName, hasAvatar) {
+    if (hasAvatar) {
+      return `<img class="post-avatar" src="/api/user/avatar/${encodeURIComponent(username)}" alt="" onerror="this.replaceWith(document.createTextNode('👤'))">`;
+    }
+    return `<div class="post-avatar">${username === 'admin' ? '🛡️' : '👤'}</div>`;
+  }
+
+  // ============================================================
+  //  外链确认弹窗
+  // ============================================================
+  function openExtLink(url) {
+    document.getElementById('extLinkUrl').textContent = url;
+    document.getElementById('extLinkModal').classList.add('show');
+    document.getElementById('extLinkConfirm').onclick = () => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      document.getElementById('extLinkModal').classList.remove('show');
+    };
+  }
+
+  document.getElementById('extLinkCancel').addEventListener('click', () => {
+    document.getElementById('extLinkModal').classList.remove('show');
+  });
+  document.getElementById('extLinkModal').addEventListener('click', (e) => {
+    if (e.target.id === 'extLinkModal') {
+      document.getElementById('extLinkModal').classList.remove('show');
+    }
+  });
+
+  // 全局链接拦截
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('[data-ext-link]');
+    if (link) {
+      e.preventDefault();
+      e.stopPropagation();
+      openExtLink(link.dataset.extLink);
+    }
+  });
+
+  // ============================================================
+  //  图片灯箱
+  // ============================================================
+  function openLightbox(src) {
+    document.getElementById('lightboxImg').src = src;
+    document.getElementById('lightbox').classList.add('show');
+  }
+  document.getElementById('lightboxClose').addEventListener('click', () => {
+    document.getElementById('lightbox').classList.remove('show');
+  });
+  document.getElementById('lightbox').addEventListener('click', (e) => {
+    if (e.target.id === 'lightbox') {
+      document.getElementById('lightbox').classList.remove('show');
+    }
+  });
+  document.addEventListener('click', (e) => {
+    const img = e.target.closest('[data-lightbox]');
+    if (img) {
+      e.preventDefault();
+      e.stopPropagation();
+      openLightbox(img.dataset.lightbox);
+    }
+  });
+
+  // ============================================================
+  //  用户认证
+  // ============================================================
+  async function checkAuth() {
+    if (!token) return null;
+    try {
+      const res = await fetch('/api/verify', { headers: { 'Authorization': `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.valid) {
+        currentUser = data;
+        return data;
+      }
+      localStorage.removeItem('greenbox_token');
+      return null;
+    } catch (e) { return null; }
+  }
+
+  async function renderUserArea() {
+    const userArea = document.getElementById('userArea');
+    const profileNav = document.getElementById('profile-nav');
+    const user = await checkAuth();
+    if (user) {
+      const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + Date.now();
+      const avatarHtml2 = user.hasAvatar
+        ? `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`
+        : '';
+      userArea.innerHTML = `
+        ${avatarHtml2}
+        <a href="/profile.html" class="user-name" style="text-decoration:none;color:inherit;">${escapeHtml(user.displayName || user.username)}</a>
+        <button onclick="logoutForum()" class="btn-outline">退出</button>
+      `;
+      if (profileNav) profileNav.style.display = 'list-item';
+    } else {
+      userArea.innerHTML = `
+        <a href="/login.html?redirect=/forum.html" class="btn-primary-sm">登录</a>
+        <a href="/register.html" class="btn-outline">注册</a>
+      `;
+      if (profileNav) profileNav.style.display = 'none';
+    }
+  }
+  window.logoutForum = function() {
+    if (token) fetch('/api/logout', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+    localStorage.removeItem('greenbox_token');
+    localStorage.removeItem('greenbox_user');
+    location.reload();
+  };
+
+  // ============================================================
+  //  加载分类
+  // ============================================================
+  async function loadCategories() {
+    try {
+      const res = await fetch('/api/forum/categories');
+      categories = await res.json();
+      renderCategories();
+      renderNewPostCats();
+    } catch (e) {
+      categories = [];
+    }
+  }
+
+  function renderCategories() {
+    const list = document.getElementById('catList');
+    const all = [{ id: 'all', name: '全部', icon: '🌐' }].concat(categories);
+    list.innerHTML = all.map(c => `
+      <button class="cat-item ${currentCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
+        <span class="ci">${c.icon}</span>
+        <span>${c.name}</span>
+      </button>
+    `).join('');
+    list.querySelectorAll('.cat-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentCategory = btn.dataset.cat;
+        currentPage = 1;
+        renderCategories();
+        loadPosts();
+      });
+    });
+  }
+
+  function renderNewPostCats() {
+    const wrap = document.getElementById('newPostCats');
+    wrap.innerHTML = categories.map(c => `
+      <button type="button" class="cat-pill ${selectedPostCategory === c.id ? 'active' : ''}" data-pcat="${c.id}">
+        ${c.icon} ${c.name}
+      </button>
+    `).join('');
+    wrap.querySelectorAll('.cat-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedPostCategory = btn.dataset.pcat;
+        renderNewPostCats();
+      });
+    });
+  }
+
+  // ============================================================
+  //  加载帖子列表
+  // ============================================================
+  async function loadPosts() {
+    const list = document.getElementById('postList');
+    list.innerHTML = '<div class="empty-state"><span class="icon">⏳</span><div>加载中...</div></div>';
+
+    try {
+      const params = new URLSearchParams({
+        category: currentCategory,
+        sort: currentSort,
+        page: currentPage,
+        limit: 15,
+      });
+      if (currentSearch) params.set('q', currentSearch);
+
+      const res = await fetch('/api/forum/posts?' + params.toString());
+      const data = await res.json();
+
+      totalPages = data.totalPages || 1;
+      renderPosts(data.items || []);
+      renderPagination(data.page, data.totalPages);
+    } catch (e) {
+      list.innerHTML = '<div class="empty-state"><span class="icon">⚠️</span><div>加载失败</div></div>';
+    }
+  }
+
+  function renderPosts(posts) {
+    const list = document.getElementById('postList');
+    if (!posts || posts.length === 0) {
+      list.innerHTML = `
+        <div class="empty-state">
+          <span class="icon">📭</span>
+          <div>暂无帖子</div>
+          <div style="font-size:12px;margin-top:8px;opacity:0.7;">成为第一个发帖的人吧！</div>
+        </div>
+      `;
+      return;
+    }
+
+    const catMap = {};
+    categories.forEach(c => catMap[c.id] = c);
+
+    list.innerHTML = posts.map(p => {
+      const cat = catMap[p.category] || { name: '其他', icon: '📌' };
+      const avatar = p.authorAvatar
+        ? `<img class="post-avatar" src="${p.authorAvatar}" alt="" onerror="this.style.display='none'">`
+        : `<div class="post-avatar">${p.author === 'admin' ? '🛡️' : '👤'}</div>`;
+
+      const coverHtml = p.coverImage
+        ? `<div class="post-cover"><img src="${p.coverImage}" data-lightbox="${p.coverImage}" onclick="event.stopPropagation()" alt=""></div>`
+        : (p.hasLinks ? `<div class="post-cover">🔗</div>` : '');
+
+      return `
+        <div class="post-card ${p.pinned ? 'pinned' : ''}" data-post-id="${p.id}">
+          <div class="post-main">
+            <div class="post-header">
+              ${avatar}
+              <span class="post-author">${escapeHtml(p.authorDisplay || p.author)}</span>
+              ${p.pinned ? '<span class="pin-badge">📌 置顶</span>' : ''}
+              <span class="post-time">${timeAgo(p.createdAt)}</span>
+            </div>
+            <div class="post-title">${escapeHtml(p.title)}</div>
+            <div class="post-excerpt">${escapeHtml(p.excerpt || '')}</div>
+            <div class="post-meta">
+              <span class="post-cat">${cat.icon} ${cat.name}</span>
+              ${(p.tags || []).slice(0, 2).map(t => `<span class="post-tag">#${escapeHtml(t)}</span>`).join('')}
+              <span>👁️ ${p.views || 0}</span>
+              <span>💬 ${p.commentCount || 0}</span>
+              <span>👍 ${p.likes || 0}</span>
+            </div>
+          </div>
+          ${coverHtml}
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('.post-card').forEach(card => {
+      card.addEventListener('click', () => {
+        openPostDetail(card.dataset.postId);
+      });
+    });
+  }
+
+  function renderPagination(page, total) {
+    const wrap = document.getElementById('pagination');
+    if (total <= 1) {
+      wrap.innerHTML = '';
+      return;
+    }
+
+    const btns = [];
+    btns.push(`<button class="page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>‹ 上一页</button>`);
+
+    const start = Math.max(1, page - 2);
+    const end = Math.min(total, page + 2);
+    if (start > 1) btns.push(`<button class="page-btn" data-page="1">1</button>`);
+    if (start > 2) btns.push('<span style="color:var(--forum-muted);">...</span>');
+    for (let i = start; i <= end; i++) {
+      btns.push(`<button class="page-btn ${i === page ? 'active' : ''}" data-page="${i}">${i}</button>`);
+    }
+    if (end < total - 1) btns.push('<span style="color:var(--forum-muted);">...</span>');
+    if (end < total) btns.push(`<button class="page-btn" data-page="${total}">${total}</button>`);
+
+    btns.push(`<button class="page-btn" data-page="${page + 1}" ${page >= total ? 'disabled' : ''}>下一页 ›</button>`);
+
+    wrap.innerHTML = btns.join('');
+    wrap.querySelectorAll('.page-btn').forEach(b => {
+      b.addEventListener('click', () => {
+        const p = parseInt(b.dataset.page, 10);
+        if (p && p >= 1 && p <= total && p !== page) {
+          currentPage = p;
+          loadPosts();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      });
+    });
+  }
+
+  // ============================================================
+  //  帖子详情
+  // ============================================================
+  async function openPostDetail(postId) {
+    currentPostId = postId;
+    document.getElementById('postDetailModal').classList.add('show');
+    document.getElementById('postDetailBody').innerHTML = '<div class="empty-state"><span class="icon">⏳</span><div>加载中...</div></div>';
+
+    try {
+      const res = await fetch(`/api/forum/posts/${postId}`);
+      if (!res.ok) {
+        document.getElementById('postDetailBody').innerHTML = '<div class="empty-state"><span class="icon">⚠️</span><div>帖子不存在或已被删除</div></div>';
+        return;
+      }
+      const post = await res.json();
+
+      // 浏览+1
+      fetch(`/api/forum/posts/${postId}/view`, { method: 'POST' }).catch(() => {});
+
+      // 加载评论
+      const cres = await fetch(`/api/forum/posts/${postId}/comments`);
+      currentComments = await cres.json();
+
+      renderPostDetail(post, currentComments);
+    } catch (e) {
+      document.getElementById('postDetailBody').innerHTML = '<div class="empty-state"><span class="icon">⚠️</span><div>加载失败</div></div>';
+    }
+  }
+
+  function renderPostDetail(post, comments) {
+    const catMap = {};
+    categories.forEach(c => catMap[c.id] = c);
+    const cat = catMap[post.category] || { name: '其他', icon: '📌' };
+
+    const isOwner = currentUser && (currentUser.username === post.author);
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    const canEdit = isOwner || isAdmin;
+    const isLiked = currentUser && post.likes && post.likes.includes(currentUser.username);
+
+    const avatarHtml3 = post.authorAvatar
+      ? `<img class="post-detail-avatar" src="${post.authorAvatar}" alt="" onerror="this.style.display='none'">`
+      : `<div class="post-detail-avatar">${post.author === 'admin' ? '🛡️' : '👤'}</div>`;
+
+    // 图片
+    const imagesHtml = (post.images || []).length > 0
+      ? `<div class="post-detail-images">${post.images.map(img =>
+          `<img src="${img}" data-lightbox="${img}" alt="">`
+        ).join('')}</div>`
+      : '';
+
+    // 内容
+    const contentHtml = `<div class="post-detail-content">${linkify(post.content)}</div>`;
+
+    // 外部链接卡片
+    const linksHtml = (post.links || []).length > 0
+      ? `<div style="margin-bottom:20px;">
+          <div style="font-size:12px;color:var(--forum-muted);font-weight:700;margin-bottom:8px;">🔗 内容中的链接（点击前会确认）</div>
+          ${post.links.map(url => `
+            <a class="link-card" href="#" data-ext-link="${escapeHtml(url)}">
+              <span class="licon">🌐</span>
+              <span class="ltext">${escapeHtml(url)}</span>
+              <span class="lgo">↗</span>
+            </a>
+          `).join('')}
+        </div>`
+      : '';
+
+    // 评论区
+    const commentsHtml = comments.length > 0
+      ? comments.map(c => {
+          const cCanDel = currentUser && (currentUser.username === c.author || currentUser.role === 'admin');
+          const cAvatar = c.authorAvatar
+            ? `<img class="comment-avatar" src="${c.authorAvatar}" alt="" onerror="this.style.display='none'">`
+            : `<div class="comment-avatar">${c.author === 'admin' ? '🛡️' : '👤'}</div>`;
+          const cImages = (c.images || []).length > 0
+            ? `<div class="comment-images">${c.images.map(img => `<img src="${img}" data-lightbox="${img}" alt="">`).join('')}</div>`
+            : '';
+          return `
+            <div class="comment-item">
+              ${cAvatar}
+              <div class="comment-body">
+                <div class="comment-head">
+                  <span class="comment-author">${escapeHtml(c.authorDisplay || c.author)}</span>
+                  <span class="comment-time">${timeAgo(c.createdAt)}</span>
+                </div>
+                <div class="comment-content">${linkify(c.content)}</div>
+                ${cImages}
+                ${cCanDel ? `<div class="comment-actions"><button class="comment-del" data-del-comment="${c.id}">删除</button></div>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')
+      : '<div style="text-align:center;padding:20px 0;color:var(--forum-muted);font-size:13px;">暂无评论，快来抢沙发~</div>';
+
+    document.getElementById('postDetailTitle').textContent = '帖子详情';
+    document.getElementById('postDetailBody').innerHTML = `
+      <div class="post-detail-title">${escapeHtml(post.title)}</div>
+      <div class="post-detail-meta">
+        ${avatarHtml3}
+        <div>
+          <div style="font-weight:700;color:var(--forum-text);font-size:14px;">${escapeHtml(post.authorDisplay || post.author)}</div>
+          <div style="font-size:12px;margin-top:2px;">${formatTime(post.createdAt)} · ${cat.icon} ${cat.name}</div>
+        </div>
+      </div>
+
+      ${(post.tags || []).length > 0 ? `
+        <div style="margin-bottom:14px;">
+          ${post.tags.map(t => `<span class="post-tag" style="margin-right:6px;">#${escapeHtml(t)}</span>`).join('')}
+        </div>
+      ` : ''}
+
+      ${contentHtml}
+      ${imagesHtml}
+      ${linksHtml}
+
+      <div class="post-actions">
+        <button class="action-btn ${isLiked ? 'active' : ''}" id="likeBtn">
+          <span>${isLiked ? '❤️' : '🤍'}</span> <span id="likeCount">${(post.likes || []).length}</span>
+        </button>
+        <span style="display:inline-flex;align-items:center;gap:6px;color:var(--forum-muted);font-size:13px;padding:8px 12px;">
+          👁️ ${post.views || 0} · 💬 ${post.commentCount || 0}
+        </span>
+        ${canEdit ? `
+          <button class="action-btn danger" id="deletePostBtn" style="margin-left:auto;">
+            🗑️ 删除帖子
+          </button>
+        ` : ''}
+        ${isAdmin && !canEdit ? `
+          <button class="action-btn danger" id="deletePostBtn" style="margin-left:auto;">
+            🗑️ 删除（管理员）
+          </button>
+        ` : ''}
+        ${isAdmin ? `
+          <button class="action-btn" id="pinBtn" style="${canEdit ? '' : 'margin-left:auto;'}">
+            📌 ${post.pinned ? '取消置顶' : '置顶'}
+          </button>
+        ` : ''}
+      </div>
+
+      <div class="comments-title">
+        💬 评论 <span style="color:var(--forum-muted);font-size:13px;">(${comments.length})</span>
+      </div>
+      <div id="commentsList">${commentsHtml}</div>
+
+      <div class="comment-input-area">
+        <textarea id="commentInput" placeholder="写下你的评论...&#10;提示：粘贴链接会自动识别并转成可点击"></textarea>
+        <button class="comment-send" id="commentSend">发送</button>
+      </div>
+    `;
+
+    // 绑定：点赞
+    const likeBtn = document.getElementById('likeBtn');
+    if (likeBtn) {
+      likeBtn.addEventListener('click', async () => {
+        if (!currentUser) { showToast('请先登录', 'error'); return; }
+        try {
+          const res = await fetch(`/api/forum/posts/${post.id}/like`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data.success) {
+            document.getElementById('likeCount').textContent = data.count;
+            likeBtn.classList.toggle('active', data.liked);
+            likeBtn.querySelector('span').textContent = data.liked ? '❤️' : '🤍';
+          }
+        } catch (e) { showToast('网络错误', 'error'); }
+      });
+    }
+
+    // 绑定：删除帖子
+    const delBtn = document.getElementById('deletePostBtn');
+    if (delBtn) {
+      delBtn.addEventListener('click', async () => {
+        if (!confirm('确定要删除这个帖子吗？删除后不可恢复。')) return;
+        try {
+          const res = await fetch(`/api/forum/posts/${post.id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast('已删除', 'success');
+            document.getElementById('postDetailModal').classList.remove('show');
+            loadPosts();
+          } else {
+            showToast(data.error || '删除失败', 'error');
+          }
+        } catch (e) { showToast('网络错误', 'error'); }
+      });
+    }
+
+    // 绑定：置顶
+    const pinBtn = document.getElementById('pinBtn');
+    if (pinBtn) {
+      pinBtn.addEventListener('click', async () => {
+        try {
+          const res = await fetch(`/api/forum/posts/${post.id}/pin`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(data.pinned ? '已置顶' : '已取消置顶', 'success');
+            openPostDetail(post.id);
+          } else {
+            showToast(data.error || '操作失败', 'error');
+          }
+        } catch (e) { showToast('网络错误', 'error'); }
+      });
+    }
+
+    // 绑定：评论发送
+    const sendBtn = document.getElementById('commentSend');
+    const commentInput = document.getElementById('commentInput');
+    if (sendBtn && commentInput) {
+      sendBtn.addEventListener('click', () => sendComment());
+      commentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          sendComment();
+        }
+      });
+    }
+
+    // 绑定：删除评论
+    document.querySelectorAll('[data-del-comment]').forEach(b => {
+      b.addEventListener('click', async () => {
+        if (!confirm('确定删除这条评论吗？')) return;
+        const cid = b.dataset.delComment;
+        try {
+          const res = await fetch(`/api/forum/comments/${post.id}/${cid}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast('已删除', 'success');
+            openPostDetail(post.id);
+          }
+        } catch (e) { showToast('网络错误', 'error'); }
+      });
+    });
+
+    // 自动聚焦评论框
+    if (commentInput) commentInput.focus();
+  }
+
+  async function sendComment() {
+    if (!currentUser) { showToast('请先登录', 'error'); return; }
+    const input = document.getElementById('commentInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const btn = document.getElementById('commentSend');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span>';
+
+    try {
+      const fd = new FormData();
+      fd.append('content', text);
+      const res = await fetch(`/api/forum/posts/${currentPostId}/comments`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: fd
+      });
+      const data = await res.json();
+      if (data.success) {
+        input.value = '';
+        showToast('评论成功', 'success');
+        openPostDetail(currentPostId);
+        loadPosts();
+      } else {
+        showToast(data.error || '评论失败', 'error');
+      }
+    } catch (e) {
+      showToast('网络错误', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '发送';
+    }
+  }
+
+  // ============================================================
+  //  发帖
+  // ============================================================
+  function openNewPost() {
+    if (!currentUser) {
+      showToast('请先登录后再发帖', 'error');
+      setTimeout(() => {
+        location.href = '/login.html?redirect=/forum.html';
+      }, 1200);
+      return;
+    }
+    document.getElementById('newPostTitle').value = '';
+    document.getElementById('newPostContent').value = '';
+    document.getElementById('newPostTags').value = '';
+    postImages = [];
+    renderPostImages();
+    document.getElementById('newPostModal').classList.add('show');
+    setTimeout(() => document.getElementById('newPostTitle').focus(), 100);
+  }
+
+  function renderPostImages() {
+    const wrap = document.getElementById('postImagesArea');
+    const btns = postImages.map((img, i) => `
+      <div class="img-preview">
+        <img src="${img.dataUri}" alt="">
+        <button class="remove" data-remove-img="${i}">✕</button>
+      </div>
+    `).join('');
+    wrap.innerHTML = btns + (postImages.length < 3 ? `
+      <button class="upload-btn" id="postUploadBtn" type="button">
+        <span class="icon">📷</span>
+        <span>添加图片</span>
+      </button>
+    ` : '');
+    const btn = document.getElementById('postUploadBtn');
+    if (btn) btn.addEventListener('click', () => document.getElementById('postImageInput').click());
+
+    wrap.querySelectorAll('[data-remove-img]').forEach(b => {
+      b.addEventListener('click', () => {
+        postImages.splice(parseInt(b.dataset.removeImg, 10), 1);
+        renderPostImages();
+      });
+    });
+  }
+
+  document.getElementById('postImageInput').addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    for (const file of files) {
+      if (postImages.length >= 3) break;
+      if (!/^image\//i.test(file.type)) continue;
+      if (file.size > 500 * 1024) {
+        showToast(`图片 ${file.name} 超过 500KB`, 'error');
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        postImages.push({ file, dataUri: ev.target.result });
+        renderPostImages();
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  async function submitNewPost() {
+    const title = document.getElementById('newPostTitle').value.trim();
+    const content = document.getElementById('newPostContent').value.trim();
+    const tags = document.getElementById('newPostTags').value.trim();
+
+    if (!title) { showToast('请输入标题', 'error'); return; }
+    if (!content) { showToast('请输入内容', 'error'); return; }
+
+    const btn = document.getElementById('newPostSubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner"></span>';
+
+    try {
+      const fd = new FormData();
+      fd.append('title', title);
+      fd.append('content', content);
+      fd.append('category', selectedPostCategory);
+      fd.append('tags', tags);
+      postImages.forEach(img => fd.append('images', img.file));
+
+      const res = await fetch('/api/forum/posts', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: fd
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('发布成功', 'success');
+        document.getElementById('newPostModal').classList.remove('show');
+        currentPage = 1;
+        loadPosts();
+      } else {
+        showToast(data.error || '发布失败', 'error');
+      }
+    } catch (e) {
+      showToast('网络错误', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '发布';
+    }
+  }
+
+  // ============================================================
+  //  事件绑定
+  // ============================================================
+  document.getElementById('newPostBtn').addEventListener('click', openNewPost);
+  document.getElementById('fabBtn').addEventListener('click', openNewPost);
+  document.getElementById('newPostClose').addEventListener('click', () => {
+    document.getElementById('newPostModal').classList.remove('show');
+  });
+  document.getElementById('newPostCancel').addEventListener('click', () => {
+    document.getElementById('newPostModal').classList.remove('show');
+  });
+  document.getElementById('newPostModal').addEventListener('click', (e) => {
+    if (e.target.id === 'newPostModal') {
+      document.getElementById('newPostModal').classList.remove('show');
+    }
+  });
+  document.getElementById('newPostSubmit').addEventListener('click', submitNewPost);
+
+  document.getElementById('postDetailClose').addEventListener('click', () => {
+    document.getElementById('postDetailModal').classList.remove('show');
+  });
+  document.getElementById('postDetailModal').addEventListener('click', (e) => {
+    if (e.target.id === 'postDetailModal') {
+      document.getElementById('postDetailModal').classList.remove('show');
+    }
+  });
+
+  // 搜索
+  const searchInput = document.getElementById('searchInput');
+  const searchClear = document.getElementById('searchClear');
+  let searchTimer = null;
+  searchInput.addEventListener('input', () => {
+    const v = searchInput.value.trim();
+    searchClear.classList.toggle('show', !!v);
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      currentSearch = v;
+      currentPage = 1;
+      loadPosts();
+    }, 400);
+  });
+  searchClear.addEventListener('click', () => {
+    searchInput.value = '';
+    searchClear.classList.remove('show');
+    currentSearch = '';
+    currentPage = 1;
+    loadPosts();
+  });
+
+  // 排序
+  document.querySelectorAll('.sort-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.sort-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentSort = btn.dataset.sort;
+      currentPage = 1;
+      loadPosts();
+    });
+  });
+
+  // Esc 关闭弹窗
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
+      document.getElementById('lightbox').classList.remove('show');
+    }
+  });
+
+  // ============================================================
+  //  加载统计
+  // ============================================================
+  async function loadStats() {
+    try {
+      const res = await fetch('/api/forum/stats');
+      const data = await res.json();
+      document.getElementById('statPosts').textContent = data.totalPosts || 0;
+      document.getElementById('statComments').textContent = data.totalComments || 0;
+      document.getElementById('statViews').textContent = data.totalViews || 0;
+    } catch (e) {}
+  }
+
+  // ============================================================
+  //  初始化
+  // ============================================================
+  (async function init() {
+    await renderUserArea();
+    await loadCategories();
+    await loadPosts();
+    await loadStats();
+  })();
+
+})();
+</script>
+</body>
+</html>

@@ -10,13 +10,11 @@
     @media (max-width: 900px) {
       .navbar { position: static !important; top: auto !important; }
     }
-
     .user-avatar-mini {
       width: 28px; height: 28px; border-radius: 50%;
       object-fit: cover; border: 2px solid var(--primary, #16a34a);
       vertical-align: middle; margin-right: 6px;
     }
-
     .notif-btn {
       position: relative;
       background: var(--bg-alt);
@@ -35,8 +33,10 @@
     .notif-btn:hover { background: var(--border); transform: translateY(-1px); }
     .notif-badge {
       position: absolute;
-      top: -4px; right: -4px;
-      min-width: 18px; height: 18px;
+      top: -4px;
+      right: -4px;
+      min-width: 18px;
+      height: 18px;
       padding: 0 5px;
       border-radius: 10px;
       background: #ef4444;
@@ -65,7 +65,8 @@
     .notif-panel-overlay.show { display: block; }
     .notif-panel {
       position: fixed;
-      top: 70px; right: 20px;
+      top: 70px;
+      right: 20px;
       width: 380px;
       max-width: calc(100vw - 24px);
       max-height: calc(100vh - 100px);
@@ -94,30 +95,45 @@
       flex-shrink: 0;
     }
     .notif-header-title {
-      display: flex; align-items: center; gap: 8px;
-      font-weight: 700; font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 15px;
     }
     .notif-header-actions { display: flex; gap: 6px; align-items: center; }
     .notif-header-btn {
       background: rgba(255,255,255,0.18);
-      border: none; color: white;
-      border-radius: 8px; padding: 5px 10px;
-      font-size: 11.5px; font-weight: 500;
-      cursor: pointer; transition: background .15s;
+      border: none;
+      color: white;
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
       font-family: inherit;
     }
     .notif-header-btn:hover { background: rgba(255,255,255,0.3); }
     .notif-close-btn {
       background: rgba(255,255,255,0.18);
-      border: none; color: white;
-      width: 26px; height: 26px; border-radius: 50%;
-      cursor: pointer; font-size: 13px;
-      display: flex; align-items: center; justify-content: center;
+      border: none;
+      color: white;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       transition: all .15s;
     }
     .notif-close-btn:hover { background: rgba(255,255,255,0.3); transform: rotate(90deg); }
     .notif-list {
-      flex: 1; overflow-y: auto; padding: 8px;
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
       background: var(--bg-alt, #f8fafc);
     }
     .notif-list::-webkit-scrollbar { width: 6px; }
@@ -149,39 +165,59 @@
       border-left: 3px solid var(--primary, #16a34a);
     }
     .notif-item-head {
-      display: flex; justify-content: space-between;
-      align-items: flex-start; gap: 8px; margin-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 5px;
     }
     .notif-item-title {
-      font-weight: 700; font-size: 13.5px;
+      font-weight: 700;
+      font-size: 13.5px;
       color: var(--text, #0f172a);
-      flex: 1; line-height: 1.4;
+      flex: 1;
+      line-height: 1.4;
     }
     .notif-item-time {
-      font-size: 11px; color: var(--muted, #94a3b8);
-      white-space: nowrap; flex-shrink: 0;
+      font-size: 11px;
+      color: var(--muted, #94a3b8);
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .notif-item-content {
-      font-size: 12.5px; color: var(--muted, #64748b);
-      line-height: 1.55; word-wrap: break-word;
+      font-size: 12.5px;
+      color: var(--muted, #64748b);
+      line-height: 1.55;
+      word-wrap: break-word;
       white-space: pre-wrap;
     }
     .notif-item-del {
-      position: absolute; top: 8px; right: 8px;
-      width: 22px; height: 22px; border-radius: 50%;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
       background: rgba(239, 68, 68, 0.1);
-      border: none; color: #ef4444;
-      font-size: 11px; cursor: pointer;
-      display: none; align-items: center; justify-content: center;
+      border: none;
+      color: #ef4444;
+      font-size: 11px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
       transition: all .15s;
     }
     .notif-item:hover .notif-item-del { display: flex; }
     .notif-item-del:hover { background: #ef4444; color: white; }
     .notif-item-type {
       display: inline-block;
-      font-size: 10px; padding: 1px 7px;
-      border-radius: 8px; font-weight: 600;
-      margin-right: 6px; vertical-align: middle;
+      font-size: 10px;
+      padding: 1px 7px;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-right: 6px;
+      vertical-align: middle;
     }
     .notif-item-type.info { background: #dbeafe; color: #1e40af; }
     .notif-item-type.success { background: #dcfce7; color: #166534; }
@@ -192,8 +228,11 @@
     }
     @media (max-width: 480px) {
       .notif-panel {
-        top: 12px; right: 12px; left: 12px;
-        width: auto; max-width: none;
+        top: 12px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+        max-width: none;
         max-height: calc(100vh - 24px);
       }
     }
@@ -207,6 +246,7 @@
         <li><a href="index.html">首页</a></li>
         <li><a href="tools.html">工具</a></li>
         <li><a href="changelog.html" class="active">更新日志</a></li>
+        <li><a href="forum.html">论坛</a></li>
         <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
       </ul>
       <div class="navbar-right">
