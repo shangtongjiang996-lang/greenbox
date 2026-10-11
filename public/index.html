@@ -115,9 +115,7 @@
 
     /* ============ 通知面板 ============ */
     .notif-panel-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 9998;
+      position: fixed; inset: 0; z-index: 9998;
       background: rgba(15, 23, 42, 0.35);
       backdrop-filter: blur(3px);
       display: none;
@@ -600,29 +598,49 @@
     }
     .ai-chat-header .ai-hbtn { cursor: pointer; }
 
+    /* 遮罩层（桌面端隐藏） */
+    .ai-sidebar-mask { display: none; }
+
     @media (max-width: 640px) {
       .ai-chat-panel {
-        width: 100vw; max-width: 100vw;
-        height: 100vh; max-height: 100vh;
+        width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
         right: 0; bottom: 0; top: 0; left: 0;
         border-radius: 0;
         flex-direction: row;
       }
+      /* 侧栏宽度收窄，最多占屏幕 72% */
       .ai-sidebar {
-        position: absolute; left: 0; top: 0; height: 100%;
-        z-index: 12; width: 260px;
+        position: absolute;
+        left: 0; top: 0;
+        height: 100%;
+        z-index: 12;
+        width: min(72vw, 260px);
         transform: translateX(-100%);
         transition: transform 0.25s ease-out;
         box-shadow: 4px 0 24px rgba(0,0,0,0.18);
       }
       .ai-sidebar.collapsed {
-        display: flex; width: 260px;
+        display: flex;
+        width: min(72vw, 260px);
         transform: translateX(-100%);
+        box-shadow: none;
       }
-      .ai-sidebar:not(.collapsed) { transform: translateX(0); }
-      .ai-sidebar:not(.collapsed)::after {
-        content: ''; position: fixed; inset: 0; left: 260px;
-        background: rgba(0,0,0,0.35); z-index: -1;
+      .ai-sidebar:not(.collapsed) {
+        transform: translateX(0);
+      }
+      /* 遮罩层 */
+      .ai-sidebar-mask {
+        position: absolute;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 11;
+        display: none;
+      }
+      .ai-sidebar:not(.collapsed) ~ .ai-sidebar-mask {
+        display: block;
       }
       .ai-main { width: 100%; }
       .ai-chat-btn { bottom: 18px; right: 18px; width: 54px; height: 54px; }
@@ -993,6 +1011,7 @@
       </div>
       <div class="ai-session-list" id="aiSessionList"></div>
     </aside>
+    <div class="ai-sidebar-mask" id="aiSidebarMask"></div>
 
     <div class="ai-main">
       <div class="ai-chat-header">
@@ -1381,6 +1400,7 @@
       const sendBtn = document.getElementById('aiChatSend');
       const quotaEl = document.getElementById('aiChatQuota');
       const sidebarEl = document.getElementById('aiSidebar');
+      const sidebarMask = document.getElementById('aiSidebarMask');
       const sessionListEl = document.getElementById('aiSessionList');
       const newBtn = document.getElementById('aiNewBtn');
       const toggleSidebarBtn = document.getElementById('aiToggleSidebar');
@@ -1403,6 +1423,10 @@
       let sending = false;
       let deepThinkEnabled = false;
       let sessions = [];
+
+      function isMobile() {
+        return window.innerWidth <= 640;
+      }
 
       function escapeHtml(s) {
         return String(s).replace(/[&<>"']/g, c => ({
@@ -1903,10 +1927,17 @@
         }
       }
 
+      // ============================================================
+      //  事件绑定
+      // ============================================================
       btn.addEventListener('click', async () => {
         panel.classList.toggle('open');
         if (panel.classList.contains('open')) {
           input.focus();
+          // 移动端打开时，默认收起侧栏
+          if (isMobile()) {
+            sidebarEl.classList.add('collapsed');
+          }
           await loadQuota();
           await loadSessions();
           if (cfg.enableHistory && sessions.length > 0 && !currentSessionId) {
@@ -1916,8 +1947,30 @@
           }
         }
       });
+
       closeBtn.addEventListener('click', () => panel.classList.remove('open'));
-      toggleSidebarBtn.addEventListener('click', () => sidebarEl.classList.toggle('collapsed'));
+
+      // 侧栏切换
+      toggleSidebarBtn.addEventListener('click', () => {
+        sidebarEl.classList.toggle('collapsed');
+      });
+
+      // 点击遮罩层关闭侧栏
+      if (sidebarMask) {
+        sidebarMask.addEventListener('click', () => {
+          sidebarEl.classList.add('collapsed');
+        });
+      }
+
+      // 屏幕尺寸变化时同步状态
+      window.addEventListener('resize', () => {
+        if (isMobile()) {
+          sidebarEl.classList.add('collapsed');
+        } else {
+          sidebarEl.classList.remove('collapsed');
+        }
+      });
+
       newBtn.addEventListener('click', () => createNewSession());
 
       thinkBtn.addEventListener('click', () => {
@@ -2063,7 +2116,13 @@
         } catch (e) {}
         renderQuickPhrases();
         if (!cfg.enableDeepThink) thinkBtn.style.display = 'none';
-        if (!cfg.enableHistory) { toggleSidebarBtn.style.display = 'none'; sidebarEl.classList.add('collapsed'); }
+        if (!cfg.enableHistory) {
+          toggleSidebarBtn.style.display = 'none';
+          sidebarEl.classList.add('collapsed');
+        } else if (isMobile()) {
+          // 移动端默认收起侧栏
+          sidebarEl.classList.add('collapsed');
+        }
         loadQuota();
       })();
     })();
