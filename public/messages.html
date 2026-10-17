@@ -23,7 +23,12 @@
     flex-direction: column;
   }
 
-  /* ===== 导航栏（全站统一） ===== */
+  /* ===== 强制约束图片，防止撑爆页面 ===== */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
   .navbar .container {
     flex-wrap: nowrap;
   }
@@ -166,8 +171,10 @@
     opacity: .7;
   }
 
+  /* 严格约束列表头像 */
   .dm-avatar {
-    width: 42px; height: 42px;
+    width: 42px !important; height: 42px !important;
+    max-width: 42px !important; max-height: 42px !important;
     border-radius: 50%;
     flex-shrink: 0;
     background: linear-gradient(135deg, #16a34a, #15803d);
@@ -181,8 +188,8 @@
     position: relative;
   }
   .dm-avatar img {
-    width: 100%; height: 100%;
-    object-fit: cover;
+    width: 100% !important; height: 100% !important;
+    object-fit: cover !important;
     display: block;
   }
   .dm-avatar .dot {
@@ -266,7 +273,7 @@
     transition: background .15s;
   }
   .dm-friend-item:hover { background: var(--bg-alt); }
-  .dm-friend-item .dm-avatar { width: 40px; height: 40px; font-size: 14px; }
+  .dm-friend-item .dm-avatar { width: 40px !important; height: 40px !important; font-size: 14px; }
   .dm-friend-body { flex: 1; min-width: 0; }
   .dm-friend-name {
     font-weight: 600;
@@ -415,7 +422,7 @@
     gap: 12px;
     flex-shrink: 0;
   }
-  .dm-chat-header .dm-avatar { width: 38px; height: 38px; font-size: 15px; }
+  .dm-chat-header .dm-avatar { width: 38px !important; height: 38px !important; font-size: 15px; }
   .dm-chat-title {
     flex: 1;
     min-width: 0;
@@ -486,8 +493,11 @@
     to { opacity: 1; transform: translateY(0); }
   }
   .dm-msg-row.self { flex-direction: row-reverse; }
+
+  /* 严格约束聊天区消息小头像 */
   .dm-msg-avatar {
-    width: 30px; height: 30px;
+    width: 30px !important; height: 30px !important;
+    max-width: 30px !important; max-height: 30px !important;
     border-radius: 50%;
     flex-shrink: 0;
     background: linear-gradient(135deg, #16a34a, #15803d);
@@ -500,7 +510,9 @@
     overflow: hidden;
     cursor: pointer;
   }
-  .dm-msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .dm-msg-avatar img { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+  .dm-msg-avatar .dot { display: none !important; } /* 聊天气泡上不显示在线状态点 */
+
   .dm-bubble-wrap {
     max-width: 72%;
     display: flex;
@@ -862,7 +874,7 @@
 
     <div class="dm-side-foot">
       <button class="dm-icon-btn" id="dmSettingsBtn" title="隐私与好友设置">⚙️</button>
-      <button class="dm-icon-btn" id="dmRefreshBtn" title="刷新">↻</button>
+      <button class="dm-icon-btn" id="dmRefreshBtn" title="刷新">刷新</button>
       <span class="dm-status-dot" id="dmStatus">离线</span>
     </div>
   </aside>
@@ -1022,7 +1034,7 @@
     return (d.getMonth()+1) + '月' + d.getDate() + '日';
   }
   
-  // 统一的头像生成工具（带有 onerror 兜底，防止图片撑破或显示错误）
+  // 头像生成
   function avatarHtml(username, hasAvatar, opts) {
     const o = opts || {};
     const cls = o.cls || '';
@@ -1031,7 +1043,7 @@
     const initial = (username || '?').slice(0,1).toUpperCase();
     const showEmoji = username === 'admin' ? '🛡️' : initial;
     
-    // 如果图片加载失败，隐藏 img，底部的文字或 emoji 就会露出来
+    // 图片加载失败时，自动隐藏图片层，露出底层的文字或emoji
     const img = hasAvatar
       ? `<img src="/api/user/avatar/${encodeURIComponent(username)}?t=${Date.now()}" onerror="this.style.display='none'">`
       : showEmoji;
@@ -1654,13 +1666,16 @@
   function renderMessageHtml(m) {
     const isSelf = m.from === me.username;
     
-    // 修复：如果是自己发的消息，使用自己的头像信息；对方发的使用 currentConvo 里的信息
+    // 【核心修复点】：区分是我发的还是对方发的，使用正确的头像信息
     const peer = isSelf ? me.username : (currentConvo ? currentConvo.peer : m.from);
     const hasAv = isSelf ? me.hasAvatar : (currentConvo ? currentConvo.peerAvatar : false);
     
-    // 头像 HTML，自定义尺寸
-    const av = avatarHtml(peer, hasAv, { withDot: false });
-    av.replace('class="dm-avatar "', 'class="dm-msg-avatar"'); // 替换 class 以便使用更小的尺寸
+    // 注意这里直接通过 CSS 限制了头像尺寸，不再使用简单的 replace 方法
+    let av = avatarHtml(peer, hasAv, { withDot: false });
+    av = av.replace('class="dm-avatar "', 'class="dm-msg-avatar"');
+    if (av.indexOf('dm-msg-avatar') === -1) { // 兜底替换
+      av = av.replace('class="dm-avatar"', 'class="dm-msg-avatar"');
+    }
     
     const timeStr = fmtTime(m.time);
     const readTag = (isSelf && m.read) ? '<span class="read-tag">已读</span>' : '';
