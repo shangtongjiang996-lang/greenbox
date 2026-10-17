@@ -19,69 +19,21 @@
     padding: 0;
     margin: 0;
     background: var(--bg);
+    display: flex;
+    flex-direction: column;
   }
 
-  /* ===== 顶部导航（与全站一致，但简化为紧凑版） ===== */
-  .dm-navbar {
-    height: 54px;
-    background: var(--card-bg);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    gap: 12px;
-    flex-shrink: 0;
-    position: relative;
-    z-index: 30;
-  }
-  .dm-navbar .logo {
-    font-size: 1.25rem;
-    font-weight: 800;
-    color: var(--primary);
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  .dm-navbar .nav-tabs {
-    display: flex;
-    gap: 4px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    flex: 1;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .dm-navbar .nav-tabs::-webkit-scrollbar { display: none; }
-  .dm-navbar .nav-tabs a {
-    display: inline-block;
-    padding: 6px 12px;
-    color: var(--muted);
-    text-decoration: none;
-    border-radius: 20px;
-    font-size: 13.5px;
-    font-weight: 500;
-    white-space: nowrap;
-    transition: all .18s;
-  }
-  .dm-navbar .nav-tabs a:hover { background: var(--bg-alt); color: var(--text); }
-  .dm-navbar .nav-tabs a.active { background: var(--primary-light); color: var(--primary); font-weight: 700; }
-  .dm-navbar .user-area {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .dm-navbar .user-avatar-mini {
-    width: 28px; height: 28px; border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid var(--primary);
+  /* ===== 导航栏（全站统一） ===== */
+  .navbar .container {
+    flex-wrap: nowrap;
   }
 
   /* ===== 主布局 ===== */
   .dm-layout {
     display: flex;
-    height: calc(100vh - 54px);
+    flex: 1;
     overflow: hidden;
+    height: calc(100vh - 60px);
   }
 
   /* ===== 左侧栏 ===== */
@@ -204,12 +156,8 @@
     align-items: center;
   }
   .dm-convo-item:hover { background: var(--bg-alt); }
-  .dm-convo-item.active {
-    background: var(--dm-accent-light);
-  }
-  [data-theme="dark"] .dm-convo-item.active {
-    background: rgba(34,197,94,0.14);
-  }
+  .dm-convo-item.active { background: var(--dm-accent-light); }
+  [data-theme="dark"] .dm-convo-item.active { background: rgba(34,197,94,0.14); }
   .dm-convo-item.pinned::before {
     content: '📌';
     position: absolute;
@@ -308,7 +256,7 @@
     justify-content: center;
   }
 
-  /* ===== 好友 / 申请 项 ===== */
+  /* ===== 好友 / 申请 ===== */
   .dm-friend-item {
     display: flex;
     gap: 10px;
@@ -377,7 +325,6 @@
   .dm-mini-btn.reject { background: #fee2e2; color: #b91c1c; }
   .dm-mini-btn.reject:hover { background: #fecaca; }
 
-  /* ===== 好友申请分区 ===== */
   .dm-section-title {
     padding: 12px 14px 6px;
     font-size: 11px;
@@ -387,7 +334,6 @@
     text-transform: uppercase;
   }
 
-  /* ===== 找人页搜索 ===== */
   .dm-finder-search {
     padding: 14px;
     display: flex;
@@ -856,8 +802,6 @@
   .dm-back-btn { display: none; }
 
   @media (max-width: 760px) {
-    .dm-navbar { padding: 0 10px; gap: 8px; }
-    .dm-navbar .nav-tabs { display: none; }
     .dm-layout { flex-direction: column; }
     .dm-sidebar {
       width: 100%;
@@ -867,7 +811,7 @@
       border-right: none;
     }
     .dm-sidebar.hide { display: none; }
-    .dm-main { display: none; position: absolute; inset: 0; z-index: 50; }
+    .dm-main { display: none; position: absolute; inset: 0; z-index: 50; background: var(--bg); }
     .dm-main.show { display: flex; }
     .dm-back-btn { display: flex; }
     .dm-bubble-wrap { max-width: 82%; }
@@ -878,17 +822,22 @@
 </head>
 <body>
 
-<nav class="dm-navbar">
-  <a href="index.html" class="logo">🌱 GreenBox</a>
-  <ul class="nav-tabs">
-    <li><a href="index.html">首页</a></li>
-    <li><a href="tools.html">工具</a></li>
-    <li><a href="changelog.html">更新日志</a></li>
-    <li><a href="forum.html">论坛</a></li>
-    <li><a href="messages.html" class="active">消息</a></li>
-    <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
-  </ul>
-  <div class="user-area" id="userArea"></div>
+<nav class="navbar">
+  <div class="container">
+    <a href="index.html" class="logo">🌱 GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="index.html">首页</a></li>
+      <li><a href="tools.html">工具</a></li>
+      <li><a href="changelog.html">更新日志</a></li>
+      <li><a href="forum.html">论坛</a></li>
+      <li><a href="messages.html" class="active">消息</a></li>
+      <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题">🌙</button>
+      <div class="user-area" id="userArea"></div>
+    </div>
+  </div>
 </nav>
 
 <div class="dm-layout">
@@ -913,7 +862,7 @@
 
     <div class="dm-side-foot">
       <button class="dm-icon-btn" id="dmSettingsBtn" title="隐私与好友设置">⚙️</button>
-      <button class="dm-icon-btn" id="dmRefreshBtn" title="刷新">🔄</button>
+      <button class="dm-icon-btn" id="dmRefreshBtn" title="刷新">↻</button>
       <span class="dm-status-dot" id="dmStatus">离线</span>
     </div>
   </aside>
@@ -1009,7 +958,7 @@
   </div>
 </div>
 
-<!-- ============ 会话更多操作弹窗 ============ -->
+<!-- ============ 更多操作弹窗 ============ -->
 <div class="dm-modal-overlay" id="dmMoreModal">
   <div class="dm-modal" style="max-width:360px;">
     <h3>更多操作</h3>
@@ -1072,18 +1021,25 @@
     const d = new Date(ts);
     return (d.getMonth()+1) + '月' + d.getDate() + '日';
   }
+  
+  // 统一的头像生成工具（带有 onerror 兜底，防止图片撑破或显示错误）
   function avatarHtml(username, hasAvatar, opts) {
     const o = opts || {};
     const cls = o.cls || '';
     const withDot = o.withDot !== false;
     const online = !!o.online;
-    const initials = (username || '?').slice(0,1).toUpperCase();
+    const initial = (username || '?').slice(0,1).toUpperCase();
+    const showEmoji = username === 'admin' ? '🛡️' : initial;
+    
+    // 如果图片加载失败，隐藏 img，底部的文字或 emoji 就会露出来
     const img = hasAvatar
-      ? `<img src="/api/user/avatar/${encodeURIComponent(username)}?t=${Date.now()}" onerror="this.parentNode.textContent='${initials}'">`
-      : (username === 'admin' ? '🛡️' : initials);
+      ? `<img src="/api/user/avatar/${encodeURIComponent(username)}?t=${Date.now()}" onerror="this.style.display='none'">`
+      : showEmoji;
+      
     const dot = withDot ? `<div class="dot ${online?'online':''}"></div>` : '';
     return `<div class="dm-avatar ${cls}">${img}${dot}</div>`;
   }
+
   function showToast(msg, type) {
     const t = document.getElementById('dmToast');
     t.textContent = msg;
@@ -1091,6 +1047,7 @@
     clearTimeout(showToast._t);
     showToast._t = setTimeout(() => t.classList.remove('show'), 2200);
   }
+
   async function api(url, opts) {
     opts = opts || {};
     opts.headers = opts.headers || {};
@@ -1108,6 +1065,7 @@
     }
     return data;
   }
+
   function convIdOf(a, b) {
     return 'p_' + [a, b].sort().join('__');
   }
@@ -1153,11 +1111,18 @@
     el.innerHTML = `
       ${av}
       <a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:13.5px;">${esc(me.displayName || me.username)}</a>
-      <a href="/user.html?u=${encodeURIComponent(me.username)}" style="text-decoration:none;color:var(--muted);font-size:12px;">主页</a>
+      <button onclick="logoutDM()" style="padding:4px 10px;font-size:12px;border-radius:15px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;margin-left:4px;">退出</button>
     `;
     const pn = document.getElementById('profile-nav');
     if (pn) pn.style.display = 'list-item';
   }
+
+  window.logoutDM = function() {
+    if (token) fetch('/api/logout', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+    localStorage.removeItem('greenbox_token');
+    localStorage.removeItem('greenbox_user');
+    window.location.href = '/';
+  };
 
   // ============================================================
   //  WebSocket
@@ -1196,7 +1161,6 @@
     socket.on('dm:message', (msg) => {
       const cid = convIdOf(msg.from, msg.to);
       if (currentConvo && currentConvo.id === cid) {
-        // 避免 REST 已追加导致重复
         if (!currentMessages.some(m => m.id === msg.id)) {
           currentMessages.push(msg);
           appendMessage(msg, true);
@@ -1296,7 +1260,7 @@
   }
 
   // ============================================================
-  //  侧栏切换 tab
+  //  侧栏切换
   // ============================================================
   function switchTab(tab) {
     currentTab = tab;
@@ -1316,7 +1280,6 @@
   function renderList() {
     const listEl = document.getElementById('dmList');
     if (!me) return;
-
     if (currentTab === 'convos') return renderConvoList(listEl);
     if (currentTab === 'friends') return renderFriendList(listEl);
     if (currentTab === 'requests') return renderRequestList(listEl);
@@ -1634,9 +1597,10 @@
     if (!currentConvo) return;
     const c = currentConvo;
     const avEl = document.getElementById('dmChatAvatar');
+    const initial = (c.peer || '?').slice(0,1).toUpperCase();
     avEl.innerHTML = c.peerAvatar
-      ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" onerror="this.parentNode.textContent='${(c.peer||'?').slice(0,1).toUpperCase()}'">`
-      : (c.peer === 'admin' ? '🛡️' : (c.peer||'?').slice(0,1).toUpperCase());
+      ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" onerror="this.style.display='none'"><span style="position:absolute;pointer-events:none;">${c.peer==='admin'?'🛡️':initial}</span>`
+      : (c.peer === 'admin' ? '🛡️' : initial);
     document.getElementById('dmChatName').textContent = c.peerName || c.peer;
     const subEl = document.getElementById('dmChatSub');
     if (c.online) {
@@ -1689,9 +1653,15 @@
 
   function renderMessageHtml(m) {
     const isSelf = m.from === me.username;
-    const peer = isSelf ? m.to : m.from;
-    const peerName = isSelf ? (currentConvo && currentConvo.peerName || m.to) : (currentConvo && currentConvo.peerName || m.from);
-    const av = avatarHtml(peer, currentConvo && currentConvo.peerAvatar);
+    
+    // 修复：如果是自己发的消息，使用自己的头像信息；对方发的使用 currentConvo 里的信息
+    const peer = isSelf ? me.username : (currentConvo ? currentConvo.peer : m.from);
+    const hasAv = isSelf ? me.hasAvatar : (currentConvo ? currentConvo.peerAvatar : false);
+    
+    // 头像 HTML，自定义尺寸
+    const av = avatarHtml(peer, hasAv, { withDot: false });
+    av.replace('class="dm-avatar "', 'class="dm-msg-avatar"'); // 替换 class 以便使用更小的尺寸
+    
     const timeStr = fmtTime(m.time);
     const readTag = (isSelf && m.read) ? '<span class="read-tag">已读</span>' : '';
 
@@ -1902,7 +1872,7 @@
   }
 
   // ============================================================
-  //  会话更多操作
+  //  更多菜单
   // ============================================================
   function openMoreMenu() {
     if (!currentConvo) return;
@@ -2015,33 +1985,28 @@
   //  事件绑定
   // ============================================================
   function bindEvents() {
-    // tab 切换
     document.querySelectorAll('.dm-tab-btn').forEach(b => {
       b.addEventListener('click', () => switchTab(b.dataset.tab));
     });
 
-    // 搜索
     const searchEl = document.getElementById('dmSearch');
     searchEl.addEventListener('input', () => {
       searchKeyword = searchEl.value.trim();
       renderList();
     });
 
-    // 刷新
     document.getElementById('dmRefreshBtn').addEventListener('click', async () => {
       showToast('刷新中…');
       await refreshAll();
       showToast('已刷新', 'success');
     });
 
-    // 设置
     document.getElementById('dmSettingsBtn').addEventListener('click', openSettingsModal);
     document.getElementById('dmSettingsCancel').addEventListener('click', () => {
       document.getElementById('dmSettingsModal').classList.remove('show');
     });
     document.getElementById('dmSettingsSave').addEventListener('click', saveSettings);
 
-    // 添加好友
     document.getElementById('addFriendCancel').addEventListener('click', () => {
       document.getElementById('dmAddFriendModal').classList.remove('show');
     });
@@ -2050,13 +2015,11 @@
       if (e.key === 'Enter') submitAddFriend();
     });
 
-    // 更多
     document.getElementById('dmMoreBtn').addEventListener('click', openMoreMenu);
     document.getElementById('dmMoreCancel').addEventListener('click', () => {
       document.getElementById('dmMoreModal').classList.remove('show');
     });
 
-    // 发送
     const input = document.getElementById('dmInput');
     const sendBtn = document.getElementById('dmSendBtn');
     sendBtn.addEventListener('click', sendCurrentMessage);
@@ -2072,7 +2035,6 @@
       sendTyping();
     });
 
-    // emoji
     document.querySelectorAll('.dm-emoji-row button').forEach(b => {
       b.addEventListener('click', () => {
         input.value += b.dataset.emoji;
@@ -2081,7 +2043,6 @@
       });
     });
 
-    // 头部快捷
     document.getElementById('dmPinBtn').addEventListener('click', togglePin);
     document.getElementById('dmMuteBtn').addEventListener('click', toggleMute);
     document.getElementById('dmProfileBtn').addEventListener('click', () => {
@@ -2091,7 +2052,6 @@
       if (currentConvo) location.href = '/user.html?u=' + encodeURIComponent(currentConvo.peer);
     });
 
-    // 移动端返回
     document.getElementById('dmBackBtn').addEventListener('click', () => {
       document.getElementById('dmMain').classList.remove('show');
       document.getElementById('dmSidebar').classList.remove('hide');
@@ -2101,14 +2061,12 @@
       renderList();
     });
 
-    // 点击弹窗背景关闭
     document.querySelectorAll('.dm-modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) overlay.classList.remove('show');
       });
     });
 
-    // Esc 关闭弹窗
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         document.querySelectorAll('.dm-modal-overlay.show').forEach(o => o.classList.remove('show'));
@@ -2119,7 +2077,17 @@
   // ============================================================
   //  启动
   // ============================================================
-  init();
+  (async function boot() {
+    await init();
+    const params = new URLSearchParams(location.search);
+    const peerParam = params.get('c') || params.get('peer');
+    if (peerParam) {
+      setTimeout(() => {
+        openConvo(peerParam);
+        history.replaceState(null, '', location.pathname);
+      }, 400);
+    }
+  })();
 })();
 </script>
 </body>
