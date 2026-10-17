@@ -697,6 +697,16 @@ function registerSocialSocket(io, deps) {
     socket.on('dm:read', async ({ convId } = {}) => {
       const me = socketUsers.get(socket.id);
       if (!me || !convId) return;
+      
+      // 1. 清除会话列表的未读数
+      const convos = await getConvos(me);
+      const ci = convos.findIndex(c => c.id === convId);
+      if (ci >= 0 && convos[ci].unread > 0) {
+        convos[ci].unread = 0;
+        await saveConvos(me, convos);
+      }
+
+      // 2. 将消息标记为已读
       const msgs = await getMessages(convId);
       let changed = false;
       const peers = new Set();
