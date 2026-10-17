@@ -7,6 +7,8 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const crypto = require('crypto');
 const { kvGet, kvPut, kvDelete, kvList, kvIncr } = require('./redis');
+// ===== 新增：社交模块（私聊 / 好友 / 用户主页 / 论坛收藏转发） =====
+const { registerSocialRoutes, registerSocialSocket, emitToUser } = require('./social');
 
 const app = express();
 const server = http.createServer(app);
@@ -251,9 +253,14 @@ app.post('/api/delete-account', async (req, res) => {
   await kvDelete(`notif_deleted:${session.username}`);
   await kvDelete(`chat_sessions:${session.username}`);
   await kvDelete(`chat_limit:${session.username}`);
+  // 社交数据一并清理
+  await kvDelete(`user_settings:${session.username}`);
+  await kvDelete(`friends:${session.username}`);
+  await kvDelete(`friend_requests:${session.username}`);
+  await kvDelete(`friend_requests_out:${session.username}`);
+  await kvDelete(`dm_convos:${session.username}`);
   res.json({ success: true });
 });
-
 // ======== 用户资料 API ========
 
 app.get('/api/user/profile/:username', async (req, res) => {
@@ -376,6 +383,7 @@ app.get('/tool/:id', async (req, res) => {
   if (!html) return res.status(404).send('工具不存在');
   res.set('Content-Type', 'text/html; charset=utf-8').send(html);
 });
+
 // ============================================================
 //  AI 聊天助手
 // ============================================================
@@ -1073,6 +1081,12 @@ app.delete('/api/admin/users', async (req, res) => {
   await kvDelete(`notif_deleted:${username}`);
   await kvDelete(`chat_sessions:${username}`);
   await kvDelete(`chat_limit:${username}`);
+  // 社交数据清理
+  await kvDelete(`user_settings:${username}`);
+  await kvDelete(`friends:${username}`);
+  await kvDelete(`friend_requests:${username}`);
+  await kvDelete(`friend_requests_out:${username}`);
+  await kvDelete(`dm_convos:${username}`);
   res.json({ success: true });
 });
 
@@ -1284,6 +1298,26 @@ async function saveForumIndex(list) {
   await kvPut('forum_index', list.slice(0, 500));
 }
 
+// 给论坛列表项补充作者头像 / 角色（
+async function decoratePosts(items) {
+  if (!Array.isArray(items) || items.length === 0) return items;
+  let usersCache = {};
+  try { usersCache = (await kvGet('users')) || {}; } catch (e) {}
+  const avatarCache = new Map();
+  for (const item of items) {
+    const author = item.author;
+    if (!author) continue;
+    if (!avatarCache.has(author)) {
+      const av = await kvGet(`user_avatar:${author}`);
+      avatarCache.set(author, !!av);
+    }
+    item.authorHasAvatar = avatarCache.get(author);
+    if (author === 'admin') item.authorRole = 'admin';
+    else item.authorRole = (usersCache[author] && usersCache[author].role) || 'user';
+  }
+  return items;
+}
+
 app.get('/api/forum/categories', async (req, res) => {
   res.json(FORUM_CATEGORIES);
 });
@@ -1330,6 +1364,9 @@ app.get('/api/forum/posts', async (req, res) => {
   const pageSize = Math.min(50, Math.max(5, parseInt(limit, 10) || 15));
   const start = (pageNum - 1) * pageSize;
   const items = list.slice(start, start + pageSize);
+
+  // 补充头像 / 角色
+  await decoratePosts(items);
 
   res.json({
     total: list.length,
@@ -1637,7 +1674,6 @@ app.get('/api/forum/score/:username', async (req, res) => {
   const score = (await kvGet(`forum_score:${req.params.username}`)) || 0;
   res.json({ username: req.params.username, score });
 });
-
 // ======== 五子棋 REST 辅助接口 ========
 
 app.post('/api/room/create', async (req, res) => {
@@ -1810,7 +1846,7 @@ app.get('/api/room/:roomId', async (req, res) => {
   res.json(safe);
 });
 
-// ======== WebSocket 实时联机 ========
+// ======== WebSocket 实时联机（五子棋） ========
 const roomCache = new Map();
 
 async function getRoom(roomId) {
@@ -1966,9 +2002,18 @@ function checkWin(row, col, player, board) {
   return false;
 }
 
+// ============================================================
+//  挂载社交模块（私聊 / 好友 / 用户主页 / 论坛收藏转发）
+//  注意：必须在所有原有路由与 WebSocket 注册之后、
+//        server.listen 之前调用
+// ============================================================
+registerSocialRoutes(app, { checkAdmin, getSession, io });
+registerSocialSocket(io, { getSession });
+
 // ======== 启动服务器 ========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
-  console.log(`🔌 WebSocket 已就绪`);
+  console.log(`🔌 WebSocket 已就绪（五子棋 + 私聊）`);
+  console.log(`💬 社交模块已挂载（好友 / 私聊 / 用户主页 / 收藏 / 转发）`);
 });
