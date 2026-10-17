@@ -144,7 +144,8 @@
       margin-bottom: 0.4rem;
     }
     .profile-field input,
-    .profile-field textarea {
+    .profile-field textarea,
+    .profile-field select {
       width: 100%;
       padding: 0.7rem 0.9rem;
       border: 1px solid var(--border, #e2e8f0);
@@ -158,7 +159,8 @@
       resize: vertical;
     }
     .profile-field input:focus,
-    .profile-field textarea:focus {
+    .profile-field textarea:focus,
+    .profile-field select:focus {
       border-color: #16a34a;
       box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
     }
@@ -370,6 +372,7 @@
         <li><a href="tools.html">工具</a></li>
         <li><a href="changelog.html">更新日志</a></li>
         <li><a href="forum.html">论坛</a></li>
+        <li><a href="messages.html">消息</a></li>
         <li><a href="/profile.html" class="active">个人中心</a></li>
       </ul>
       <div class="navbar-right">
@@ -407,6 +410,17 @@
           </div>
         </div>
 
+        <div class="profile-section" style="margin-bottom:1rem;">
+          <div class="btn-row" style="gap:0.6rem;">
+            <a class="pbtn pbtn-primary" id="goMyProfileBtn" href="#" style="text-decoration:none;">
+              👤 查看我的主页
+            </a>
+            <a class="pbtn pbtn-outline" href="/messages.html" style="text-decoration:none;">
+              💬 打开消息中心
+            </a>
+          </div>
+        </div>
+
         <div class="profile-section admin-card" id="adminSection" style="display:none;padding:1.2rem;border-radius:14px;">
           <div class="profile-section-title">👑 管理员专属</div>
           <div class="btn-row">
@@ -432,6 +446,47 @@
             <button class="pbtn pbtn-primary" id="saveProfileBtn">💾 保存修改</button>
             <button class="pbtn pbtn-outline" id="resetProfileBtn">重置</button>
           </div>
+        </div>
+
+        <div class="profile-section">
+          <div class="profile-section-title">🔐 隐私与好友设置</div>
+
+          <div class="profile-field">
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.92rem;">
+              <input type="checkbox" id="privacyAllowStranger" style="width:18px;height:18px;accent-color:#16a34a;cursor:pointer;">
+              <span>允许陌生人发起私聊会话</span>
+            </label>
+            <div class="hint" style="text-align:left;margin-top:0.3rem;">关闭后，非好友无法给你发消息</div>
+          </div>
+
+          <div class="profile-field">
+            <label>好友申请策略</label>
+            <select id="privacyFriendPolicy">
+              <option value="direct">直接添加（无需我确认）</option>
+              <option value="confirm">需要我确认（推荐）</option>
+              <option value="closed">拒绝一切好友申请</option>
+            </select>
+            <div class="hint" style="text-align:left;margin-top:0.3rem;">别人添加你为好友时的处理方式</div>
+          </div>
+
+          <div class="profile-field">
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.92rem;">
+              <input type="checkbox" id="privacyShowOnline" style="width:18px;height:18px;accent-color:#16a34a;cursor:pointer;">
+              <span>允许好友看到我的在线状态</span>
+            </label>
+          </div>
+
+          <div class="profile-field">
+            <label>离线自动回复（可选）</label>
+            <textarea id="privacyAutoReply" rows="2" maxlength="200" placeholder="留空则不自动回复，例如：我现在不在，稍后联系你～"></textarea>
+            <div class="hint"><span id="autoReplyCount">0</span>/200</div>
+          </div>
+
+          <div class="btn-row">
+            <button class="pbtn pbtn-primary" id="savePrivacyBtn">💾 保存隐私设置</button>
+            <button class="pbtn pbtn-outline" id="reloadPrivacyBtn">🔄 重新加载</button>
+          </div>
+          <div id="privacyMsg" style="margin-top:0.5rem;font-weight:500;font-size:0.9rem;"></div>
         </div>
 
         <div class="profile-section">
@@ -527,6 +582,7 @@
         renderProfile(data);
         document.getElementById('profileMain').style.display = 'block';
         loadStats(data.username);
+        loadPrivacy();
       } catch (e) {
         console.error(e);
         document.getElementById('notLoggedIn').style.display = 'block';
@@ -555,6 +611,9 @@
         displayName: data.displayName || '',
         bio: data.bio || '',
       };
+
+      const mpBtn = document.getElementById('goMyProfileBtn');
+      if (mpBtn) mpBtn.href = '/user.html?u=' + encodeURIComponent(data.username);
 
       if (data.role === 'admin') {
         document.getElementById('adminSection').style.display = 'block';
@@ -606,6 +665,54 @@
       document.getElementById('statDays').textContent = '1';
     }
 
+    async function loadPrivacy() {
+      if (!token) return;
+      try {
+        const res = await fetch('/api/social/settings', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const s = await res.json();
+        document.getElementById('privacyAllowStranger').checked = !!s.allowStrangerMsg;
+        document.getElementById('privacyFriendPolicy').value = s.friendPolicy || 'confirm';
+        document.getElementById('privacyShowOnline').checked = !!s.showOnline;
+        document.getElementById('privacyAutoReply').value = s.autoReply || '';
+        document.getElementById('autoReplyCount').textContent = (s.autoReply || '').length;
+      } catch (e) {}
+    }
+
+    async function savePrivacy() {
+      const msg = document.getElementById('privacyMsg');
+      if (!msg) return;
+      msg.textContent = '保存中…';
+      msg.style.color = '#64748b';
+      const payload = {
+        allowStrangerMsg: document.getElementById('privacyAllowStranger').checked,
+        friendPolicy: document.getElementById('privacyFriendPolicy').value,
+        showOnline: document.getElementById('privacyShowOnline').checked,
+        autoReply: document.getElementById('privacyAutoReply').value.trim(),
+      };
+      try {
+        const res = await fetch('/api/social/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          msg.textContent = '✅ 已保存';
+          msg.style.color = '#16a34a';
+          showToast('隐私设置已保存', 'success');
+        } else {
+          msg.textContent = '❌ 保存失败';
+          msg.style.color = '#ef4444';
+        }
+      } catch (e) {
+        msg.textContent = '❌ 网络错误';
+        msg.style.color = '#ef4444';
+      }
+      setTimeout(() => { msg.textContent = ''; }, 2400);
+    }
+
     document.getElementById('saveProfileBtn').addEventListener('click', async () => {
       const displayName = document.getElementById('inputDisplayName').value.trim();
       const bio = document.getElementById('inputBio').value.trim();
@@ -647,6 +754,12 @@
 
     document.getElementById('inputDisplayName').addEventListener('input', updateCounters);
     document.getElementById('inputBio').addEventListener('input', updateCounters);
+
+    document.getElementById('savePrivacyBtn').addEventListener('click', savePrivacy);
+    document.getElementById('reloadPrivacyBtn').addEventListener('click', loadPrivacy);
+    document.getElementById('privacyAutoReply').addEventListener('input', function () {
+      document.getElementById('autoReplyCount').textContent = this.value.length;
+    });
 
     const avatarModal = document.getElementById('avatarModal');
     const avatarPreviewBox = document.getElementById('avatarPreviewBox');

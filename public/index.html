@@ -253,7 +253,6 @@
         max-height: calc(100vh - 24px);
       }
     }
-
     /* ============ AI 助手 ============ */
     :root {
       --ai-primary: #16a34a;
@@ -878,6 +877,7 @@
   </style>
 </head>
 <body>
+
   <nav class="navbar">
     <div class="container">
       <a href="index.html" class="logo">🌱 GreenBox</a>
@@ -886,6 +886,7 @@
         <li><a href="tools.html">工具</a></li>
         <li><a href="changelog.html">更新日志</a></li>
         <li><a href="forum.html">论坛</a></li>
+        <li><a href="messages.html">消息</a></li>
         <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
       </ul>
       <div class="navbar-right">
@@ -898,7 +899,6 @@
       </div>
     </div>
   </nav>
-
   <main class="container">
     <section class="hero">
       <h1>让工具更简单 🌟</h1>
@@ -1934,7 +1934,6 @@
         panel.classList.toggle('open');
         if (panel.classList.contains('open')) {
           input.focus();
-          // 移动端打开时，默认收起侧栏
           if (isMobile()) {
             sidebarEl.classList.add('collapsed');
           }
@@ -1950,19 +1949,16 @@
 
       closeBtn.addEventListener('click', () => panel.classList.remove('open'));
 
-      // 侧栏切换
       toggleSidebarBtn.addEventListener('click', () => {
         sidebarEl.classList.toggle('collapsed');
       });
 
-      // 点击遮罩层关闭侧栏
       if (sidebarMask) {
         sidebarMask.addEventListener('click', () => {
           sidebarEl.classList.add('collapsed');
         });
       }
 
-      // 屏幕尺寸变化时同步状态
       window.addEventListener('resize', () => {
         if (isMobile()) {
           sidebarEl.classList.add('collapsed');
@@ -2120,7 +2116,6 @@
           toggleSidebarBtn.style.display = 'none';
           sidebarEl.classList.add('collapsed');
         } else if (isMobile()) {
-          // 移动端默认收起侧栏
           sidebarEl.classList.add('collapsed');
         }
         loadQuota();

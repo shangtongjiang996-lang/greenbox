@@ -18,201 +18,121 @@
   }
   body { background: var(--forum-bg); }
 
-  @media (max-width: 900px) {
-    .navbar { position: static !important; top: auto !important; }
-  }
+  @media (max-width: 900px) { .navbar { position: static !important; top: auto !important; } }
 
+  /* ===== 布局 ===== */
   .forum-wrap {
-    max-width: 1180px;
-    margin: 0 auto;
+    max-width: 1180px; margin: 0 auto;
     padding: 24px 16px 80px;
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 24px;
-    align-items: start;
+    display: grid; grid-template-columns: 220px 1fr;
+    gap: 24px; align-items: start;
   }
   @media (max-width: 900px) {
     .forum-wrap { grid-template-columns: 1fr; padding: 16px 12px 80px; }
   }
 
-  /* 侧栏 */
+  /* ===== 侧栏 ===== */
   .sidebar {
     background: var(--forum-card);
-    border-radius: 16px;
-    padding: 16px;
+    border-radius: 16px; padding: 16px;
     box-shadow: 0 2px 12px rgba(15,23,42,0.05);
     border: 1px solid var(--forum-border);
-    position: sticky;
-    top: 80px;
+    position: sticky; top: 80px;
   }
-  @media (max-width: 900px) {
-    .sidebar { position: static; }
-  }
+  @media (max-width: 900px) { .sidebar { position: static; } }
   .sidebar-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--forum-muted);
-    letter-spacing: 1px;
-    margin-bottom: 10px;
-    text-transform: uppercase;
+    font-size: 12px; font-weight: 700; color: var(--forum-muted);
+    letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase;
   }
   .cat-list { display: flex; flex-direction: column; gap: 4px; }
   @media (max-width: 900px) {
     .cat-list { flex-direction: row; flex-wrap: wrap; }
   }
   .cat-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--forum-text);
-    transition: all 0.15s;
-    border: none;
-    background: transparent;
-    font-family: inherit;
-    text-align: left;
-    width: 100%;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px;
+    cursor: pointer; font-size: 14px; color: var(--forum-text);
+    transition: all 0.15s; border: none; background: transparent;
+    font-family: inherit; text-align: left; width: 100%;
   }
   .cat-item:hover { background: var(--forum-bg); }
   .cat-item.active {
-    background: var(--forum-primary-light);
-    color: #15803d;
-    font-weight: 700;
+    background: var(--forum-primary-light); color: #15803d; font-weight: 700;
   }
   [data-theme="dark"] .cat-item.active {
-    background: rgba(34,197,94,0.15);
-    color: #4ade80;
+    background: rgba(34,197,94,0.15); color: #4ade80;
   }
   .cat-item .ci { font-size: 16px; }
-
   .forum-stats {
-    margin-top: 18px;
-    padding-top: 14px;
+    margin-top: 18px; padding-top: 14px;
     border-top: 1px solid var(--forum-border);
-    font-size: 12.5px;
-    color: var(--forum-muted);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    font-size: 12.5px; color: var(--forum-muted);
+    display: flex; flex-direction: column; gap: 6px;
   }
   .forum-stats b { color: var(--forum-text); font-size: 14px; }
 
-  /* 主内容 */
+  /* ===== 工具栏 ===== */
   .main-area { min-width: 0; }
-
   .forum-toolbar {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    align-items: center;
+    display: flex; gap: 10px; margin-bottom: 16px;
+    flex-wrap: wrap; align-items: center;
   }
-  .search-box {
-    flex: 1;
-    min-width: 200px;
-    position: relative;
-  }
+  .search-box { flex: 1; min-width: 200px; position: relative; }
   .search-box input {
-    width: 100%;
-    padding: 11px 42px 11px 40px;
-    border: 1px solid var(--forum-border);
-    border-radius: 12px;
-    font-family: inherit;
-    font-size: 14px;
-    background: var(--forum-card);
-    color: var(--forum-text);
-    outline: none;
-    transition: border 0.2s, box-shadow 0.2s;
+    width: 100%; padding: 11px 42px 11px 40px;
+    border: 1px solid var(--forum-border); border-radius: 12px;
+    font-family: inherit; font-size: 14px;
+    background: var(--forum-card); color: var(--forum-text);
+    outline: none; transition: border 0.2s, box-shadow 0.2s;
   }
   .search-box input:focus {
     border-color: var(--forum-primary);
     box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
   }
   .search-box .si {
-    position: absolute;
-    left: 14px; top: 50%;
-    transform: translateY(-50%);
-    font-size: 16px;
-    opacity: 0.5;
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    font-size: 16px; opacity: 0.5;
   }
   .search-box .clear {
-    position: absolute;
-    right: 10px; top: 50%;
-    transform: translateY(-50%);
-    background: none; border: none;
-    cursor: pointer; font-size: 14px;
-    color: var(--forum-muted);
-    padding: 4px 8px;
-    display: none;
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; font-size: 14px;
+    color: var(--forum-muted); padding: 4px 8px; display: none;
   }
   .search-box .clear.show { display: block; }
 
   .sort-tabs {
-    display: flex;
-    gap: 4px;
-    background: var(--forum-card);
-    border-radius: 12px;
-    padding: 4px;
-    border: 1px solid var(--forum-border);
+    display: flex; gap: 4px; background: var(--forum-card);
+    border-radius: 12px; padding: 4px; border: 1px solid var(--forum-border);
   }
   .sort-tab {
-    padding: 7px 14px;
-    border: none;
-    background: transparent;
-    border-radius: 8px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 13px;
-    color: var(--forum-muted);
-    font-weight: 500;
-    transition: all 0.15s;
-    white-space: nowrap;
+    padding: 7px 14px; border: none; background: transparent;
+    border-radius: 8px; cursor: pointer; font-family: inherit;
+    font-size: 13px; color: var(--forum-muted); font-weight: 500;
+    transition: all 0.15s; white-space: nowrap;
   }
-  .sort-tab.active {
-    background: var(--forum-primary);
-    color: white;
-    font-weight: 700;
-  }
+  .sort-tab.active { background: var(--forum-primary); color: white; font-weight: 700; }
   .sort-tab:hover:not(.active) { color: var(--forum-text); }
 
   .new-post-btn {
     padding: 11px 22px;
     background: linear-gradient(135deg, #16a34a, #15803d);
-    color: white;
-    border: none;
-    border-radius: 12px;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(22,163,74,0.35);
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    color: white; border: none; border-radius: 12px;
+    font-family: inherit; font-size: 14px; font-weight: 700;
+    cursor: pointer; box-shadow: 0 4px 14px rgba(22,163,74,0.35);
+    transition: all 0.2s; display: flex; align-items: center; gap: 6px;
     white-space: nowrap;
   }
-  .new-post-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(22,163,74,0.45);
-  }
+  .new-post-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,163,74,0.45); }
 
-  /* 帖子列表 */
+  /* ===== 帖子卡片 ===== */
   .post-list { display: flex; flex-direction: column; gap: 12px; }
 
   .post-card {
     background: var(--forum-card);
-    border-radius: 16px;
-    padding: 18px 20px;
+    border-radius: 16px; padding: 16px 20px;
     border: 1px solid var(--forum-border);
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    gap: 16px;
-    align-items: flex-start;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; gap: 14px; align-items: flex-start;
     box-shadow: 0 1px 4px rgba(15,23,42,0.03);
   }
   .post-card:hover {
@@ -229,183 +149,165 @@
     border-color: #d97706;
   }
 
-  .post-main { flex: 1; min-width: 0; }
-  .post-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
+  /* 左侧头像（新：列表中直接展示） */
+  .post-author-col {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 4px; flex-shrink: 0; width: 52px;
   }
   .post-avatar {
-    width: 24px; height: 24px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid var(--forum-border);
-    flex-shrink: 0;
-    background: var(--forum-primary-light);
+    width: 44px; height: 44px; border-radius: 50%;
+    object-fit: cover; border: 2px solid var(--forum-border);
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: white;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px;
+    font-size: 16px; font-weight: 700;
+    cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+    position: relative;
   }
-  .post-author {
-    font-size: 12.5px;
+  .post-avatar:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 14px rgba(22,163,74,0.3);
+  }
+  .post-avatar .role-crown {
+    position: absolute; top: -6px; right: -4px;
+    font-size: 14px;
+  }
+  .post-avatar-author {
+    font-size: 11px;
     color: var(--forum-muted);
-    font-weight: 500;
+    text-align: center;
+    font-weight: 600;
+    max-width: 52px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    cursor: pointer;
+  }
+  .post-avatar-author:hover { color: var(--forum-primary); }
+
+  .post-main { flex: 1; min-width: 0; }
+  .post-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px; flex-wrap: wrap;
   }
   .post-time {
-    font-size: 11.5px;
-    color: var(--forum-muted);
-    margin-left: auto;
+    font-size: 11.5px; color: var(--forum-muted); margin-left: auto;
   }
   .pin-badge {
-    font-size: 10px;
-    background: #fef3c7;
-    color: #92400e;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-weight: 700;
+    font-size: 10px; background: #fef3c7; color: #92400e;
+    padding: 2px 8px; border-radius: 10px; font-weight: 700;
   }
   .post-title {
-    font-size: 17px;
-    font-weight: 700;
-    color: var(--forum-text);
-    line-height: 1.4;
-    margin-bottom: 6px;
+    font-size: 16px; font-weight: 700; color: var(--forum-text);
+    line-height: 1.4; margin-bottom: 6px;
     word-wrap: break-word;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
   }
   .post-excerpt {
-    font-size: 13.5px;
-    color: var(--forum-muted);
-    line-height: 1.6;
-    margin-bottom: 10px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    font-size: 13.5px; color: var(--forum-muted);
+    line-height: 1.6; margin-bottom: 10px;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
     word-wrap: break-word;
   }
   .post-meta {
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    font-size: 12px;
-    color: var(--forum-muted);
-    flex-wrap: wrap;
+    display: flex; gap: 12px; align-items: center;
+    font-size: 12px; color: var(--forum-muted); flex-wrap: wrap;
   }
   .post-meta span { display: inline-flex; align-items: center; gap: 4px; }
   .post-cat {
     display: inline-flex; align-items: center; gap: 4px;
-    background: var(--forum-primary-light);
-    color: #15803d;
-    padding: 2px 10px;
-    border-radius: 10px;
-    font-size: 11.5px;
-    font-weight: 600;
+    background: var(--forum-primary-light); color: #15803d;
+    padding: 2px 10px; border-radius: 10px;
+    font-size: 11.5px; font-weight: 600;
   }
-  [data-theme="dark"] .post-cat {
-    background: rgba(34,197,94,0.15);
-    color: #4ade80;
-  }
+  [data-theme="dark"] .post-cat { background: rgba(34,197,94,0.15); color: #4ade80; }
   .post-tag {
-    font-size: 11.5px;
-    color: var(--forum-muted);
-    background: var(--forum-bg);
-    padding: 2px 8px;
-    border-radius: 8px;
+    font-size: 11.5px; color: var(--forum-muted);
+    background: var(--forum-bg); padding: 2px 8px; border-radius: 8px;
   }
 
-  .post-cover {
-    width: 100px;
-    height: 100px;
-    border-radius: 12px;
-    overflow: hidden;
-    flex-shrink: 0;
-    background: var(--forum-bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--forum-muted);
-    font-size: 28px;
-    border: 1px solid var(--forum-border);
+  /* 卡片右侧快捷操作（收藏/转发） */
+  .post-quick-actions {
+    display: flex; flex-direction: column; gap: 4px;
+    flex-shrink: 0; align-items: center;
   }
-  .post-cover img {
-    width: 100%; height: 100%; object-fit: cover;
-  }
-  @media (max-width: 640px) {
-    .post-cover { width: 70px; height: 70px; }
-    .post-card { padding: 14px 16px; gap: 12px; }
-    .post-title { font-size: 15.5px; }
-  }
-
-  .empty-state {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--forum-muted);
-  }
-  .empty-state .icon {
-    font-size: 48px;
-    display: block;
-    margin-bottom: 12px;
-    opacity: 0.5;
-  }
-
-  /* 分页 */
-  .pagination {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    margin-top: 24px;
-    flex-wrap: wrap;
-  }
-  .page-btn {
-    min-width: 38px;
-    height: 38px;
-    padding: 0 12px;
-    border-radius: 10px;
-    border: 1px solid var(--forum-border);
-    background: var(--forum-card);
-    color: var(--forum-text);
-    font-family: inherit;
-    font-size: 14px;
-    cursor: pointer;
+  .quick-btn {
+    width: 34px; height: 34px; border-radius: 10px;
+    border: 1px solid var(--forum-border); background: transparent;
+    color: var(--forum-muted); font-size: 15px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
     transition: all 0.15s;
-    font-weight: 500;
   }
-  .page-btn:hover:not(:disabled) {
+  .quick-btn:hover {
+    background: var(--forum-bg);
     border-color: var(--forum-primary);
     color: var(--forum-primary);
   }
+  .quick-btn.active {
+    background: #fff7ed;
+    border-color: #f59e0b;
+    color: #f59e0b;
+  }
+  .quick-btn.active::after {
+    content: ''; position: absolute;
+  }
+
+  .post-cover {
+    width: 90px; height: 90px; border-radius: 12px;
+    overflow: hidden; flex-shrink: 0;
+    background: var(--forum-bg);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--forum-muted); font-size: 26px;
+    border: 1px solid var(--forum-border);
+  }
+  .post-cover img { width: 100%; height: 100%; object-fit: cover; }
+  @media (max-width: 640px) {
+    .post-cover { width: 64px; height: 64px; }
+    .post-card { padding: 12px 14px; gap: 10px; flex-wrap: wrap; }
+    .post-author-col { width: 40px; }
+    .post-avatar { width: 36px; height: 36px; font-size: 14px; }
+    .post-avatar-author { font-size: 10px; max-width: 40px; }
+    .post-title { font-size: 15px; }
+    .post-quick-actions { flex-direction: row; width: 100%; justify-content: flex-end; }
+    .quick-btn { width: 30px; height: 30px; font-size: 13px; }
+  }
+
+  /* ===== 空状态 ===== */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--forum-muted);
+  }
+  .empty-state .icon {
+    font-size: 48px; display: block; margin-bottom: 12px; opacity: 0.5;
+  }
+
+  /* ===== 分页 ===== */
+  .pagination {
+    display: flex; justify-content: center; align-items: center;
+    gap: 8px; margin-top: 24px; flex-wrap: wrap;
+  }
+  .page-btn {
+    min-width: 38px; height: 38px; padding: 0 12px;
+    border-radius: 10px; border: 1px solid var(--forum-border);
+    background: var(--forum-card); color: var(--forum-text);
+    font-family: inherit; font-size: 14px; cursor: pointer;
+    transition: all 0.15s; font-weight: 500;
+  }
+  .page-btn:hover:not(:disabled) { border-color: var(--forum-primary); color: var(--forum-primary); }
   .page-btn.active {
-    background: var(--forum-primary);
-    color: white;
-    border-color: var(--forum-primary);
-    font-weight: 700;
+    background: var(--forum-primary); color: white;
+    border-color: var(--forum-primary); font-weight: 700;
   }
   .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* 悬浮发帖按钮（移动端） */
+  /* ===== 悬浮发帖按钮 ===== */
   .fab {
-    position: fixed;
-    right: 20px;
-    bottom: 90px;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
+    position: fixed; right: 20px; bottom: 90px;
+    width: 56px; height: 56px; border-radius: 50%;
     background: linear-gradient(135deg, #16a34a, #15803d);
-    color: white;
-    border: none;
-    font-size: 26px;
-    cursor: pointer;
-    box-shadow: 0 8px 24px rgba(22,163,74,0.4);
-    z-index: 100;
-    display: none;
-    align-items: center;
-    justify-content: center;
+    color: white; border: none; font-size: 26px;
+    cursor: pointer; box-shadow: 0 8px 24px rgba(22,163,74,0.4);
+    z-index: 100; display: none;
+    align-items: center; justify-content: center;
     transition: all 0.2s;
   }
   .fab:active { transform: scale(0.92); }
@@ -414,28 +316,20 @@
     .new-post-btn { display: none; }
   }
 
-  /* ============ 弹窗 ============ */
+  /* ===== 通用弹窗 ===== */
   .modal-overlay {
     position: fixed; inset: 0;
     background: rgba(15,23,42,0.6);
     backdrop-filter: blur(4px);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    z-index: 1000;
-    overflow-y: auto;
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; z-index: 1000; overflow-y: auto;
   }
   .modal-overlay.show { display: flex; }
   .modal-box {
     background: var(--forum-card);
-    border-radius: 20px;
-    width: 100%;
-    max-width: 680px;
-    max-height: calc(100vh - 40px);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    border-radius: 20px; width: 100%; max-width: 680px;
+    max-height: calc(100vh - 40px); overflow: hidden;
+    display: flex; flex-direction: column;
     box-shadow: 0 30px 80px rgba(0,0,0,0.3);
     animation: modalIn 0.3s cubic-bezier(.34,1.56,.64,1);
   }
@@ -445,417 +339,241 @@
   }
   .modal-head {
     padding: 16px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--forum-border);
-    flex-shrink: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--forum-border); flex-shrink: 0;
   }
-  .modal-head h2 {
-    font-size: 17px;
-    font-weight: 700;
-    color: var(--forum-text);
-  }
+  .modal-head h2 { font-size: 17px; font-weight: 700; color: var(--forum-text); }
   .modal-close {
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    border: none;
-    background: var(--forum-bg);
-    color: var(--forum-muted);
-    font-size: 16px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 32px; height: 32px; border-radius: 50%;
+    border: none; background: var(--forum-bg);
+    color: var(--forum-muted); font-size: 16px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
     transition: all 0.15s;
   }
-  .modal-close:hover {
-    background: var(--forum-border);
-    color: var(--forum-text);
-    transform: rotate(90deg);
-  }
-  .modal-body {
-    padding: 20px;
-    overflow-y: auto;
-    flex: 1;
-  }
+  .modal-close:hover { background: var(--forum-border); color: var(--forum-text); transform: rotate(90deg); }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
   .modal-foot {
-    padding: 14px 20px;
-    border-top: 1px solid var(--forum-border);
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    flex-shrink: 0;
+    padding: 14px 20px; border-top: 1px solid var(--forum-border);
+    display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;
   }
 
-  /* 表单 */
+  /* ===== 表单 ===== */
   .form-field { margin-bottom: 16px; }
   .form-field label {
-    display: block;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--forum-text);
-    margin-bottom: 6px;
+    display: block; font-size: 13px; font-weight: 700;
+    color: var(--forum-text); margin-bottom: 6px;
   }
-  .form-field input,
-  .form-field textarea,
-  .form-field select {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--forum-border);
-    border-radius: 10px;
-    font-family: inherit;
-    font-size: 14px;
-    background: var(--forum-bg);
-    color: var(--forum-text);
-    outline: none;
-    transition: border 0.2s, box-shadow 0.2s;
+  .form-field input, .form-field textarea, .form-field select {
+    width: 100%; padding: 10px 14px;
+    border: 1px solid var(--forum-border); border-radius: 10px;
+    font-family: inherit; font-size: 14px;
+    background: var(--forum-bg); color: var(--forum-text);
+    outline: none; transition: border 0.2s, box-shadow 0.2s;
   }
   .form-field textarea { resize: vertical; min-height: 140px; }
-  .form-field input:focus,
-  .form-field textarea:focus,
-  .form-field select:focus {
+  .form-field input:focus, .form-field textarea:focus, .form-field select:focus {
     border-color: var(--forum-primary);
     box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
   }
 
-  .cat-pills {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
+  .cat-pills { display: flex; gap: 6px; flex-wrap: wrap; }
   .cat-pill {
-    padding: 7px 14px;
-    border: 1.5px solid var(--forum-border);
-    border-radius: 20px;
-    background: transparent;
-    color: var(--forum-muted);
-    font-family: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.15s;
-    font-weight: 500;
+    padding: 7px 14px; border: 1.5px solid var(--forum-border);
+    border-radius: 20px; background: transparent;
+    color: var(--forum-muted); font-family: inherit; font-size: 13px;
+    cursor: pointer; transition: all 0.15s; font-weight: 500;
   }
   .cat-pill:hover { border-color: var(--forum-primary); color: var(--forum-primary); }
   .cat-pill.active {
-    background: var(--forum-primary);
-    color: white;
-    border-color: var(--forum-primary);
-    font-weight: 700;
+    background: var(--forum-primary); color: white;
+    border-color: var(--forum-primary); font-weight: 700;
   }
 
-  /* 图片上传预览 */
-  .img-upload-area {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
+  .img-upload-area { display: flex; gap: 10px; flex-wrap: wrap; }
   .img-preview {
-    position: relative;
-    width: 90px;
-    height: 90px;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--forum-border);
-    background: var(--forum-bg);
+    position: relative; width: 90px; height: 90px;
+    border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--forum-border); background: var(--forum-bg);
   }
-  .img-preview img {
-    width: 100%; height: 100%; object-fit: cover;
-  }
+  .img-preview img { width: 100%; height: 100%; object-fit: cover; }
   .img-preview .remove {
-    position: absolute;
-    top: 4px; right: 4px;
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    background: rgba(0,0,0,0.6);
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: absolute; top: 4px; right: 4px;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(0,0,0,0.6); color: white;
+    border: none; cursor: pointer; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
   }
   .upload-btn {
-    width: 90px;
-    height: 90px;
-    border: 2px dashed var(--forum-border);
-    border-radius: 12px;
-    background: transparent;
-    cursor: pointer;
-    color: var(--forum-muted);
-    font-size: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    transition: all 0.15s;
-    font-family: inherit;
+    width: 90px; height: 90px; border: 2px dashed var(--forum-border);
+    border-radius: 12px; background: transparent; cursor: pointer;
+    color: var(--forum-muted); font-size: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; transition: all 0.15s; font-family: inherit;
   }
-  .upload-btn:hover {
-    border-color: var(--forum-primary);
-    color: var(--forum-primary);
-    background: rgba(22,163,74,0.04);
-  }
+  .upload-btn:hover { border-color: var(--forum-primary); color: var(--forum-primary); background: rgba(22,163,74,0.04); }
   .upload-btn .icon { font-size: 22px; }
 
-  /* 帖子详情 */
+  /* ===== 帖子详情 ===== */
   .post-detail-title {
-    font-size: 22px;
-    font-weight: 800;
-    color: var(--forum-text);
-    line-height: 1.4;
-    margin-bottom: 12px;
-    word-wrap: break-word;
+    font-size: 22px; font-weight: 800; color: var(--forum-text);
+    line-height: 1.4; margin-bottom: 12px; word-wrap: break-word;
   }
   .post-detail-meta {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--forum-border);
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    font-size: 13px;
-    color: var(--forum-muted);
+    display: flex; align-items: center; gap: 12px;
+    padding-bottom: 16px; border-bottom: 1px solid var(--forum-border);
+    margin-bottom: 20px; flex-wrap: wrap;
+    font-size: 13px; color: var(--forum-muted);
   }
   .post-detail-avatar {
-    width: 36px; height: 36px;
-    border-radius: 50%;
+    width: 44px; height: 44px; border-radius: 50%;
     object-fit: cover;
     border: 2px solid var(--forum-primary-light);
-    background: var(--forum-primary-light);
+    background: linear-gradient(135deg, #16a34a, #15803d); color: white;
     display: flex; align-items: center; justify-content: center;
-    font-size: 16px;
+    font-size: 18px; font-weight: 700; cursor: pointer;
+    transition: transform 0.15s;
   }
+  .post-detail-avatar:hover { transform: scale(1.08); }
+  .post-detail-author-name {
+    font-weight: 700; color: var(--forum-text); font-size: 14px;
+    cursor: pointer;
+  }
+  .post-detail-author-name:hover { color: var(--forum-primary); }
   .post-detail-content {
-    font-size: 15px;
-    line-height: 1.8;
-    color: var(--forum-text);
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    margin-bottom: 20px;
+    font-size: 15px; line-height: 1.8; color: var(--forum-text);
+    white-space: pre-wrap; word-wrap: break-word; margin-bottom: 20px;
   }
   .post-detail-content a {
-    color: #3b82f6;
-    text-decoration: none;
+    color: #3b82f6; text-decoration: none;
     border-bottom: 1px dashed #3b82f6;
-    cursor: pointer;
-    word-break: break-all;
+    cursor: pointer; word-break: break-all;
   }
   .post-detail-content a:hover { color: #1d4ed8; }
-
   .post-detail-images {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 10px;
-    margin-bottom: 20px;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px; margin-bottom: 20px;
   }
   .post-detail-images img {
-    width: 100%;
-    aspect-ratio: 1;
-    object-fit: cover;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: transform 0.2s;
-    border: 1px solid var(--forum-border);
+    width: 100%; aspect-ratio: 1; object-fit: cover;
+    border-radius: 12px; cursor: pointer;
+    transition: transform 0.2s; border: 1px solid var(--forum-border);
   }
   .post-detail-images img:hover { transform: scale(1.02); }
 
   .link-card {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    background: var(--forum-bg);
-    border: 1px solid var(--forum-border);
-    border-radius: 12px;
-    margin-bottom: 8px;
-    cursor: pointer;
-    transition: all 0.15s;
-    text-decoration: none;
-    color: var(--forum-text);
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; background: var(--forum-bg);
+    border: 1px solid var(--forum-border); border-radius: 12px;
+    margin-bottom: 8px; cursor: pointer;
+    transition: all 0.15s; text-decoration: none; color: var(--forum-text);
   }
-  .link-card:hover {
-    border-color: var(--forum-primary);
-    background: var(--forum-primary-light);
-  }
-  [data-theme="dark"] .link-card:hover {
-    background: rgba(34,197,94,0.1);
-  }
+  .link-card:hover { border-color: var(--forum-primary); background: var(--forum-primary-light); }
+  [data-theme="dark"] .link-card:hover { background: rgba(34,197,94,0.1); }
   .link-card .licon {
-    width: 32px; height: 32px;
-    border-radius: 8px;
+    width: 32px; height: 32px; border-radius: 8px;
     background: var(--forum-card);
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-    flex-shrink: 0;
+    font-size: 14px; flex-shrink: 0;
   }
   .link-card .ltext {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 13px;
-    color: var(--forum-muted);
+    flex: 1; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font-size: 13px; color: var(--forum-muted);
   }
   .link-card .lgo { font-size: 14px; opacity: 0.5; }
 
-  /* 操作栏 */
+  /* 帖子详情操作栏 */
   .post-actions {
-    display: flex;
-    gap: 10px;
-    padding: 14px 0;
+    display: flex; gap: 8px; padding: 14px 0;
     border-top: 1px solid var(--forum-border);
     border-bottom: 1px solid var(--forum-border);
-    margin-bottom: 20px;
-    flex-wrap: wrap;
+    margin-bottom: 20px; flex-wrap: wrap;
   }
   .action-btn {
-    padding: 8px 16px;
-    border-radius: 10px;
-    border: 1px solid var(--forum-border);
-    background: transparent;
-    color: var(--forum-muted);
-    font-family: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.15s;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 500;
+    padding: 8px 16px; border-radius: 10px;
+    border: 1px solid var(--forum-border); background: transparent;
+    color: var(--forum-muted); font-family: inherit; font-size: 13px;
+    cursor: pointer; transition: all 0.15s;
+    display: inline-flex; align-items: center; gap: 6px; font-weight: 500;
   }
-  .action-btn:hover {
-    border-color: var(--forum-primary);
-    color: var(--forum-primary);
-  }
+  .action-btn:hover { border-color: var(--forum-primary); color: var(--forum-primary); }
   .action-btn.active {
-    background: var(--forum-primary-light);
-    color: #15803d;
-    border-color: var(--forum-primary);
-    font-weight: 700;
+    background: var(--forum-primary-light); color: #15803d;
+    border-color: var(--forum-primary); font-weight: 700;
   }
-  [data-theme="dark"] .action-btn.active {
-    background: rgba(34,197,94,0.15);
-    color: #4ade80;
+  .action-btn.faved {
+    background: #fff7ed; color: #c2410c; border-color: #f59e0b;
   }
-  .action-btn.danger:hover {
-    border-color: #ef4444;
-    color: #ef4444;
-  }
+  .action-btn.danger:hover { border-color: #ef4444; color: #ef4444; }
 
-  /* 评论区 */
+  /* ===== 评论区 ===== */
   .comments-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--forum-text);
-    margin-bottom: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-size: 15px; font-weight: 700; color: var(--forum-text);
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
   }
   .comment-item {
-    display: flex;
-    gap: 10px;
-    padding: 14px 0;
+    display: flex; gap: 10px; padding: 14px 0;
     border-bottom: 1px solid var(--forum-border);
   }
   .comment-item:last-child { border-bottom: none; }
   .comment-avatar {
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-    background: var(--forum-primary-light);
+    width: 34px; height: 34px; border-radius: 50%;
+    object-fit: cover; flex-shrink: 0;
+    background: linear-gradient(135deg, #16a34a, #15803d); color: white;
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
+    font-size: 14px; font-weight: 700;
     border: 2px solid var(--forum-border);
+    cursor: pointer; transition: transform 0.15s;
   }
+  .comment-avatar:hover { transform: scale(1.08); }
   .comment-body { flex: 1; min-width: 0; }
   .comment-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
-    flex-wrap: wrap;
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 4px; flex-wrap: wrap;
   }
   .comment-author {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--forum-text);
+    font-size: 13px; font-weight: 700; color: var(--forum-text);
+    cursor: pointer;
   }
+  .comment-author:hover { color: var(--forum-primary); }
   .comment-time {
-    font-size: 11.5px;
-    color: var(--forum-muted);
-    margin-left: auto;
+    font-size: 11.5px; color: var(--forum-muted); margin-left: auto;
   }
   .comment-content {
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--forum-text);
-    white-space: pre-wrap;
-    word-wrap: break-word;
+    font-size: 14px; line-height: 1.6; color: var(--forum-text);
+    white-space: pre-wrap; word-wrap: break-word;
   }
   .comment-content a {
-    color: #3b82f6;
-    text-decoration: none;
+    color: #3b82f6; text-decoration: none;
     border-bottom: 1px dashed #3b82f6;
-    cursor: pointer;
-    word-break: break-all;
+    cursor: pointer; word-break: break-all;
   }
-  .comment-content a:hover { color: #1d4ed8; }
   .comment-images {
-    display: flex;
-    gap: 6px;
-    margin-top: 8px;
-    flex-wrap: wrap;
+    display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
   }
   .comment-images img {
-    width: 80px; height: 80px;
-    object-fit: cover;
-    border-radius: 8px;
-    cursor: pointer;
-    border: 1px solid var(--forum-border);
+    width: 80px; height: 80px; object-fit: cover;
+    border-radius: 8px; cursor: pointer; border: 1px solid var(--forum-border);
   }
   .comment-actions {
-    margin-top: 6px;
-    display: flex;
-    gap: 8px;
+    margin-top: 6px; display: flex; gap: 8px;
   }
   .comment-del {
-    background: none;
-    border: none;
-    color: var(--forum-muted);
-    font-size: 11.5px;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 6px;
-    font-family: inherit;
+    background: none; border: none; color: var(--forum-muted);
+    font-size: 11.5px; cursor: pointer; padding: 2px 6px;
+    border-radius: 6px; font-family: inherit;
   }
   .comment-del:hover { color: #ef4444; background: #fee2e2; }
 
   .comment-input-area {
-    display: flex;
-    gap: 10px;
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--forum-border);
+    display: flex; gap: 10px; margin-top: 16px;
+    padding-top: 16px; border-top: 1px solid var(--forum-border);
   }
   .comment-input-area textarea {
-    flex: 1;
-    padding: 10px 14px;
-    border: 1px solid var(--forum-border);
-    border-radius: 12px;
-    font-family: inherit;
-    font-size: 14px;
-    resize: none;
-    background: var(--forum-bg);
-    color: var(--forum-text);
-    outline: none;
-    min-height: 44px;
-    max-height: 200px;
+    flex: 1; padding: 10px 14px;
+    border: 1px solid var(--forum-border); border-radius: 12px;
+    font-family: inherit; font-size: 14px; resize: none;
+    background: var(--forum-bg); color: var(--forum-text);
+    outline: none; min-height: 44px; max-height: 200px;
     transition: border 0.2s;
   }
   .comment-input-area textarea:focus {
@@ -863,130 +581,107 @@
     box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
   }
   .comment-send {
-    align-self: flex-end;
-    padding: 10px 22px;
+    align-self: flex-end; padding: 10px 22px;
     background: linear-gradient(135deg, #16a34a, #15803d);
-    color: white;
-    border: none;
-    border-radius: 12px;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.15s;
-    height: 44px;
+    color: white; border: none; border-radius: 12px;
+    font-family: inherit; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s; height: 44px;
   }
   .comment-send:hover:not(:disabled) { transform: translateY(-1px); }
   .comment-send:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  /* Toast */
+  /* ===== Toast ===== */
   .toast {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
+    position: fixed; bottom: 30px; left: 50%;
     transform: translateX(-50%) translateY(80px);
-    background: #0f172a;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 30px;
-    font-size: 14px;
+    background: #0f172a; color: white; padding: 12px 24px;
+    border-radius: 30px; font-size: 14px;
     box-shadow: 0 12px 30px rgba(0,0,0,0.25);
-    opacity: 0;
-    transition: all 0.3s;
-    z-index: 10000;
-    pointer-events: none;
-    max-width: 90vw;
-    white-space: nowrap;
+    opacity: 0; transition: all 0.3s; z-index: 10000;
+    pointer-events: none; max-width: 90vw; white-space: nowrap;
   }
-  .toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.success { background: #16a34a; }
   .toast.error { background: #dc2626; }
 
-  /* 链接确认弹窗 */
-  .ext-link-confirm {
-    text-align: center;
-    padding: 8px 4px;
-  }
-  .ext-link-confirm .icon {
-    font-size: 48px;
-    margin-bottom: 14px;
-    display: block;
-  }
+  /* 外链确认 */
+  .ext-link-confirm { text-align: center; padding: 8px 4px; }
+  .ext-link-confirm .icon { font-size: 48px; margin-bottom: 14px; display: block; }
   .ext-link-confirm h3 {
-    font-size: 18px;
-    color: var(--forum-text);
-    margin-bottom: 8px;
+    font-size: 18px; color: var(--forum-text); margin-bottom: 8px;
   }
   .ext-link-confirm p {
-    font-size: 14px;
-    color: var(--forum-muted);
-    line-height: 1.6;
-    margin-bottom: 8px;
+    font-size: 14px; color: var(--forum-muted);
+    line-height: 1.6; margin-bottom: 8px;
   }
   .ext-link-confirm .url {
-    display: block;
-    padding: 10px 14px;
-    background: var(--forum-bg);
-    border: 1px solid var(--forum-border);
-    border-radius: 10px;
-    font-size: 12.5px;
-    font-family: ui-monospace, monospace;
-    color: #3b82f6;
-    word-break: break-all;
-    margin: 12px 0 20px;
-    text-align: left;
+    display: block; padding: 10px 14px;
+    background: var(--forum-bg); border: 1px solid var(--forum-border);
+    border-radius: 10px; font-size: 12.5px;
+    font-family: ui-monospace, monospace; color: #3b82f6;
+    word-break: break-all; margin: 12px 0 20px; text-align: left;
   }
 
   /* 图片灯箱 */
   .lightbox {
-    position: fixed;
-    inset: 0;
+    position: fixed; inset: 0;
     background: rgba(0,0,0,0.92);
-    z-index: 10001;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    cursor: zoom-out;
+    z-index: 10001; display: none;
+    align-items: center; justify-content: center;
+    padding: 20px; cursor: zoom-out;
   }
   .lightbox.show { display: flex; }
   .lightbox img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    border-radius: 4px;
+    max-width: 100%; max-height: 100%;
+    object-fit: contain; border-radius: 4px;
   }
   .lightbox .lb-close {
-    position: absolute;
-    top: 20px; right: 20px;
-    width: 40px; height: 40px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.15);
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-size: 20px;
+    position: absolute; top: 20px; right: 20px;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); color: white;
+    border: none; cursor: pointer; font-size: 20px;
     display: flex; align-items: center; justify-content: center;
   }
 
-  /* 加载状态 */
+  /* 加载 */
   .loading-spinner {
-    display: inline-block;
-    width: 20px; height: 20px;
+    display: inline-block; width: 20px; height: 20px;
     border: 2.5px solid rgba(255,255,255,0.3);
-    border-top-color: white;
-    border-radius: 50%;
+    border-top-color: white; border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .user-avatar-mini {
-    width: 28px; height: 28px; border-radius: 50%;
-    object-fit: cover; border: 2px solid var(--forum-primary);
-    vertical-align: middle; margin-right: 6px;
+  /* 转发弹窗 */
+  .repost-options {
+    display: flex; flex-direction: column; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .repost-opt {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    background: var(--forum-bg);
+    border: 1.5px solid var(--forum-border);
+    border-radius: 12px; cursor: pointer;
+    transition: all 0.15s;
+    text-align: left; font-family: inherit;
+    color: var(--forum-text); width: 100%;
+  }
+  .repost-opt:hover {
+    border-color: var(--forum-primary);
+    background: var(--forum-primary-light);
+  }
+  .repost-opt .icon {
+    font-size: 22px; flex-shrink: 0;
+  }
+  .repost-opt .text {
+    flex: 1;
+  }
+  .repost-opt .t1 {
+    font-weight: 700; font-size: 14px;
+  }
+  .repost-opt .t2 {
+    font-size: 12px; color: var(--forum-muted); margin-top: 2px;
   }
 </style>
 </head>
@@ -1000,6 +695,7 @@
       <li><a href="tools.html">工具</a></li>
       <li><a href="changelog.html">更新日志</a></li>
       <li><a href="forum.html" class="active">论坛</a></li>
+      <li><a href="messages.html">消息</a></li>
       <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
     </ul>
     <div class="navbar-right">
@@ -1010,6 +706,7 @@
 </nav>
 
 <main class="forum-wrap">
+  <!-- 侧栏 -->
   <aside class="sidebar">
     <div class="sidebar-title">📂 板块</div>
     <div class="cat-list" id="catList"></div>
@@ -1020,6 +717,7 @@
     </div>
   </aside>
 
+  <!-- 主区 -->
   <div class="main-area">
     <div class="forum-toolbar">
       <div class="search-box">
@@ -1050,7 +748,7 @@
 
 <button class="fab" id="fabBtn" title="发帖">✏️</button>
 
-<!-- 发帖弹窗 -->
+<!-- ========== 发帖弹窗 ========== -->
 <div class="modal-overlay" id="newPostModal">
   <div class="modal-box">
     <div class="modal-head">
@@ -1092,7 +790,7 @@
   </div>
 </div>
 
-<!-- 帖子详情弹窗 -->
+<!-- ========== 帖子详情弹窗 ========== -->
 <div class="modal-overlay" id="postDetailModal">
   <div class="modal-box" style="max-width: 780px;">
     <div class="modal-head">
@@ -1105,7 +803,52 @@
   </div>
 </div>
 
-<!-- 外链确认弹窗 -->
+<!-- ========== 转发弹窗 ========== -->
+<div class="modal-overlay" id="repostModal">
+  <div class="modal-box" style="max-width: 440px;">
+    <div class="modal-head">
+      <h2>🔄 转发帖子</h2>
+      <button class="modal-close" id="repostClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="repost-options">
+        <button class="repost-opt" id="repostCopyLink">
+          <span class="icon">🔗</span>
+          <div class="text">
+            <div class="t1">复制链接</div>
+            <div class="t2">把帖子链接复制到剪贴板</div>
+          </div>
+        </button>
+        <button class="repost-opt" id="repostShare">
+          <span class="icon">📤</span>
+          <div class="text">
+            <div class="t1">转发到聊天</div>
+            <div class="t2">分享给你的好友或聊天对象</div>
+          </div>
+        </button>
+        <button class="repost-opt" id="repostWithComment">
+          <span class="icon">💬</span>
+          <div class="text">
+            <div class="t1">带评论转发</div>
+            <div class="t2">附上你的看法，让更多人看到</div>
+          </div>
+        </button>
+      </div>
+      <div id="repostCommentArea" style="display:none;">
+        <div class="form-field">
+          <label>你的评论（可选）</label>
+          <textarea id="repostCommentText" placeholder="说点什么…" style="min-height:80px;" maxlength="200"></textarea>
+        </div>
+        <div class="modal-foot" style="padding:0;border:none;margin-top:8px;">
+          <button class="action-btn" id="repostCancelComment">取消</button>
+          <button class="comment-send" id="repostSubmitComment">转发</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 外链确认弹窗 ========== -->
 <div class="modal-overlay" id="extLinkModal">
   <div class="modal-box" style="max-width: 460px;">
     <div class="modal-body">
@@ -1124,7 +867,7 @@
   </div>
 </div>
 
-<!-- 图片灯箱 -->
+<!-- ========== 图片灯箱 ========== -->
 <div class="lightbox" id="lightbox">
   <button class="lb-close" id="lightboxClose">✕</button>
   <img id="lightboxImg" src="" alt="">
@@ -1134,7 +877,7 @@
 
 <script src="script.js"></script>
 <script>
-(function() {
+(function () {
   'use strict';
 
   // ============================================================
@@ -1148,30 +891,28 @@
   let totalPages = 1;
   let categories = [];
   let selectedPostCategory = 'general';
-  let postImages = []; // { file, dataUri }
+  let postImages = [];
   let currentPostId = null;
   let currentComments = [];
-
+  let currentRepostPostId = null;
+  let myFavSet = new Set();
   const token = localStorage.getItem('greenbox_token');
 
   // ============================================================
-  //  工具
+  //  工具函数
   // ============================================================
   function escapeHtml(s) {
     return String(s || '').replace(/[&<>"']/g, c => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
   }
-
-  // 把文本中的链接转成可点击的 a 标签
   function linkify(text) {
     const escaped = escapeHtml(text);
     return escaped.replace(
       /https?:\/\/[^\s<>"']+/gi,
-      (url) => `<a href="#" data-ext-link="${escapeHtml(url)}" class="ext-link">${escapeHtml(url)}</a>`
+      (url) => `<a href="#" data-ext-link="${escapeHtml(url)}">${escapeHtml(url)}</a>`
     );
   }
-
   function timeAgo(ts) {
     const d = Date.now() - ts;
     if (d < 60000) return '刚刚';
@@ -1181,12 +922,10 @@
     const date = new Date(ts);
     return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
   }
-
   function formatTime(ts) {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   }
-
   function showToast(msg, type) {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -1194,16 +933,40 @@
     clearTimeout(showToast._t);
     showToast._t = setTimeout(() => t.classList.remove('show'), 2400);
   }
-
-  function avatarHtml(username, displayName, hasAvatar) {
-    if (hasAvatar) {
-      return `<img class="post-avatar" src="/api/user/avatar/${encodeURIComponent(username)}" alt="" onerror="this.replaceWith(document.createTextNode('👤'))">`;
+  async function api(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    if (token) opts.headers['Authorization'] = `Bearer ${token}`;
+    if (opts.body && !(opts.body instanceof FormData)) {
+      opts.headers['Content-Type'] = 'application/json';
+      if (typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
     }
-    return `<div class="post-avatar">${username === 'admin' ? '🛡️' : '👤'}</div>`;
+    const res = await fetch(url, opts);
+    let data = null;
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) {
+      const e = new Error((data && data.error) || `HTTP ${res.status}`);
+      e.status = res.status;
+      throw e;
+    }
+    return data;
+  }
+
+  // 生成头像 HTML（作者头像）
+  function authorAvatarHtml(username, hasAvatar, size, extraClass) {
+    const initial = (username || '?').slice(0, 1).toUpperCase();
+    const showEmoji = username === 'admin' ? '🛡️' : initial;
+    const cls = extraClass || 'post-avatar';
+    const style = size ? `style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.4)}px;"` : '';
+    if (hasAvatar) {
+      const url = `/api/user/avatar/${encodeURIComponent(username)}?t=${Date.now()}`;
+      return `<img class="${cls}" ${style} src="${url}" alt="" data-user="${escapeHtml(username)}" onerror="this.style.display='none';this.parentNode.insertAdjacentHTML('beforeend','<div class=\\'${cls}\\' ${style} data-user=\\'${escapeHtml(username)}\\'>${showEmoji}</div>');">`;
+    }
+    return `<div class="${cls}" ${style} data-user="${escapeHtml(username)}">${showEmoji}</div>`;
   }
 
   // ============================================================
-  //  外链确认弹窗
+  //  外链确认
   // ============================================================
   function openExtLink(url) {
     document.getElementById('extLinkUrl').textContent = url;
@@ -1213,7 +976,6 @@
       document.getElementById('extLinkModal').classList.remove('show');
     };
   }
-
   document.getElementById('extLinkCancel').addEventListener('click', () => {
     document.getElementById('extLinkModal').classList.remove('show');
   });
@@ -1222,8 +984,6 @@
       document.getElementById('extLinkModal').classList.remove('show');
     }
   });
-
-  // 全局链接拦截
   document.addEventListener('click', (e) => {
     const link = e.target.closest('[data-ext-link]');
     if (link) {
@@ -1257,8 +1017,21 @@
     }
   });
 
+  // 全局头像点击 → 用户主页
+  document.addEventListener('click', (e) => {
+    const u = e.target.closest('[data-user]');
+    if (u) {
+      e.preventDefault();
+      e.stopPropagation();
+      const username = u.dataset.user;
+      if (username) {
+        window.location.href = '/user.html?u=' + encodeURIComponent(username);
+      }
+    }
+  });
+
   // ============================================================
-  //  用户认证
+  //  认证 + 顶部用户区
   // ============================================================
   async function checkAuth() {
     if (!token) return null;
@@ -1273,19 +1046,18 @@
       return null;
     } catch (e) { return null; }
   }
-
   async function renderUserArea() {
     const userArea = document.getElementById('userArea');
     const profileNav = document.getElementById('profile-nav');
     const user = await checkAuth();
     if (user) {
       const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + Date.now();
-      const avatarHtml2 = user.hasAvatar
+      const avatarHtml = user.hasAvatar
         ? `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`
         : '';
       userArea.innerHTML = `
-        ${avatarHtml2}
-        <a href="/profile.html" class="user-name" style="text-decoration:none;color:inherit;">${escapeHtml(user.displayName || user.username)}</a>
+        ${avatarHtml}
+        <a href="/profile.html" class="user-name" style="text-decoration:none;color:inherit;" title="个人中心">${escapeHtml(user.displayName || user.username)}</a>
         <button onclick="logoutForum()" class="btn-outline">退出</button>
       `;
       if (profileNav) profileNav.style.display = 'list-item';
@@ -1305,7 +1077,7 @@
   };
 
   // ============================================================
-  //  加载分类
+  //  分类
   // ============================================================
   async function loadCategories() {
     try {
@@ -1317,7 +1089,6 @@
       categories = [];
     }
   }
-
   function renderCategories() {
     const list = document.getElementById('catList');
     const all = [{ id: 'all', name: '全部', icon: '🌐' }].concat(categories);
@@ -1336,7 +1107,6 @@
       });
     });
   }
-
   function renderNewPostCats() {
     const wrap = document.getElementById('newPostCats');
     wrap.innerHTML = categories.map(c => `
@@ -1353,7 +1123,18 @@
   }
 
   // ============================================================
-  //  加载帖子列表
+  //  加载我的收藏（用于标记收藏状态）
+  // ============================================================
+  async function loadMyFavorites() {
+    if (!token) return;
+    try {
+      const list = await api('/api/forum/favorites');
+      myFavSet = new Set(Array.isArray(list) ? list.map(p => p.id) : []);
+    } catch (e) { myFavSet = new Set(); }
+  }
+
+  // ============================================================
+  //  帖子列表
   // ============================================================
   async function loadPosts() {
     const list = document.getElementById('postList');
@@ -1397,20 +1178,20 @@
 
     list.innerHTML = posts.map(p => {
       const cat = catMap[p.category] || { name: '其他', icon: '📌' };
-      const avatar = p.authorAvatar
-        ? `<img class="post-avatar" src="${p.authorAvatar}" alt="" onerror="this.style.display='none'">`
-        : `<div class="post-avatar">${p.author === 'admin' ? '🛡️' : '👤'}</div>`;
-
+      const isFaved = myFavSet.has(p.id);
+      const avatarHtml = authorAvatarHtml(p.author, p.authorHasAvatar, null, 'post-avatar');
       const coverHtml = p.coverImage
         ? `<div class="post-cover"><img src="${p.coverImage}" data-lightbox="${p.coverImage}" onclick="event.stopPropagation()" alt=""></div>`
         : (p.hasLinks ? `<div class="post-cover">🔗</div>` : '');
 
       return `
         <div class="post-card ${p.pinned ? 'pinned' : ''}" data-post-id="${p.id}">
+          <div class="post-author-col">
+            ${avatarHtml}
+            <div class="post-avatar-author" data-user="${escapeHtml(p.author)}" title="查看 ${escapeHtml(p.authorDisplay || p.author)} 的主页">${escapeHtml(p.authorDisplay || p.author)}</div>
+          </div>
           <div class="post-main">
             <div class="post-header">
-              ${avatar}
-              <span class="post-author">${escapeHtml(p.authorDisplay || p.author)}</span>
               ${p.pinned ? '<span class="pin-badge">📌 置顶</span>' : ''}
               <span class="post-time">${timeAgo(p.createdAt)}</span>
             </div>
@@ -1424,24 +1205,59 @@
               <span>👍 ${p.likes || 0}</span>
             </div>
           </div>
+          <div class="post-quick-actions">
+            <button class="quick-btn ${isFaved ? 'active' : ''}" data-action="fav" data-post-id="${p.id}" title="收藏">${isFaved ? '⭐' : '☆'}</button>
+            <button class="quick-btn" data-action="repost" data-post-id="${p.id}" title="转发">🔄</button>
+          </div>
           ${coverHtml}
         </div>
       `;
     }).join('');
 
     list.querySelectorAll('.post-card').forEach(card => {
-      card.addEventListener('click', () => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.quick-btn')) return;
+        if (e.target.closest('[data-user]')) return;
+        if (e.target.closest('[data-lightbox]')) return;
         openPostDetail(card.dataset.postId);
+      });
+    });
+
+    // 收藏 / 转发按钮
+    list.querySelectorAll('.quick-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.postId;
+        if (btn.dataset.action === 'fav') {
+          await toggleFavorite(id, btn);
+        } else if (btn.dataset.action === 'repost') {
+          openRepostModal(id);
+        }
       });
     });
   }
 
+  async function toggleFavorite(postId, btn) {
+    if (!currentUser) { showToast('请先登录', 'error'); return; }
+    try {
+      const res = await api(`/api/forum/posts/${postId}/favorite`, { method: 'POST' });
+      if (res.favorited) {
+        myFavSet.add(postId);
+        btn.classList.add('active');
+        btn.textContent = '⭐';
+        showToast('已收藏', 'success');
+      } else {
+        myFavSet.delete(postId);
+        btn.classList.remove('active');
+        btn.textContent = '☆';
+        showToast('已取消收藏', 'success');
+      }
+    } catch (e) { showToast(e.message, 'error'); }
+  }
+
   function renderPagination(page, total) {
     const wrap = document.getElementById('pagination');
-    if (total <= 1) {
-      wrap.innerHTML = '';
-      return;
-    }
+    if (total <= 1) { wrap.innerHTML = ''; return; }
 
     const btns = [];
     btns.push(`<button class="page-btn" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}>‹ 上一页</button>`);
@@ -1487,12 +1303,14 @@
       }
       const post = await res.json();
 
-      // 浏览+1
       fetch(`/api/forum/posts/${postId}/view`, { method: 'POST' }).catch(() => {});
 
-      // 加载评论
       const cres = await fetch(`/api/forum/posts/${postId}/comments`);
       currentComments = await cres.json();
+
+      // 收藏状态
+      if (!myFavSet.size && token) await loadMyFavorites();
+      post._isFaved = myFavSet.has(postId);
 
       renderPostDetail(post, currentComments);
     } catch (e) {
@@ -1509,22 +1327,21 @@
     const isAdmin = currentUser && currentUser.role === 'admin';
     const canEdit = isOwner || isAdmin;
     const isLiked = currentUser && post.likes && post.likes.includes(currentUser.username);
+    const isFaved = !!post._isFaved;
 
-    const avatarHtml3 = post.authorAvatar
-      ? `<img class="post-detail-avatar" src="${post.authorAvatar}" alt="" onerror="this.style.display='none'">`
-      : `<div class="post-detail-avatar">${post.author === 'admin' ? '🛡️' : '👤'}</div>`;
+    // 详情页的 post 对象可能没有 authorHasAvatar 字段，检查 authorAvatar 是否有值
+    const hasAvatar = post.authorHasAvatar === true || (post.authorAvatar && !post.authorAvatar.includes('404'));
 
-    // 图片
+    const avatarHtml = authorAvatarHtml(post.author, hasAvatar, null, 'post-detail-avatar');
+
     const imagesHtml = (post.images || []).length > 0
       ? `<div class="post-detail-images">${post.images.map(img =>
           `<img src="${img}" data-lightbox="${img}" alt="">`
         ).join('')}</div>`
       : '';
 
-    // 内容
     const contentHtml = `<div class="post-detail-content">${linkify(post.content)}</div>`;
 
-    // 外部链接卡片
     const linksHtml = (post.links || []).length > 0
       ? `<div style="margin-bottom:20px;">
           <div style="font-size:12px;color:var(--forum-muted);font-weight:700;margin-bottom:8px;">🔗 内容中的链接（点击前会确认）</div>
@@ -1538,22 +1355,22 @@
         </div>`
       : '';
 
-    // 评论区
     const commentsHtml = comments.length > 0
       ? comments.map(c => {
           const cCanDel = currentUser && (currentUser.username === c.author || currentUser.role === 'admin');
-          const cAvatar = c.authorAvatar
-            ? `<img class="comment-avatar" src="${c.authorAvatar}" alt="" onerror="this.style.display='none'">`
-            : `<div class="comment-avatar">${c.author === 'admin' ? '🛡️' : '👤'}</div>`;
+          const cHasAvatar = !!c.authorAvatar;
+          const cAvatarHtml = cHasAvatar
+            ? `<img class="comment-avatar" src="${c.authorAvatar}" alt="" data-user="${escapeHtml(c.author)}" onerror="this.style.display='none'">`
+            : `<div class="comment-avatar" data-user="${escapeHtml(c.author)}">${c.author === 'admin' ? '🛡️' : (c.author || '?').slice(0,1).toUpperCase()}</div>`;
           const cImages = (c.images || []).length > 0
             ? `<div class="comment-images">${c.images.map(img => `<img src="${img}" data-lightbox="${img}" alt="">`).join('')}</div>`
             : '';
           return `
             <div class="comment-item">
-              ${cAvatar}
+              ${cAvatarHtml}
               <div class="comment-body">
                 <div class="comment-head">
-                  <span class="comment-author">${escapeHtml(c.authorDisplay || c.author)}</span>
+                  <span class="comment-author" data-user="${escapeHtml(c.author)}">${escapeHtml(c.authorDisplay || c.author)}</span>
                   <span class="comment-time">${timeAgo(c.createdAt)}</span>
                 </div>
                 <div class="comment-content">${linkify(c.content)}</div>
@@ -1569,9 +1386,9 @@
     document.getElementById('postDetailBody').innerHTML = `
       <div class="post-detail-title">${escapeHtml(post.title)}</div>
       <div class="post-detail-meta">
-        ${avatarHtml3}
-        <div>
-          <div style="font-weight:700;color:var(--forum-text);font-size:14px;">${escapeHtml(post.authorDisplay || post.author)}</div>
+        ${avatarHtml}
+        <div style="cursor:pointer;" data-user="${escapeHtml(post.author)}">
+          <div class="post-detail-author-name" data-user="${escapeHtml(post.author)}">${escapeHtml(post.authorDisplay || post.author)}</div>
           <div style="font-size:12px;margin-top:2px;">${formatTime(post.createdAt)} · ${cat.icon} ${cat.name}</div>
         </div>
       </div>
@@ -1589,6 +1406,12 @@
       <div class="post-actions">
         <button class="action-btn ${isLiked ? 'active' : ''}" id="likeBtn">
           <span>${isLiked ? '❤️' : '🤍'}</span> <span id="likeCount">${(post.likes || []).length}</span>
+        </button>
+        <button class="action-btn ${isFaved ? 'faved' : ''}" id="favBtn">
+          <span>${isFaved ? '⭐' : '☆'}</span> <span>${isFaved ? '已收藏' : '收藏'}</span>
+        </button>
+        <button class="action-btn" id="repostBtn">
+          🔄 转发
         </button>
         <span style="display:inline-flex;align-items:center;gap:6px;color:var(--forum-muted);font-size:13px;padding:8px 12px;">
           👁️ ${post.views || 0} · 💬 ${post.commentCount || 0}
@@ -1621,7 +1444,7 @@
       </div>
     `;
 
-    // 绑定：点赞
+    // 点赞
     const likeBtn = document.getElementById('likeBtn');
     if (likeBtn) {
       likeBtn.addEventListener('click', async () => {
@@ -1641,7 +1464,36 @@
       });
     }
 
-    // 绑定：删除帖子
+    // 收藏
+    const favBtn = document.getElementById('favBtn');
+    if (favBtn) {
+      favBtn.addEventListener('click', async () => {
+        if (!currentUser) { showToast('请先登录', 'error'); return; }
+        try {
+          const res = await api(`/api/forum/posts/${post.id}/favorite`, { method: 'POST' });
+          if (res.favorited) {
+            myFavSet.add(post.id);
+            favBtn.classList.add('faved');
+            favBtn.querySelector('span:first-child').textContent = '⭐';
+            favBtn.querySelector('span:last-child').textContent = '已收藏';
+          } else {
+            myFavSet.delete(post.id);
+            favBtn.classList.remove('faved');
+            favBtn.querySelector('span:first-child').textContent = '☆';
+            favBtn.querySelector('span:last-child').textContent = '收藏';
+          }
+          loadPosts();
+        } catch (e) { showToast(e.message, 'error'); }
+      });
+    }
+
+    // 转发
+    const repostBtn = document.getElementById('repostBtn');
+    if (repostBtn) {
+      repostBtn.addEventListener('click', () => openRepostModal(post.id));
+    }
+
+    // 删除
     const delBtn = document.getElementById('deletePostBtn');
     if (delBtn) {
       delBtn.addEventListener('click', async () => {
@@ -1663,7 +1515,7 @@
       });
     }
 
-    // 绑定：置顶
+    // 置顶
     const pinBtn = document.getElementById('pinBtn');
     if (pinBtn) {
       pinBtn.addEventListener('click', async () => {
@@ -1683,7 +1535,7 @@
       });
     }
 
-    // 绑定：评论发送
+    // 评论
     const sendBtn = document.getElementById('commentSend');
     const commentInput = document.getElementById('commentInput');
     if (sendBtn && commentInput) {
@@ -1696,7 +1548,7 @@
       });
     }
 
-    // 绑定：删除评论
+    // 删除评论
     document.querySelectorAll('[data-del-comment]').forEach(b => {
       b.addEventListener('click', async () => {
         if (!confirm('确定删除这条评论吗？')) return;
@@ -1715,7 +1567,6 @@
       });
     });
 
-    // 自动聚焦评论框
     if (commentInput) commentInput.focus();
   }
 
@@ -1755,14 +1606,39 @@
   }
 
   // ============================================================
+  //  转发
+  // ============================================================
+  function openRepostModal(postId) {
+    if (!currentUser) { showToast('请先登录', 'error'); return; }
+    currentRepostPostId = postId;
+    document.getElementById('repostModal').classList.add('show');
+    document.getElementById('repostCommentArea').style.display = 'none';
+    document.getElementById('repostCommentText').value = '';
+  }
+  function closeRepostModal() {
+    document.getElementById('repostModal').classList.remove('show');
+    currentRepostPostId = null;
+  }
+
+  async function doRepostWithComment(comment) {
+    if (!currentRepostPostId) return;
+    try {
+      await api(`/api/forum/posts/${currentRepostPostId}/repost`, {
+        method: 'POST',
+        body: { comment: comment || '' }
+      });
+      showToast('转发成功', 'success');
+      closeRepostModal();
+    } catch (e) { showToast(e.message, 'error'); }
+  }
+
+  // ============================================================
   //  发帖
   // ============================================================
   function openNewPost() {
     if (!currentUser) {
       showToast('请先登录后再发帖', 'error');
-      setTimeout(() => {
-        location.href = '/login.html?redirect=/forum.html';
-      }, 1200);
+      setTimeout(() => { location.href = '/login.html?redirect=/forum.html'; }, 1200);
       return;
     }
     document.getElementById('newPostTitle').value = '';
@@ -1773,7 +1649,6 @@
     document.getElementById('newPostModal').classList.add('show');
     setTimeout(() => document.getElementById('newPostTitle').focus(), 100);
   }
-
   function renderPostImages() {
     const wrap = document.getElementById('postImagesArea');
     const btns = postImages.map((img, i) => `
@@ -1790,7 +1665,6 @@
     ` : '');
     const btn = document.getElementById('postUploadBtn');
     if (btn) btn.addEventListener('click', () => document.getElementById('postImageInput').click());
-
     wrap.querySelectorAll('[data-remove-img]').forEach(b => {
       b.addEventListener('click', () => {
         postImages.splice(parseInt(b.dataset.removeImg, 10), 1);
@@ -1798,7 +1672,6 @@
       });
     });
   }
-
   document.getElementById('postImageInput').addEventListener('change', (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
@@ -1817,7 +1690,6 @@
       reader.readAsDataURL(file);
     }
   });
-
   async function submitNewPost() {
     const title = document.getElementById('newPostTitle').value.trim();
     const content = document.getElementById('newPostContent').value.trim();
@@ -1887,6 +1759,55 @@
     }
   });
 
+  // 转发弹窗事件
+  document.getElementById('repostClose').addEventListener('click', closeRepostModal);
+  document.getElementById('repostModal').addEventListener('click', (e) => {
+    if (e.target.id === 'repostModal') closeRepostModal();
+  });
+
+  document.getElementById('repostCopyLink').addEventListener('click', () => {
+    if (!currentRepostPostId) return;
+    const url = location.origin + '/forum.html?post=' + encodeURIComponent(currentRepostPostId);
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('链接已复制到剪贴板', 'success');
+      closeRepostModal();
+    }).catch(() => {
+      showToast('复制失败，请手动复制：' + url, 'error');
+    });
+  });
+
+  document.getElementById('repostShare').addEventListener('click', async () => {
+    if (!currentRepostPostId) return;
+    const url = location.origin + '/forum.html?post=' + encodeURIComponent(currentRepostPostId);
+    try {
+      const postRes = await fetch('/api/forum/posts/' + currentRepostPostId);
+      const post = await postRes.json();
+      const shareText = `【GreenBox 论坛】${post.title}\n${url}`;
+      if (navigator.share) {
+        await navigator.share({ title: post.title, text: shareText, url });
+        closeRepostModal();
+      } else {
+        await navigator.clipboard.writeText(shareText);
+        showToast('已复制分享内容', 'success');
+        closeRepostModal();
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') showToast('分享失败', 'error');
+    }
+  });
+
+  document.getElementById('repostWithComment').addEventListener('click', () => {
+    document.getElementById('repostCommentArea').style.display = 'block';
+    setTimeout(() => document.getElementById('repostCommentText').focus(), 100);
+  });
+  document.getElementById('repostCancelComment').addEventListener('click', () => {
+    document.getElementById('repostCommentArea').style.display = 'none';
+  });
+  document.getElementById('repostSubmitComment').addEventListener('click', () => {
+    const comment = document.getElementById('repostCommentText').value.trim();
+    doRepostWithComment(comment);
+  });
+
   // 搜索
   const searchInput = document.getElementById('searchInput');
   const searchClear = document.getElementById('searchClear');
@@ -1928,9 +1849,7 @@
     }
   });
 
-  // ============================================================
-  //  加载统计
-  // ============================================================
+  // 统计
   async function loadStats() {
     try {
       const res = await fetch('/api/forum/stats');
@@ -1947,10 +1866,17 @@
   (async function init() {
     await renderUserArea();
     await loadCategories();
+    await loadMyFavorites();
     await loadPosts();
     await loadStats();
-  })();
 
+    // 从 URL 参数打开指定帖子
+    const params = new URLSearchParams(location.search);
+    const postParam = params.get('post');
+    if (postParam) {
+      setTimeout(() => openPostDetail(postParam), 300);
+    }
+  })();
 })();
 </script>
 </body>

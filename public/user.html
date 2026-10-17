@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>用户主页 · GreenBox</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<style>
+  body { background: var(--bg); }
+
+  /* ===== 用户主页包装 ===== */
+  .user-wrap {
+    max-width: 960px;
+    margin: 2rem auto 4rem;
+    padding: 0 1.2rem;
+  }
+
+  /* ===== 顶部卡片 ===== */
+  .user-hero {
+    position: relative;
+    border-radius: 24px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 55%, #14532d 100%);
+    padding: 3rem 2rem 2rem;
+    color: white;
+    box-shadow: 0 16px 48px rgba(22,163,74,0.25);
+    margin-bottom: 1.4rem;
+  }
+  .user-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%; right: -20%;
+    width: 70%; height: 100%;
+    background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .user-hero::after {
+    content: '';
+    position: absolute;
+    bottom: -50%; left: -20%;
+    width: 60%; height: 100%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .user-hero-inner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 24px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .user-avatar-big {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    border: 4px solid rgba(255,255,255,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 52px;
+    font-weight: 700;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+    position: relative;
+  }
+  .user-avatar-big img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .user-avatar-big .online-dot {
+    position: absolute;
+    bottom: 4px; right: 4px;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #94a3b8;
+    border: 3px solid white;
+    box-sizing: content-box;
+  }
+  .user-avatar-big .online-dot.online { background: #22c55e; }
+
+  .user-info {
+    flex: 1;
+    min-width: 200px;
+  }
+  .user-name-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .user-display-name {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+  .user-role-badge {
+    font-size: 0.75rem;
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    backdrop-filter: blur(4px);
+  }
+  .user-role-badge.admin { background: rgba(250,204,21,0.45); color: #fef9c3; }
+  .user-role-badge.user { background: rgba(255,255,255,0.22); color: #fff; }
+  .user-username {
+    font-size: 0.95rem;
+    opacity: 0.85;
+    margin-bottom: 10px;
+  }
+  .user-bio {
+    font-size: 0.95rem;
+    line-height: 1.65;
+    opacity: 0.95;
+    max-width: 560px;
+    word-break: break-word;
+    white-space: pre-wrap;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 12px;
+    border-left: 3px solid rgba(255,255,255,0.5);
+  }
+  .user-bio.empty {
+    opacity: 0.7;
+    font-style: italic;
+  }
+
+  /* ===== 统计 ===== */
+  .user-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 12px;
+    margin-bottom: 1.4rem;
+  }
+  .stat-box {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1rem 0.6rem;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    transition: all .2s;
+  }
+  .stat-box:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary);
+  }
+  .stat-box .num {
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: var(--primary);
+    line-height: 1.2;
+  }
+  .stat-box .lbl {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 3px;
+    font-weight: 500;
+  }
+
+  /* ===== 操作卡片 ===== */
+  .user-actions {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 1.2rem 1.4rem;
+    margin-bottom: 1.4rem;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.03);
+  }
+  .user-actions .hint {
+    flex: 1;
+    min-width: 100%;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .ua-btn {
+    padding: 9px 20px;
+    border-radius: 12px;
+    border: none;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .ua-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .ua-btn-primary {
+    background: linear-gradient(135deg, #16a34a, #15803d);
+    color: white;
+    box-shadow: 0 4px 12px rgba(22,163,74,0.3);
+  }
+  .ua-btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(22,163,74,0.4);
+  }
+  .ua-btn-outline {
+    background: transparent;
+    border: 1.5px solid var(--border);
+    color: var(--text);
+  }
+  .ua-btn-outline:hover:not(:disabled) {
+    background: var(--bg-alt);
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+  .ua-btn-danger {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+  .ua-btn-danger:hover:not(:disabled) {
+    background: #fecaca;
+  }
+  .ua-btn-success {
+    background: #dcfce7;
+    color: #15803d;
+  }
+  .ua-btn-success:hover:not(:disabled) {
+    background: #bbf7d0;
+  }
+  .ua-btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+  .ua-btn-ghost:hover:not(:disabled) { color: var(--text); background: var(--bg-alt); }
+
+  /* ===== 帖子列表区 ===== */
+  .user-posts-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 1.4rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.03);
+  }
+  .user-posts-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .user-posts-title .count {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--muted);
+    background: var(--bg-alt);
+    padding: 2px 10px;
+    border-radius: 20px;
+  }
+
+  .user-post-item {
+    display: flex;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: all .18s;
+    align-items: flex-start;
+  }
+  .user-post-item:last-child { border-bottom: none; }
+  .user-post-item:hover {
+    padding-left: 8px;
+    background: linear-gradient(90deg, var(--primary-light) 0%, transparent 100%);
+    border-radius: 8px;
+  }
+  .user-post-cover {
+    width: 64px;
+    height: 64px;
+    border-radius: 10px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--bg-alt);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    border: 1px solid var(--border);
+  }
+  .user-post-cover img { width: 100%; height: 100%; object-fit: cover; }
+  .user-post-body { flex: 1; min-width: 0; }
+  .user-post-title {
+    font-weight: 700;
+    font-size: 0.98rem;
+    color: var(--text);
+    margin-bottom: 4px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  .user-post-excerpt {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .user-post-meta {
+    display: flex;
+    gap: 14px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .user-post-meta .cat {
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    padding: 1px 9px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.72rem;
+  }
+
+  /* ===== 空 / 加载 / 错误状态 ===== */
+  .state-box {
+    text-align: center;
+    padding: 4rem 1.5rem;
+    color: var(--muted);
+  }
+  .state-box .icon {
+    font-size: 64px;
+    display: block;
+    margin-bottom: 16px;
+    opacity: 0.4;
+  }
+  .state-box .title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .state-box .desc { font-size: 0.92rem; line-height: 1.7; }
+  .state-box .btn-back {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 10px 24px;
+    background: var(--primary);
+    color: white;
+    border-radius: 30px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.92rem;
+    transition: all .2s;
+  }
+  .state-box .btn-back:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+  }
+
+  /* 骨架屏 */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-alt) 25%, var(--border) 37%, var(--bg-alt) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+    border-radius: 8px;
+  }
+  @keyframes shimmer {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  /* ===== Toast ===== */
+  .toast-msg {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(60px);
+    background: #0f172a;
+    color: white;
+    padding: 10px 22px;
+    border-radius: 24px;
+    font-size: 13.5px;
+    font-weight: 500;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+    opacity: 0;
+    transition: all .3s;
+    z-index: 10000;
+    pointer-events: none;
+    max-width: 90vw;
+    text-align: center;
+  }
+  .toast-msg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast-msg.success { background: #16a34a; }
+  .toast-msg.error { background: #dc2626; }
+
+  /* ===== 移动端 ===== */
+  @media (max-width: 640px) {
+    .user-wrap { margin: 1rem auto 3rem; padding: 0 0.8rem; }
+    .user-hero { padding: 2rem 1.2rem 1.4rem; border-radius: 18px; }
+    .user-hero-inner { gap: 14px; flex-direction: column; align-items: center; text-align: center; }
+    .user-avatar-big { width: 92px; height: 92px; font-size: 40px; }
+    .user-display-name { font-size: 1.5rem; }
+    .user-name-row { justify-content: center; }
+    .user-bio { max-width: 100%; font-size: 0.88rem; }
+    .user-stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat-box { padding: 0.8rem 0.4rem; }
+    .stat-box .num { font-size: 1.3rem; }
+    .stat-box .lbl { font-size: 0.7rem; }
+    .user-actions { padding: 1rem; gap: 8px; justify-content: center; }
+    .user-actions .ua-btn { flex: 1; justify-content: center; min-width: 120px; }
+    .user-posts-section { padding: 1rem; border-radius: 14px; }
+    .user-post-cover { width: 52px; height: 52px; }
+    .user-post-title { font-size: 0.92rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="container">
+    <a href="index.html" class="logo">🌱 GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="index.html">首页</a></li>
+      <li><a href="tools.html">工具</a></li>
+      <li><a href="changelog.html">更新日志</a></li>
+      <li><a href="forum.html">论坛</a></li>
+      <li><a href="messages.html">消息</a></li>
+      <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题">🌙</button>
+      <div class="user-area" id="userArea"></div>
+    </div>
+  </div>
+</nav>
+
+<main class="user-wrap">
+  <!-- 骨架 -->
+  <div id="skeleton" class="state-box" style="padding:2rem 0;">
+    <div class="skeleton" style="height:180px;border-radius:20px;margin-bottom:16px;"></div>
+    <div class="skeleton" style="height:80px;border-radius:16px;margin-bottom:16px;"></div>
+    <div class="skeleton" style="height:280px;border-radius:16px;"></div>
+  </div>
+
+  <!-- 主内容 -->
+  <div id="content" style="display:none;">
+    <section class="user-hero">
+      <div class="user-hero-inner">
+        <div class="user-avatar-big" id="userAvatar">
+          <span id="userAvatarText">?</span>
+          <div class="online-dot" id="onlineDot"></div>
+        </div>
+        <div class="user-info">
+          <div class="user-name-row">
+            <div class="user-display-name" id="userDisplayName">-</div>
+            <span class="user-role-badge user" id="userRoleBadge" style="display:none;"></span>
+          </div>
+          <div class="user-username" id="userUsername">@-</div>
+          <div class="user-bio empty" id="userBio">这个人很懒，什么都没写~</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="user-stats">
+      <div class="stat-box">
+        <div class="num" id="statPosts">0</div>
+        <div class="lbl">📝 帖子</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="statFriends">0</div>
+        <div class="lbl">👥 好友</div>
+      </div>
+      <div class="stat-box">
+        <div class="num" id="statDays">-</div>
+        <div class="lbl">📅 加入天数</div>
+      </div>
+    </section>
+
+    <section class="user-actions" id="userActions">
+      <!-- 按钮由 JS 动态生成 -->
+    </section>
+
+    <section class="user-posts-section">
+      <div class="user-posts-title">
+        <span>📝 TA 的帖子</span>
+        <span class="count" id="postsCount">0</span>
+      </div>
+      <div id="postsList"></div>
+    </section>
+  </div>
+
+  <!-- 错误状态 -->
+  <div id="errorBox" class="state-box" style="display:none;">
+    <span class="icon">😢</span>
+    <div class="title" id="errTitle">出错了</div>
+    <div class="desc" id="errDesc"></div>
+    <a href="/forum.html" class="btn-back">返回论坛</a>
+  </div>
+</main>
+
+<div class="toast-msg" id="toast"></div>
+
+<script src="script.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const token = localStorage.getItem('greenbox_token');
+  const params = new URLSearchParams(location.search);
+  const targetUsername = (params.get('u') || '').trim();
+  let me = null;
+  let profile = null;
+
+  const CAT_MAP = {
+    general: { name: '综合讨论', icon: '💬' },
+    tech: { name: '技术交流', icon: '💻' },
+    share: { name: '资源分享', icon: '🎁' },
+    help: { name: '求助问答', icon: '❓' },
+    show: { name: '作品展示', icon: '🎨' },
+    chat: { name: '灌水闲聊', icon: '☕' },
+  };
+
+  // ---------- 工具 ----------
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+  function timeAgo(ts) {
+    if (!ts) return '';
+    const d = Date.now() - ts;
+    if (d < 0) return '刚刚';
+    if (d < 60000) return '刚刚';
+    if (d < 3600000) return Math.floor(d/60000) + ' 分钟前';
+    if (d < 86400000) return Math.floor(d/3600000) + ' 小时前';
+    if (d < 2592000000) return Math.floor(d/86400000) + ' 天前';
+    const date = new Date(ts);
+    return date.getFullYear() + '-' + (date.getMonth()+1) + '-' + date.getDate();
+  }
+  function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast-msg show' + (type ? ' ' + type : '');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+  async function api(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    if (opts.body && typeof opts.body !== 'string') {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(opts.body);
+    }
+    const res = await fetch(url, opts);
+    let data = null;
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) {
+      const e = new Error((data && data.error) || ('HTTP ' + res.status));
+      e.status = res.status;
+      throw e;
+    }
+    return data;
+  }
+
+  // ---------- 顶部用户区 ----------
+  async function renderTopUser() {
+    const el = document.getElementById('userArea');
+    if (!token) {
+      el.innerHTML = `
+        <a href="/login.html?redirect=${encodeURIComponent(location.pathname + location.search)}" class="btn-primary-sm">登录</a>
+        <a href="/register.html" class="btn-outline">注册</a>`;
+      return;
+    }
+    try {
+      const data = await api('/api/verify');
+      if (!data || !data.valid) {
+        localStorage.removeItem('greenbox_token');
+        el.innerHTML = `
+          <a href="/login.html" class="btn-primary-sm">登录</a>
+          <a href="/register.html" class="btn-outline">注册</a>`;
+        return;
+      }
+      me = data;
+      const pn = document.getElementById('profile-nav');
+      if (pn) pn.style.display = 'list-item';
+      const av = data.hasAvatar
+        ? `<img class="user-avatar-mini" src="/api/user/avatar/${encodeURIComponent(data.username)}?t=${Date.now()}" onerror="this.style.display='none'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);">`
+        : '';
+      el.innerHTML = `
+        ${av}
+        <a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:0.92rem;">${esc(data.displayName || data.username)}</a>
+        <button onclick="logoutUserPage()" class="btn-outline" style="padding:0.3rem 0.9rem;font-size:0.82rem;">退出</button>`;
+    } catch (e) {
+      el.innerHTML = `
+        <a href="/login.html" class="btn-primary-sm">登录</a>
+        <a href="/register.html" class="btn-outline">注册</a>`;
+    }
+  }
+  window.logoutUserPage = function() {
+    if (token) fetch('/api/logout', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+    localStorage.removeItem('greenbox_token');
+    localStorage.removeItem('greenbox_user');
+    location.reload();
+  };
+
+  // ---------- 加载数据 ----------
+  async function load() {
+    if (!targetUsername) return showError('缺少用户参数', '请通过正确链接访问用户主页。');
+
+    try {
+      profile = await api('/api/social/user/' + encodeURIComponent(targetUsername));
+    } catch (e) {
+      if (e.status === 404) return showError('用户不存在', '该用户可能已被删除或从未存在。');
+      return showError('加载失败', e.message || '请稍后重试');
+    }
+
+    document.title = (profile.displayName || profile.username) + ' · GreenBox';
+    renderHero();
+    renderStats();
+    renderActions();
+    renderPosts();
+
+    document.getElementById('skeleton').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+  }
+
+  function renderHero() {
+    const p = profile;
+    const avEl = document.getElementById('userAvatar');
+    const initials = (p.username || '?').slice(0,1).toUpperCase();
+    if (p.hasAvatar) {
+      avEl.innerHTML = `
+        <img src="/api/user/avatar/${encodeURIComponent(p.username)}?t=${Date.now()}" onerror="this.parentNode.innerHTML='<span>${p.username==='admin'?'🛡️':initials}</span><div class=\\'online-dot\\' id=\\'onlineDot\\'></div>'">
+        <div class="online-dot ${p.online ? 'online' : ''}" id="onlineDot"></div>`;
+    } else {
+      avEl.innerHTML = `
+        <span>${p.username === 'admin' ? '🛡️' : initials}</span>
+        <div class="online-dot ${p.online ? 'online' : ''}" id="onlineDot"></div>`;
+    }
+
+    document.getElementById('userDisplayName').textContent = p.displayName || p.username;
+    document.getElementById('userUsername').textContent = '@' + p.username;
+
+    const roleBadge = document.getElementById('userRoleBadge');
+    if (p.role === 'admin') {
+      roleBadge.textContent = '👑 管理员';
+      roleBadge.className = 'user-role-badge admin';
+      roleBadge.style.display = 'inline-block';
+    } else {
+      roleBadge.textContent = '✨ 用户';
+      roleBadge.className = 'user-role-badge user';
+      roleBadge.style.display = 'inline-block';
+    }
+
+    const bioEl = document.getElementById('userBio');
+    if (p.bio) {
+      bioEl.textContent = p.bio;
+      bioEl.classList.remove('empty');
+    } else {
+      bioEl.textContent = '这个人很懒，什么都没写~';
+      bioEl.classList.add('empty');
+    }
+  }
+
+  function renderStats() {
+    document.getElementById('statPosts').textContent = (profile.stats && profile.stats.posts) || 0;
+    document.getElementById('statFriends').textContent = (profile.stats && profile.stats.friends) || 0;
+    let days = '-';
+    if (profile.createdAt) {
+      const d = Math.max(1, Math.floor((Date.now() - profile.createdAt) / 86400000));
+      days = d;
+    }
+    document.getElementById('statDays').textContent = days;
+  }
+
+  function renderActions() {
+    const el = document.getElementById('userActions');
+    const p = profile;
+    const rel = p.relation;
+    let html = '';
+
+    if (!me) {
+      html += `
+        <a class="ua-btn ua-btn-outline" href="/login.html?redirect=${encodeURIComponent(location.pathname + location.search)}">🔐 登录后操作</a>`;
+      el.innerHTML = html;
+      return;
+    }
+
+    if (rel === 'self') {
+      html += `<a class="ua-btn ua-btn-primary" href="/profile.html">✏️ 编辑我的资料</a>`;
+      html += `<a class="ua-btn ua-btn-outline" href="/messages.html">💬 打开消息中心</a>`;
+    } else {
+      // 私聊按钮
+      if (p.canDM) {
+        html += `<button class="ua-btn ua-btn-primary" data-action="dm">💬 发消息</button>`;
+      } else if (rel !== 'blocked_by_me' && rel !== 'blocked_me') {
+        html += `<button class="ua-btn ua-btn-outline" disabled title="对方已关闭陌生人消息">💬 对方不接受消息</button>`;
+      }
+
+      // 好友状态
+      if (rel === 'friend') {
+        html += `<button class="ua-btn ua-btn-success" disabled>✅ 已是好友</button>`;
+      } else if (rel === 'outgoing') {
+        html += `<button class="ua-btn ua-btn-outline" disabled>⏳ 申请待确认</button>`;
+      } else if (rel === 'incoming' && p.canAccept) {
+        html += `<button class="ua-btn ua-btn-primary" data-action="accept">✓ 接受好友申请</button>`;
+        html += `<button class="ua-btn ua-btn-outline" data-action="reject">✕ 拒绝</button>`;
+      } else if (rel === 'blocked_by_me') {
+        html += `<button class="ua-btn ua-btn-success" data-action="unblock">🔓 解除拉黑</button>`;
+      } else if (rel === 'blocked_me') {
+        html += `<button class="ua-btn ua-btn-outline" disabled>⚠️ 对方已将你拉黑</button>`;
+      } else if (rel === 'none' && p.canFriendRequest) {
+        html += `<button class="ua-btn ua-btn-primary" data-action="add">➕ 加为好友</button>`;
+      } else if (rel === 'none' && !p.canFriendRequest) {
+        html += `<button class="ua-btn ua-btn-outline" disabled>对方不接受好友申请</button>`;
+      }
+
+      // 拉黑 / 更多
+      if (rel === 'none' || rel === 'friend' || rel === 'outgoing') {
+        html += `<button class="ua-btn ua-btn-ghost" data-action="block" title="拉黑对方">🚫 拉黑</button>`;
+      }
+    }
+
+    // 举报按钮（普通用户）
+    if (rel !== 'self' && me && me.role !== 'admin') {
+      html += `<button class="ua-btn ua-btn-ghost" data-action="report" title="举报该用户">⚠️ 举报</button>`;
+    }
+
+    // 在线状态提示
+    if (rel !== 'self') {
+      const onlineText = p.online ? '🟢 当前在线' : '⚪ 当前离线';
+      const dmText = p.canDM ? '' : ' · 对方关闭了陌生人消息';
+      html += `<div class="hint">${onlineText}${dmText}</div>`;
+    }
+
+    el.innerHTML = html;
+    bindActions();
+  }
+
+  function bindActions() {
+    const el = document.getElementById('userActions');
+    el.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => handleAction(btn.dataset.action, btn));
+    });
+  }
+
+  async function handleAction(act, btn) {
+    const p = profile;
+    if (!p) return;
+    btn.disabled = true;
+
+    try {
+      if (act === 'dm') {
+        const res = await api('/api/social/dm/convos', { method: 'POST', body: { peer: p.username } });
+        location.href = '/messages.html' + (res && res.convId ? '?c=' + encodeURIComponent(res.convId) : '');
+        return;
+      }
+
+      if (act === 'add') {
+        const msg = prompt('附上一条验证消息（可选）：', '');
+        if (msg === null) { btn.disabled = false; return; }
+        const r = await api('/api/social/friends/request', {
+          method: 'POST',
+          body: { username: p.username, message: msg }
+        });
+        showToast(r.msg || '申请已发送', 'success');
+        await reload();
+        return;
+      }
+
+      if (act === 'accept') {
+        await api('/api/social/friends/accept', { method: 'POST', body: { from: p.username } });
+        showToast('✅ 已添加为好友', 'success');
+        await reload();
+        return;
+      }
+
+      if (act === 'reject') {
+        if (!confirm('确定拒绝对方的好友申请？')) { btn.disabled = false; return; }
+        await api('/api/social/friends/reject', { method: 'POST', body: { from: p.username } });
+        showToast('已拒绝申请', 'success');
+        await reload();
+        return;
+      }
+
+      if (act === 'block') {
+        if (!confirm('确定将 ' + p.username + ' 加入黑名单？对方将无法给你发消息。')) { btn.disabled = false; return; }
+        await api('/api/social/friends/block', { method: 'POST', body: { username: p.username, blocked: true } });
+        showToast('已拉黑', 'success');
+        await reload();
+        return;
+      }
+
+      if (act === 'unblock') {
+        await api('/api/social/friends/block', { method: 'POST', body: { username: p.username, blocked: false } });
+        showToast('已解除拉黑', 'success');
+        await reload();
+        return;
+      }
+
+      if (act === 'report') {
+        showToast('举报功能即将上线，敬请期待', 'success');
+        btn.disabled = false;
+        return;
+      }
+    } catch (e) {
+      showToast(e.message || '操作失败', 'error');
+      btn.disabled = false;
+    }
+  }
+
+  function renderPosts() {
+    const el = document.getElementById('postsList');
+    const posts = profile.recentPosts || [];
+    document.getElementById('postsCount').textContent = (profile.stats && profile.stats.posts) || 0;
+
+    if (!posts.length) {
+      el.innerHTML = `
+        <div style="text-align:center;padding:2.4rem 1rem;color:var(--muted);font-size:0.9rem;">
+          🌱 还没有发布过帖子
+        </div>`;
+      return;
+    }
+
+    el.innerHTML = posts.map(p => {
+      const cat = CAT_MAP[p.category] || { name: '其他', icon: '📌' };
+      const cover = p.coverImage
+        ? `<div class="user-post-cover"><img src="${p.coverImage}" alt=""></div>`
+        : `<div class="user-post-cover">${cat.icon}</div>`;
+      return `
+        <div class="user-post-item" data-post-id="${esc(p.id)}">
+          ${cover}
+          <div class="user-post-body">
+            <div class="user-post-title">${esc(p.title)}</div>
+            <div class="user-post-excerpt">${esc(p.excerpt || '')}</div>
+            <div class="user-post-meta">
+              <span class="cat">${cat.icon} ${cat.name}</span>
+              <span>👁️ ${p.views || 0}</span>
+              <span>💬 ${p.commentCount || 0}</span>
+              <span>❤️ ${p.likes || 0}</span>
+              <span>${timeAgo(p.createdAt)}</span>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    el.querySelectorAll('.user-post-item').forEach(item => {
+      item.addEventListener('click', () => {
+        location.href = '/forum.html?post=' + encodeURIComponent(item.dataset.postId);
+      });
+    });
+  }
+
+  function showError(title, desc) {
+    document.getElementById('skeleton').style.display = 'none';
+    document.getElementById('content').style.display = 'none';
+    document.getElementById('errorBox').style.display = 'block';
+    document.getElementById('errTitle').textContent = title;
+    document.getElementById('errDesc').textContent = desc;
+  }
+
+  async function reload() {
+    try {
+      profile = await api('/api/social/user/' + encodeURIComponent(targetUsername));
+      renderHero();
+      renderStats();
+      renderActions();
+      renderPosts();
+    } catch (e) { showToast(e.message, 'error'); }
+  }
+
+  // 启动
+  (async function init() {
+    await renderTopUser();
+    await load();
+  })();
+})();
+</script>
+</body>
+</html>
