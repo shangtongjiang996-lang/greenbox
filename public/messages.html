@@ -23,14 +23,27 @@
     flex-direction: column;
   }
 
-  /* ===== 强制约束图片，防止撑爆页面 ===== */
-  img {
-    max-width: 100%;
-    height: auto;
-  }
-
+  /* ===== 强制修复导航栏布局 ===== */
   .navbar .container {
-    flex-wrap: nowrap;
+    flex-wrap: nowrap !important;
+    height: 60px !important;
+    overflow: hidden;
+  }
+  .user-area {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .user-avatar-mini {
+    width: 28px !important;
+    height: 28px !important;
+    max-width: 28px !important;
+    max-height: 28px !important;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--primary, #16a34a);
+    flex-shrink: 0;
   }
 
   /* ===== 主布局 ===== */
@@ -874,7 +887,7 @@
 
     <div class="dm-side-foot">
       <button class="dm-icon-btn" id="dmSettingsBtn" title="隐私与好友设置">⚙️</button>
-      <button class="dm-icon-btn" id="dmRefreshBtn" title="刷新">刷新</button>
+      <button class="dm-icon-btn" id="dmRefreshBtn" title="刷新" style="width:auto;padding:0 10px;font-size:12px;">刷新</button>
       <span class="dm-status-dot" id="dmStatus">离线</span>
     </div>
   </aside>
@@ -1034,10 +1047,10 @@
     return (d.getMonth()+1) + '月' + d.getDate() + '日';
   }
   
-  // 头像生成
+  // 彻底修复的头像生成工具
   function avatarHtml(username, hasAvatar, opts) {
     const o = opts || {};
-    const cls = o.cls || '';
+    const cls = o.cls || 'dm-avatar'; // 允许外部传入类名，默认 dm-avatar
     const withDot = o.withDot !== false;
     const online = !!o.online;
     const initial = (username || '?').slice(0,1).toUpperCase();
@@ -1049,7 +1062,7 @@
       : showEmoji;
       
     const dot = withDot ? `<div class="dot ${online?'online':''}"></div>` : '';
-    return `<div class="dm-avatar ${cls}">${img}${dot}</div>`;
+    return `<div class="${cls}">${img}${dot}</div>`;
   }
 
   function showToast(msg, type) {
@@ -1666,16 +1679,10 @@
   function renderMessageHtml(m) {
     const isSelf = m.from === me.username;
     
-    // 【核心修复点】：区分是我发的还是对方发的，使用正确的头像信息
+    // 【彻底修复】：区分是我发的还是对方发的，使用正确的头像，并直接传入尺寸类名，避免替换失败
     const peer = isSelf ? me.username : (currentConvo ? currentConvo.peer : m.from);
     const hasAv = isSelf ? me.hasAvatar : (currentConvo ? currentConvo.peerAvatar : false);
-    
-    // 注意这里直接通过 CSS 限制了头像尺寸，不再使用简单的 replace 方法
-    let av = avatarHtml(peer, hasAv, { withDot: false });
-    av = av.replace('class="dm-avatar "', 'class="dm-msg-avatar"');
-    if (av.indexOf('dm-msg-avatar') === -1) { // 兜底替换
-      av = av.replace('class="dm-avatar"', 'class="dm-msg-avatar"');
-    }
+    const av = avatarHtml(peer, hasAv, { cls: 'dm-msg-avatar', withDot: false });
     
     const timeStr = fmtTime(m.time);
     const readTag = (isSelf && m.read) ? '<span class="read-tag">已读</span>' : '';
