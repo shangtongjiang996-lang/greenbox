@@ -175,7 +175,7 @@
     }
   });
 
-  // 4. 执行上传逻辑（核心）
+  // 4. 执行上传（后端中转）
   document.getElementById('startUploadBtn').addEventListener('click', async () => {
     const title = document.getElementById('resTitle').value.trim();
     const category = document.getElementById('resCategory').value;
@@ -188,29 +188,21 @@
     const progressFill = document.getElementById('progressFill');
     
     btn.disabled = true;
-    btn.textContent = '正在获取上传许可...';
+    btn.textContent = '正在上传至服务器...';
     progressBar.style.display = 'block';
 
+    // 使用 FormData 直接发给后端
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('title', title);
+    formData.append('category', category);
+
     try {
-      // 4.1 请求后端生成 B2 上传链接
-      const { uploadUrl, objectKey } = await api('/api/resource/upload-url', {
-        method: 'POST',
-        body: { 
-          filename: selectedFile.name, 
-          contentType: selectedFile.type || 'video/mp4', 
-          fileSize: selectedFile.size 
-        }
-      });
-
-      btn.textContent = '上传中...';
-
-      // 4.2 使用 XHR 直传 B2（为了获取精确的上传进度）
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('PUT', uploadUrl, true);
-        xhr.setRequestHeader('Content-Type', selectedFile.type || 'video/mp4');
+        xhr.open('POST', '/api/resource/upload', true);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + token);
         
-        // 监听进度
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const percent = (e.loaded / e.total) * 100;
@@ -220,17 +212,13 @@
         
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error('上传失败，请检查 B2 CORS 配置是否生效'));
+          else {
+            const msg = JSON.parse(xhr.responseText || '{}').error || '上传失败';
+            reject(new Error(msg));
+          }
         };
-        xhr.onerror = () => reject(new Error('网络错误或 CORS 拦截'));
-        xhr.send(selectedFile);
-      });
-
-      // 4.3 通知后端确认，扣除配额，生成播放链接
-      btn.textContent = '保存记录中...';
-      await api('/api/resource/confirm', {
-        method: 'POST',
-        body: { objectKey, fileSize: selectedFile.size, title, category }
+        xhr.onerror = () => reject(new Error('网络错误，无法连接到服务器'));
+        xhr.send(formData);
       });
 
       alert('🎉 上传成功！');
@@ -244,7 +232,6 @@
       progressFill.style.width = '0%';
       btn.style.display = 'none';
       
-      // 刷新配额和列表
       loadQuota();
       if (category === currentCategory) loadResources(currentCategory);
 
@@ -255,7 +242,6 @@
       btn.disabled = false;
     }
   });
-
   // 5. 加载对应分类的资源列表
   async function loadResources(category) {
     const listEl = document.getElementById('resList');
