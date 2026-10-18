@@ -410,20 +410,20 @@ app.get('/tool/:id', async (req, res) => {
 });
 
 // ======== 资源中心 (B2 上传与配额) ========
-// 后端代理接收文件并上传至 B2
-app.post('/api/resource/upload', upload.single('file'), async (req, res) => {
+// 生成预签名上传链接（前端直传 B2）
+app.post('/api/resource/upload-url', async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
 
-  const file = req.file;
-  const { title, category } = req.body;
-  
-  if (!file) return res.status(400).json({ error: '没有接收到文件' });
-  const fileSize = file.size;
-  
-  if (fileSize > MONTHLY_LIMIT) return res.status(400).json({ error: '单个文件不能超过 2GB' });
+  const { filename, contentType, fileSize } = req.body;
+  if (!filename || !contentType || !fileSize) {
+    return res.status(400).json({ error: '缺少文件信息' });
+  }
+  if (fileSize > MONTHLY_LIMIT) {
+    return res.status(400).json({ error: '单个文件不能超过 2GB' });
+  }
 
-  // 配额检查（管理员无限）
+  // 配额检查
   if (session.role !== 'admin') {
     const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
     const used = parseInt(await kvGet(quotaKey) || '0', 10);
@@ -432,60 +432,22 @@ app.post('/api/resource/upload', upload.single('file'), async (req, res) => {
     }
   }
 
-  const ext = file.originalname.split('.').pop() || 'bin';
+  const ext = filename.split('.').pop();
   const objectKey = `resources/${session.username}/${crypto.randomUUID()}.${ext}`;
 
-  try {
-    // 由 Node.js 后端直接把文件流推给 B2
-    const command = new PutObjectCommand({
-      Bucket: process.env.B2_BUCKET_NAME,
-      Key: objectKey,
-      ContentType: file.mimetype || 'application/octet-stream',
-      Body: file.buffer,
-    });
-    await b2Client.send(command);
-  } catch (err) {
-    console.error('B2 上传失败详细错误:', err);
-    return res.status(500).json({ error: 'B2 上传失败: ' + (err.message || '未知错误') });
-  }
-
-  // 扣除配额
-  if (session.role !== 'admin') {
-    const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
-    const used = parseInt(await kvGet(quotaKey) || '0', 10);
-    await kvPut(quotaKey, used + fileSize, { expirationTtl: 62 * 24 * 3600 });
-  }
-
-  // 生成播放链接（7天有效）
-  const getCommand = new GetObjectCommand({
+  // 生成直传命令
+  const command = new PutObjectCommand({
     Bucket: process.env.B2_BUCKET_NAME,
     Key: objectKey,
+    ContentType: contentType,
   });
-  const playUrl = await getSignedUrl(b2Client, getCommand, { expiresIn: 7 * 24 * 3600 });
 
-  // 保存记录
-  const resourceId = 'res_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
-  const record = {
-    id: resourceId,
-    objectKey,
-    playUrl,
-    title: String(title || '未命名资源').slice(0, 100),
-    category: ['movie', 'music', 'software', 'other'].includes(category) ? category : 'other',
-    fileSize,
-    uploader: session.username,
-    createdAt: Date.now(),
-  };
+  // 生成 B2 直传链接（1小时有效）
+  const uploadUrl = await getSignedUrl(b2Client, command, { expiresIn: 3600 });
   
-  await kvPut(`resource:${resourceId}`, record);
-
-  const indexKey = `resource_index:${record.category}`;
-  const index = (await kvGet(indexKey)) || [];
-  index.unshift(resourceId);
-  await kvPut(indexKey, index.slice(0, 500));
-
-  res.json({ success: true, resourceId, playUrl });
+  // 因为改用前端直传，原 /api/resource/confirm 接口依然保留，前端传完后再调它保存记录
+  res.json({ uploadUrl, objectKey });
 });
-
 app.post('/api/resource/confirm', async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
