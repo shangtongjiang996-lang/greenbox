@@ -27,7 +27,7 @@ app.use(express.static('public'));
 
 const upload = multer({ 
   storage: multer.memoryStorage(), 
-  limits: { fileSize: 2 * 1024 * 1024 } 
+  limits: { fileSize: 50 * 1024 * 1024 } // 限制最大 50MB，防止撑爆 Render 内存
 });
 
 // ======== 辅助函数 ========
@@ -154,8 +154,6 @@ const b2Client = new S3Client({
     accessKeyId: process.env.B2_KEY_ID,
     secretAccessKey: process.env.B2_APP_KEY,
   },
-  requestChecksumCalculation: "when_required",
-  responseChecksumValidation: "when_required",
 });
 
 const MONTHLY_LIMIT = 2 * 1024 * 1024 * 1024; // 2 GB
@@ -412,41 +410,80 @@ app.get('/tool/:id', async (req, res) => {
 });
 
 // ======== 资源中心 (B2 上传与配额) ========
-app.post('/api/resource/upload-url', async (req, res) => {
+// 后端代理接收文件并上传至 B2
+app.post('/api/resource/upload', upload.single('file'), async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
 
-  const { filename, contentType, fileSize } = req.body;
-  if (!filename || !contentType || !fileSize) {
-    return res.status(400).json({ error: '缺少文件信息' });
-  }
-  if (fileSize > MONTHLY_LIMIT) {
-    return res.status(400).json({ error: '单个文件不能超过 2GB' });
-  }
+  const file = req.file;
+  const { title, category } = req.body;
+  
+  if (!file) return res.status(400).json({ error: '没有接收到文件' });
+  const fileSize = file.size;
+  
+  if (fileSize > MONTHLY_LIMIT) return res.status(400).json({ error: '单个文件不能超过 2GB' });
 
   // 配额检查（管理员无限）
   if (session.role !== 'admin') {
     const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
     const used = parseInt(await kvGet(quotaKey) || '0', 10);
     if (used + fileSize > MONTHLY_LIMIT) {
-      return res.status(429).json({
-        error: `本月上传额度不足。已用 ${(used / 1024 / 1024).toFixed(1)} MB，剩余 ${((MONTHLY_LIMIT - used) / 1024 / 1024).toFixed(1)} MB`,
-      });
+      return res.status(429).json({ error: `本月额度不足，剩余 ${((MONTHLY_LIMIT - used) / 1024 / 1024).toFixed(1)} MB` });
     }
   }
 
-  const ext = filename.split('.').pop();
+  const ext = file.originalname.split('.').pop() || 'bin';
   const objectKey = `resources/${session.username}/${crypto.randomUUID()}.${ext}`;
 
-  const command = new PutObjectCommand({
+  try {
+    // 由 Node.js 后端直接把文件流推给 B2
+    const command = new PutObjectCommand({
+      Bucket: process.env.B2_BUCKET_NAME,
+      Key: objectKey,
+      ContentType: file.mimetype || 'application/octet-stream',
+      Body: file.buffer,
+    });
+    await b2Client.send(command);
+  } catch (err) {
+    console.error('B2 上传失败:', err);
+    return res.status(500).json({ error: 'B2 存储服务上传失败' });
+  }
+
+  // 扣除配额
+  if (session.role !== 'admin') {
+    const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
+    const used = parseInt(await kvGet(quotaKey) || '0', 10);
+    await kvPut(quotaKey, used + fileSize, { expirationTtl: 62 * 24 * 3600 });
+  }
+
+  // 生成播放链接（7天有效）
+  const getCommand = new GetObjectCommand({
     Bucket: process.env.B2_BUCKET_NAME,
     Key: objectKey,
-    ContentType: contentType,
-    // 注意：这里千万不要加 ChecksumAlgorithm，否则会导致 B2 报 502/CORS 错误
   });
+  const playUrl = await getSignedUrl(b2Client, getCommand, { expiresIn: 7 * 24 * 3600 });
 
-  const uploadUrl = await getSignedUrl(b2Client, command, { expiresIn: 3600 });
-  res.json({ uploadUrl, objectKey });
+  // 保存记录
+  const resourceId = 'res_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+  const record = {
+    id: resourceId,
+    objectKey,
+    playUrl,
+    title: String(title || '未命名资源').slice(0, 100),
+    category: ['movie', 'music', 'software', 'other'].includes(category) ? category : 'other',
+    fileSize,
+    uploader: session.username,
+    createdAt: Date.now(),
+  };
+  
+  await kvPut(`resource:${resourceId}`, record);
+
+  const indexKey = `resource_index:${record.category}`;
+  const index = (await kvGet(indexKey)) || [];
+  index.unshift(resourceId);
+  await kvPut(indexKey, index.slice(0, 500));
+
+  res.json({ success: true, resourceId, playUrl });
 });
 
 app.post('/api/resource/confirm', async (req, res) => {
