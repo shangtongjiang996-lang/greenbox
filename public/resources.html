@@ -175,7 +175,7 @@
     }
   });
 
-  // 4. 执行上传（后端中转）
+  // 4. 执行上传（前端直传 B2，避免服务器超时）
   document.getElementById('startUploadBtn').addEventListener('click', async () => {
     const title = document.getElementById('resTitle').value.trim();
     const category = document.getElementById('resCategory').value;
@@ -188,20 +188,23 @@
     const progressFill = document.getElementById('progressFill');
     
     btn.disabled = true;
-    btn.textContent = '正在上传至服务器...';
+    btn.textContent = '获取上传许可...';
     progressBar.style.display = 'block';
 
-    // 使用 FormData 直接发给后端
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('title', title);
-    formData.append('category', category);
-
     try {
+      // 4.1 从 Render 后端获取 B2 上传链接
+      const { uploadUrl, objectKey } = await api('/api/resource/upload-url', {
+        method: 'POST',
+        body: { filename: selectedFile.name, contentType: selectedFile.type || 'application/octet-stream', fileSize: selectedFile.size }
+      });
+
+      btn.textContent = '正在直传至 B2...';
+
+      // 4.2 浏览器直传 B2
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/resource/upload', true);
-        xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        xhr.open('PUT', uploadUrl, true);
+        xhr.setRequestHeader('Content-Type', selectedFile.type || 'application/octet-stream');
         
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
@@ -212,13 +215,17 @@
         
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else {
-            const msg = JSON.parse(xhr.responseText || '{}').error || '上传失败';
-            reject(new Error(msg));
-          }
+          else reject(new Error('B2 上传失败，请检查 CORS 配置是否生效'));
         };
-        xhr.onerror = () => reject(new Error('网络错误，无法连接到服务器'));
-        xhr.send(formData);
+        xhr.onerror = () => reject(new Error('网络错误或 CORS 拦截'));
+        xhr.send(selectedFile);
+      });
+
+      // 4.3 通知后端确认上传完成，保存记录
+      btn.textContent = '保存记录中...';
+      await api('/api/resource/confirm', {
+        method: 'POST',
+        body: { objectKey, fileSize: selectedFile.size, title, category }
       });
 
       alert('🎉 上传成功！');
