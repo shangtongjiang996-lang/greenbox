@@ -145,15 +145,17 @@ async function getPublicProfile(username) {
   };
 }
 
-// ===== B2 存储客户端初始化 =====
+// ===== B2 存储客户端初始化（修复 CORS 与崩溃问题） =====
 const b2Client = new S3Client({
   region: process.env.B2_REGION || 'us-east-005',
   endpoint: `https://${process.env.B2_ENDPOINT}`,
-  forcePathStyle: true,  // 必须加上这一行！B2 的 S3 兼容层要求路径风格
+  forcePathStyle: true,
   credentials: {
     accessKeyId: process.env.B2_KEY_ID,
     secretAccessKey: process.env.B2_APP_KEY,
   },
+  requestChecksumCalculation: "when_required",
+  responseChecksumValidation: "when_required",
 });
 
 const MONTHLY_LIMIT = 2 * 1024 * 1024 * 1024; // 2 GB
@@ -440,6 +442,7 @@ app.post('/api/resource/upload-url', async (req, res) => {
     Bucket: process.env.B2_BUCKET_NAME,
     Key: objectKey,
     ContentType: contentType,
+    // 注意：这里千万不要加 ChecksumAlgorithm，否则会导致 B2 报 502/CORS 错误
   });
 
   const uploadUrl = await getSignedUrl(b2Client, command, { expiresIn: 3600 });
