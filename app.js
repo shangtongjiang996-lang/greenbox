@@ -156,7 +156,7 @@ const b2Client = new S3Client({
   },
 });
 
-const MONTHLY_LIMIT = 2 * 1024 * 1024 * 1024; // 2 GB
+const MONTHLY_LIMIT = 2.5 * 1024 * 1024 * 1024; // 2.5 GB
 
 function getCurrentMonth() {
   const d = new Date();
