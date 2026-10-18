@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资源中心 · GreenBox</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<style>
+  .res-wrap { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+  .res-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  .res-card { background: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border); margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+  
+  /* 上传区 */
+  .upload-area { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; }
+  .upload-area input[type="text"], .upload-area select { padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-alt); color: var(--text); outline: none; }
+  .upload-area input[type="file"] { display: none; }
+  .btn-upload { background: #16a34a; color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; transition: background 0.2s; }
+  .btn-upload:hover { background: #15803d; }
+  .btn-upload:disabled { background: #9ca3af; cursor: not-allowed; }
+  
+  /* 进度条 */
+  .progress-bar { width: 100%; height: 10px; background: var(--bg-alt); border-radius: 5px; overflow: hidden; display: none; margin-top: 10px; }
+  .progress-fill { height: 100%; background: #16a34a; width: 0%; transition: width 0.2s; }
+
+  /* 分类Tab */
+  .cat-tabs { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; }
+  .cat-tab { padding: 8px 16px; border-radius: 20px; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; color: var(--muted); font-weight: 500; white-space: nowrap; transition: all 0.2s; }
+  .cat-tab.active { background: #16a34a; color: white; border-color: #16a34a; }
+
+  /* 资源列表 */
+  .res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+  .res-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .res-video { width: 100%; aspect-ratio: 16/9; background: #000; object-fit: contain; }
+  .res-info { padding: 12px; flex: 1; display: flex; flex-direction: column; }
+  .res-title { font-weight: bold; font-size: 16px; margin-bottom: 6px; color: var(--text); word-break: break-all; }
+  .res-meta { font-size: 12px; color: var(--muted); margin-top: auto; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="index.html" class="logo">🌱 GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="index.html">首页</a></li>
+      <li><a href="tools.html">工具</a></li>
+      <li><a href="changelog.html">更新日志</a></li>
+      <li><a href="forum.html">论坛</a></li>
+      <li><a href="messages.html">消息</a></li>
+      <li><a href="resources.html" class="active">资源中心</a></li>
+      <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题">🌙</button>
+      <div class="user-area" id="userArea"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="res-wrap">
+  <div class="res-header">
+    <h2>🎬 资源中心</h2>
+    <div id="quotaDisplay" style="font-size: 14px; font-weight: bold; color: #16a34a;">配额加载中...</div>
+  </div>
+
+  <!-- 上传面板（未登录时不显示） -->
+  <div class="res-card" id="uploadPanel" style="display: none;">
+    <h3 style="margin-bottom: 15px; font-size: 16px;">📤 上传新资源</h3>
+    <div class="upload-area">
+      <input type="text" id="resTitle" placeholder="资源标题 (如：阿凡达2)" style="flex: 1; min-width: 200px;">
+      <select id="resCategory">
+        <option value="movie">🎬 电影</option>
+        <option value="music">🎵 音乐</option>
+        <option value="software">💻 软件</option>
+        <option value="other">📁 其他</option>
+      </select>
+      <label class="btn-upload" id="selectFileBtn">
+        选择文件 <input type="file" id="resFile">
+      </label>
+    </div>
+    <div id="fileName" style="font-size: 12px; color: var(--muted); margin-bottom: 10px;"></div>
+    
+    <div class="progress-bar" id="progressBar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    
+    <button id="startUploadBtn" class="btn-upload" style="width: 100%; margin-top: 10px; display: none;">开始上传</button>
+  </div>
+
+  <!-- 分类 Tabs -->
+  <div class="cat-tabs">
+    <button class="cat-tab active" data-cat="movie">🎬 电影</button>
+    <button class="cat-tab" data-cat="music">🎵 音乐</button>
+    <button class="cat-tab" data-cat="software">💻 软件</button>
+    <button class="cat-tab" data-cat="other">📁 其他</button>
+  </div>
+
+  <!-- 资源列表区 -->
+  <div class="res-grid" id="resList">
+    <p style="text-align:center;width:100%;color:var(--muted);">加载中...</p>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('greenbox_token');
+  let selectedFile = null;
+  let currentCategory = 'movie';
+  let currentUser = null;
+
+  // 格式化文件大小
+  function formatSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // API 请求封装
+  async function api(url, opts = {}) {
+    opts.headers = opts.headers || {};
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    if (opts.body && !(opts.body instanceof FormData)) {
+      opts.headers['Content-Type'] = 'application/json';
+      if (typeof opts.body !== 'string') opts.body = JSON.stringify(opts.body);
+    }
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '请求失败');
+    return data;
+  }
+
+  // 1. 初始化检查登录状态
+  async function init() {
+    if (!token) return;
+    try {
+      const user = await api('/api/verify');
+      if (user.valid) {
+        currentUser = user;
+        document.getElementById('uploadPanel').style.display = 'block';
+        const pn = document.getElementById('profile-nav');
+        if (pn) pn.style.display = 'list-item';
+        
+        // 渲染导航栏用户信息
+        const ua = document.getElementById('userArea');
+        ua.innerHTML = `<a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:13.5px;">${user.displayName || user.username}</a>`;
+        
+        loadQuota();
+      }
+    } catch (e) {
+      console.warn('未登录或登录失效');
+    }
+  }
+
+  // 2. 加载配额显示
+  async function loadQuota() {
+    try {
+      const q = await api('/api/resource/quota');
+      const el = document.getElementById('quotaDisplay');
+      if (q.unlimited) {
+        el.textContent = '👑 管理员 · 无限配额';
+      } else {
+        el.textContent = `本月剩余：${formatSize(q.remaining)} / ${formatSize(q.limit)}`;
+      }
+    } catch (e) {
+      document.getElementById('quotaDisplay').textContent = '配额加载失败';
+    }
+  }
+
+  // 3. 选择文件
+  document.getElementById('resFile').addEventListener('change', (e) => {
+    selectedFile = e.target.files[0];
+    if (selectedFile) {
+      document.getElementById('fileName').textContent = `已选择: ${selectedFile.name} (${formatSize(selectedFile.size)})`;
+      document.getElementById('startUploadBtn').style.display = 'block';
+    }
+  });
+
+  // 4. 执行上传逻辑（核心）
+  document.getElementById('startUploadBtn').addEventListener('click', async () => {
+    const title = document.getElementById('resTitle').value.trim();
+    const category = document.getElementById('resCategory').value;
+    
+    if (!title) return alert('请输入资源标题');
+    if (!selectedFile) return alert('请选择文件');
+
+    const btn = document.getElementById('startUploadBtn');
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    
+    btn.disabled = true;
+    btn.textContent = '正在获取上传许可...';
+    progressBar.style.display = 'block';
+
+    try {
+      // 4.1 请求后端生成 B2 上传链接
+      const { uploadUrl, objectKey } = await api('/api/resource/upload-url', {
+        method: 'POST',
+        body: { 
+          filename: selectedFile.name, 
+          contentType: selectedFile.type || 'video/mp4', 
+          fileSize: selectedFile.size 
+        }
+      });
+
+      btn.textContent = '上传中...';
+
+      // 4.2 使用 XHR 直传 B2（为了获取精确的上传进度）
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl, true);
+        xhr.setRequestHeader('Content-Type', selectedFile.type || 'video/mp4');
+        
+        // 监听进度
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = (e.loaded / e.total) * 100;
+            progressFill.style.width = percent + '%';
+          }
+        };
+        
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error('上传失败，请检查 B2 CORS 配置是否生效'));
+        };
+        xhr.onerror = () => reject(new Error('网络错误或 CORS 拦截'));
+        xhr.send(selectedFile);
+      });
+
+      // 4.3 通知后端确认，扣除配额，生成播放链接
+      btn.textContent = '保存记录中...';
+      await api('/api/resource/confirm', {
+        method: 'POST',
+        body: { objectKey, fileSize: selectedFile.size, title, category }
+      });
+
+      alert('🎉 上传成功！');
+      
+      // 清空表单
+      document.getElementById('resTitle').value = '';
+      document.getElementById('resFile').value = '';
+      selectedFile = null;
+      document.getElementById('fileName').textContent = '';
+      progressBar.style.display = 'none';
+      progressFill.style.width = '0%';
+      btn.style.display = 'none';
+      
+      // 刷新配额和列表
+      loadQuota();
+      if (category === currentCategory) loadResources(currentCategory);
+
+    } catch (err) {
+      alert('❌ ' + err.message);
+      btn.textContent = '重新上传';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // 5. 加载对应分类的资源列表
+  async function loadResources(category) {
+    const listEl = document.getElementById('resList');
+    listEl.innerHTML = '<p style="text-align:center;width:100%;color:var(--muted);">加载中...</p>';
+    
+    try {
+      const data = await api(`/api/resource/list/${category}`);
+      if (!data || data.length === 0) {
+        listEl.innerHTML = '<p style="text-align:center;width:100%;color:var(--muted);">该分区暂无资源</p>';
+        return;
+      }
+      
+      listEl.innerHTML = data.map(item => `
+        <div class="res-item">
+          <video class="res-video" src="${item.playUrl}" controls preload="metadata"></video>
+          <div class="res-info">
+            <div class="res-title">${item.title}</div>
+            <div class="res-meta">
+              <span>👤 ${item.uploader}</span>
+              <span>${formatSize(item.fileSize)}</span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      listEl.innerHTML = '<p style="text-align:center;width:100%;color:#ef4444;">加载失败</p>';
+    }
+  }
+
+  // 6. 分类 Tab 切换
+  document.querySelectorAll('.cat-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentCategory = tab.dataset.cat;
+      loadResources(currentCategory);
+    });
+  });
+
+  // 启动
+  (async function() {
+    await init();
+    loadResources(currentCategory);
+  })();
+</script>
+</body>
+</html>
