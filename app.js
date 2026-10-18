@@ -149,6 +149,7 @@ async function getPublicProfile(username) {
 const b2Client = new S3Client({
   region: process.env.B2_REGION || 'us-east-005',
   endpoint: `https://${process.env.B2_ENDPOINT}`,
+  forcePathStyle: true,  // 必须加上这一行！B2 的 S3 兼容层要求路径风格
   credentials: {
     accessKeyId: process.env.B2_KEY_ID,
     secretAccessKey: process.env.B2_APP_KEY,
@@ -439,6 +440,7 @@ app.post('/api/resource/upload-url', async (req, res) => {
     Bucket: process.env.B2_BUCKET_NAME,
     Key: objectKey,
     ContentType: contentType,
+    ChecksumAlgorithm: "NONE",  // 必须加上这一行！防止 B2 校验失败
   });
 
   const uploadUrl = await getSignedUrl(b2Client, command, { expiresIn: 3600 });
