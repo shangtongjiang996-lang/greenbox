@@ -7,8 +7,13 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const crypto = require('crypto');
 const { kvGet, kvPut, kvDelete, kvList, kvIncr } = require('./redis');
-// ===== 新增：社交模块（私聊 / 好友 / 用户主页 / 论坛收藏转发） =====
+
+// ===== 社交模块 =====
 const { registerSocialRoutes, registerSocialSocket, emitToUser } = require('./social');
+
+// ===== B2 对象存储 SDK =====
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const app = express();
 const server = http.createServer(app);
@@ -140,8 +145,24 @@ async function getPublicProfile(username) {
   };
 }
 
-// ======== REST API ========
+// ===== B2 存储客户端初始化 =====
+const b2Client = new S3Client({
+  region: process.env.B2_REGION || 'us-east-005',
+  endpoint: `https://${process.env.B2_ENDPOINT}`,
+  credentials: {
+    accessKeyId: process.env.B2_KEY_ID,
+    secretAccessKey: process.env.B2_APP_KEY,
+  },
+});
 
+const MONTHLY_LIMIT = 2 * 1024 * 1024 * 1024; // 2 GB
+
+function getCurrentMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// ======== REST API ========
 app.post('/api/register', async (req, res) => {
   const ip = clientIp(req);
   if (!(await checkRateLimit(`rl:register:${ip}`, 5, 3600))) return res.status(429).json({ error: '请求过于频繁' });
@@ -253,16 +274,20 @@ app.post('/api/delete-account', async (req, res) => {
   await kvDelete(`notif_deleted:${session.username}`);
   await kvDelete(`chat_sessions:${session.username}`);
   await kvDelete(`chat_limit:${session.username}`);
-  // 社交数据一并清理
+  
   await kvDelete(`user_settings:${session.username}`);
   await kvDelete(`friends:${session.username}`);
   await kvDelete(`friend_requests:${session.username}`);
   await kvDelete(`friend_requests_out:${session.username}`);
   await kvDelete(`dm_convos:${session.username}`);
+  
+  try {
+    const { removeUserFromAllFriends } = require('./social');
+    await removeUserFromAllFriends(session.username);
+  } catch (e) {}
   res.json({ success: true });
 });
 // ======== 用户资料 API ========
-
 app.get('/api/user/profile/:username', async (req, res) => {
   const username = req.params.username;
   if (!username) return res.status(400).json({ error: '缺少用户名' });
@@ -348,7 +373,6 @@ app.delete('/api/user/avatar', async (req, res) => {
 });
 
 // ======== 站点数据 ========
-
 app.get('/api/data', async (req, res) => {
   const data = await kvGet('site_data') || { tools: [], changelogs: [] };
   res.json(data);
@@ -383,6 +407,118 @@ app.get('/tool/:id', async (req, res) => {
   if (!html) return res.status(404).send('工具不存在');
   res.set('Content-Type', 'text/html; charset=utf-8').send(html);
 });
+
+// ======== 资源中心 (B2 上传与配额) ========
+app.post('/api/resource/upload-url', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const { filename, contentType, fileSize } = req.body;
+  if (!filename || !contentType || !fileSize) {
+    return res.status(400).json({ error: '缺少文件信息' });
+  }
+  if (fileSize > MONTHLY_LIMIT) {
+    return res.status(400).json({ error: '单个文件不能超过 2GB' });
+  }
+
+  // 配额检查（管理员无限）
+  if (session.role !== 'admin') {
+    const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
+    const used = parseInt(await kvGet(quotaKey) || '0', 10);
+    if (used + fileSize > MONTHLY_LIMIT) {
+      return res.status(429).json({
+        error: `本月上传额度不足。已用 ${(used / 1024 / 1024).toFixed(1)} MB，剩余 ${((MONTHLY_LIMIT - used) / 1024 / 1024).toFixed(1)} MB`,
+      });
+    }
+  }
+
+  const ext = filename.split('.').pop();
+  const objectKey = `resources/${session.username}/${crypto.randomUUID()}.${ext}`;
+
+  const command = new PutObjectCommand({
+    Bucket: process.env.B2_BUCKET_NAME,
+    Key: objectKey,
+    ContentType: contentType,
+  });
+
+  const uploadUrl = await getSignedUrl(b2Client, command, { expiresIn: 3600 });
+  res.json({ uploadUrl, objectKey });
+});
+
+app.post('/api/resource/confirm', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const { objectKey, fileSize, title, category } = req.body;
+  if (!objectKey || !fileSize) return res.status(400).json({ error: '参数缺失' });
+
+  // 扣除配额
+  if (session.role !== 'admin') {
+    const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
+    const used = parseInt(await kvGet(quotaKey) || '0', 10);
+    await kvPut(quotaKey, used + fileSize, { expirationTtl: 62 * 24 * 3600 });
+  }
+
+  // 生成播放链接（7天有效）
+  const getCommand = new GetObjectCommand({
+    Bucket: process.env.B2_BUCKET_NAME,
+    Key: objectKey,
+  });
+  const playUrl = await getSignedUrl(b2Client, getCommand, { expiresIn: 7 * 24 * 3600 });
+
+  const resourceId = 'res_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+  const record = {
+    id: resourceId,
+    objectKey,
+    playUrl,
+    title: String(title || '未命名资源').slice(0, 100),
+    category: ['movie', 'music', 'software', 'other'].includes(category) ? category : 'other',
+    fileSize,
+    uploader: session.username,
+    createdAt: Date.now(),
+  };
+  
+  await kvPut(`resource:${resourceId}`, record);
+
+  const indexKey = `resource_index:${record.category}`;
+  const index = (await kvGet(indexKey)) || [];
+  index.unshift(resourceId);
+  await kvPut(indexKey, index.slice(0, 500));
+
+  res.json({ success: true, resourceId, playUrl });
+});
+
+app.get('/api/resource/quota', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  if (session.role === 'admin') {
+    return res.json({ unlimited: true, used: 0, limit: -1 });
+  }
+
+  const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
+  const used = parseInt(await kvGet(quotaKey) || '0', 10);
+  res.json({
+    unlimited: false,
+    used,
+    limit: MONTHLY_LIMIT,
+    remaining: Math.max(0, MONTHLY_LIMIT - used),
+  });
+});
+
+app.get('/api/resource/list/:category', async (req, res) => {
+  const category = req.params.category;
+  const indexKey = `resource_index:${category}`;
+  const ids = (await kvGet(indexKey)) || [];
+  
+  const list = [];
+  for (const id of ids.slice(0, 50)) {
+    const item = await kvGet(`resource:${id}`);
+    if (item) list.push(item);
+  }
+  res.json(list);
+});
+
 
 // ============================================================
 //  AI 聊天助手
@@ -1081,12 +1217,17 @@ app.delete('/api/admin/users', async (req, res) => {
   await kvDelete(`notif_deleted:${username}`);
   await kvDelete(`chat_sessions:${username}`);
   await kvDelete(`chat_limit:${username}`);
-  // 社交数据清理
+  
   await kvDelete(`user_settings:${username}`);
   await kvDelete(`friends:${username}`);
   await kvDelete(`friend_requests:${username}`);
   await kvDelete(`friend_requests_out:${username}`);
   await kvDelete(`dm_convos:${username}`);
+  
+  try {
+    const { removeUserFromAllFriends } = require('./social');
+    await removeUserFromAllFriends(username);
+  } catch (e) {}
   res.json({ success: true });
 });
 
@@ -1270,7 +1411,6 @@ app.post('/api/admin/view-password', async (req, res) => {
 // ============================================================
 //  论坛系统
 // ============================================================
-
 const FORUM_CATEGORIES = [
   { id: 'general', name: '综合讨论', icon: '💬' },
   { id: 'tech', name: '技术交流', icon: '💻' },
@@ -1298,7 +1438,6 @@ async function saveForumIndex(list) {
   await kvPut('forum_index', list.slice(0, 500));
 }
 
-// 给论坛列表项补充作者头像 / 角色（
 async function decoratePosts(items) {
   if (!Array.isArray(items) || items.length === 0) return items;
   let usersCache = {};
@@ -1365,7 +1504,6 @@ app.get('/api/forum/posts', async (req, res) => {
   const start = (pageNum - 1) * pageSize;
   const items = list.slice(start, start + pageSize);
 
-  // 补充头像 / 角色
   await decoratePosts(items);
 
   res.json({
@@ -1675,7 +1813,6 @@ app.get('/api/forum/score/:username', async (req, res) => {
   res.json({ username: req.params.username, score });
 });
 // ======== 五子棋 REST 辅助接口 ========
-
 app.post('/api/room/create', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -2004,8 +2141,6 @@ function checkWin(row, col, player, board) {
 
 // ============================================================
 //  挂载社交模块（私聊 / 好友 / 用户主页 / 论坛收藏转发）
-//  注意：必须在所有原有路由与 WebSocket 注册之后、
-//        server.listen 之前调用
 // ============================================================
 registerSocialRoutes(app, { checkAdmin, getSession, io });
 registerSocialSocket(io, { getSession });
