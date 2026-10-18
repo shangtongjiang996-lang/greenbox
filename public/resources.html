@@ -31,10 +31,19 @@
   /* 资源列表 */
   .res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
   .res-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-  .res-video { width: 100%; aspect-ratio: 16/9; background: #000; object-fit: contain; }
   .res-info { padding: 12px; flex: 1; display: flex; flex-direction: column; }
   .res-title { font-weight: bold; font-size: 16px; margin-bottom: 6px; color: var(--text); word-break: break-all; }
   .res-meta { font-size: 12px; color: var(--muted); margin-top: auto; display: flex; justify-content: space-between; }
+
+  /* 不同类型文件的预览样式 */
+  .res-video { width: 100%; aspect-ratio: 16/9; background: #000; object-fit: contain; }
+  .res-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; }
+  .res-preview-box { width: 100%; aspect-ratio: 16/9; background: var(--bg-alt); display: flex; flex-direction: column; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); gap: 8px; }
+  .res-preview-box .file-icon { font-size: 42px; }
+  .res-preview-box .file-ext { font-weight: bold; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+  .res-audio-wrap { width: 90%; margin: 0 auto; }
+  .download-btn { display: inline-block; padding: 6px 16px; background: var(--primary); color: #fff; text-decoration: none; border-radius: 8px; font-size: 12px; font-weight: bold; transition: background .2s; margin-top: 4px; }
+  .download-btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
 </style>
 </head>
 <body>
@@ -175,7 +184,7 @@
     }
   });
 
-  // 4. 执行上传（前端直传 B2，避免服务器超时）
+  // 4. 执行上传（前端直传 B2）
   document.getElementById('startUploadBtn').addEventListener('click', async () => {
     const title = document.getElementById('resTitle').value.trim();
     const category = document.getElementById('resCategory').value;
@@ -192,7 +201,7 @@
     progressBar.style.display = 'block';
 
     try {
-      // 4.1 从 Render 后端获取 B2 上传链接
+      // 4.1 从 Node 后端获取 B2 上传链接
       const { uploadUrl, objectKey } = await api('/api/resource/upload-url', {
         method: 'POST',
         body: { filename: selectedFile.name, contentType: selectedFile.type || 'application/octet-stream', fileSize: selectedFile.size }
@@ -200,7 +209,7 @@
 
       btn.textContent = '正在直传至 B2...';
 
-      // 4.2 浏览器直传 B2
+      // 4.2 浏览器直接 PUT 给 B2
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', uploadUrl, true);
@@ -221,7 +230,7 @@
         xhr.send(selectedFile);
       });
 
-      // 4.3 通知后端确认上传完成，保存记录
+      // 4.3 通知后端保存记录并扣除配额
       btn.textContent = '保存记录中...';
       await api('/api/resource/confirm', {
         method: 'POST',
@@ -249,7 +258,8 @@
       btn.disabled = false;
     }
   });
-  // 5. 加载对应分类的资源列表
+
+  // 5. 加载对应分类的资源列表（智能识别文件类型）
   async function loadResources(category) {
     const listEl = document.getElementById('resList');
     listEl.innerHTML = '<p style="text-align:center;width:100%;color:var(--muted);">加载中...</p>';
@@ -261,18 +271,45 @@
         return;
       }
       
-      listEl.innerHTML = data.map(item => `
-        <div class="res-item">
-          <video class="res-video" src="${item.playUrl}" controls preload="metadata"></video>
-          <div class="res-info">
-            <div class="res-title">${item.title}</div>
-            <div class="res-meta">
-              <span>👤 ${item.uploader}</span>
-              <span>${formatSize(item.fileSize)}</span>
+      listEl.innerHTML = data.map(item => {
+        // 获取文件后缀名
+        const ext = (item.objectKey || '').split('.').pop().toLowerCase();
+        let previewHtml = '';
+
+        // 根据后缀名渲染不同的预览图
+        if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
+          previewHtml = `<video class="res-video" src="${item.playUrl}" controls preload="metadata"></video>`;
+        } else if (['mp3', 'wav', 'flac', 'aac'].includes(ext)) {
+          previewHtml = `<div class="res-preview-box"><span class="file-icon">🎵</span><span class="file-ext">${ext} Audio</span><audio class="res-audio-wrap" src="${item.playUrl}" controls></audio></div>`;
+        } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
+          previewHtml = `<img class="res-img" src="${item.playUrl}" alt="${item.title}" loading="lazy">`;
+        } else {
+          // 其他未知文件（zip, pdf, exe 等）
+          let icon = '📄';
+          if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) icon = '📦';
+          else if (['pdf'].includes(ext)) icon = '📕';
+          else if (['exe', 'msi', 'apk'].includes(ext)) icon = '💻';
+          
+          previewHtml = `<div class="res-preview-box">
+              <span class="file-icon">${icon}</span>
+              <span class="file-ext">${ext} 文件</span>
+              <a class="download-btn" href="${item.playUrl}" target="_blank" download>⬇️ 点击下载</a>
+            </div>`;
+        }
+
+        return `
+          <div class="res-item">
+            ${previewHtml}
+            <div class="res-info">
+              <div class="res-title">${item.title}</div>
+              <div class="res-meta">
+                <span>👤 ${item.uploader}</span>
+                <span>${formatSize(item.fileSize)}</span>
+              </div>
             </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     } catch (e) {
       listEl.innerHTML = '<p style="text-align:center;width:100%;color:#ef4444;">加载失败</p>';
     }
