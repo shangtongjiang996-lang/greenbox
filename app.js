@@ -445,8 +445,8 @@ app.post('/api/resource/upload', upload.single('file'), async (req, res) => {
     });
     await b2Client.send(command);
   } catch (err) {
-    console.error('B2 上传失败:', err);
-    return res.status(500).json({ error: 'B2 存储服务上传失败' });
+    console.error('B2 上传失败详细错误:', err);
+    return res.status(500).json({ error: 'B2 上传失败: ' + (err.message || '未知错误') });
   }
 
   // 扣除配额
