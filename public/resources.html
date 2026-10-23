@@ -6,12 +6,12 @@
 <title>资源中心 · GreenBox</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <style>
   .res-wrap { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
   .res-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
   .res-card { background: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border); margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
   
-  /* 上传区 */
   .upload-area { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 15px; }
   .upload-area input[type="text"], .upload-area select { padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-alt); color: var(--text); outline: none; }
   .upload-area input[type="file"] { display: none; }
@@ -19,31 +19,48 @@
   .btn-upload:hover { background: #15803d; }
   .btn-upload:disabled { background: #9ca3af; cursor: not-allowed; }
   
-  /* 进度条 */
   .progress-bar { width: 100%; height: 10px; background: var(--bg-alt); border-radius: 5px; overflow: hidden; display: none; margin-top: 10px; }
   .progress-fill { height: 100%; background: #16a34a; width: 0%; transition: width 0.2s; }
 
-  /* 分类Tab */
   .cat-tabs { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; }
   .cat-tab { padding: 8px 16px; border-radius: 20px; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; color: var(--muted); font-weight: 500; white-space: nowrap; transition: all 0.2s; }
   .cat-tab.active { background: #16a34a; color: white; border-color: #16a34a; }
 
-  /* 资源列表 */
-  .res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
-  .res-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+  .res-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; position: relative; }
   .res-info { padding: 12px; flex: 1; display: flex; flex-direction: column; }
-  .res-title { font-weight: bold; font-size: 16px; margin-bottom: 6px; color: var(--text); word-break: break-all; }
+  .res-title { font-weight: bold; font-size: 16px; margin-bottom: 6px; color: var(--text); word-break: break-all; padding-right: 40px; }
   .res-meta { font-size: 12px; color: var(--muted); margin-top: auto; display: flex; justify-content: space-between; }
 
-  /* 不同类型文件的预览样式 */
-  .res-video { width: 100%; aspect-ratio: 16/9; background: #000; object-fit: contain; }
+  /* ===== 自定义播放器 ===== */
+  .player-wrapper { position: relative; background: #000; aspect-ratio: 16/9; overflow: hidden; width: 100%; }
+  .player-wrapper video { width: 100%; height: 100%; object-fit: contain; outline: none; }
+  .player-controls {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    display: flex; align-items: center; padding: 10px; gap: 10px;
+    opacity: 0; transition: opacity 0.3s; color: white; z-index: 10;
+  }
+  .player-wrapper:hover .player-controls, .player-wrapper.paused .player-controls { opacity: 1; }
+  .player-controls button { background: none; border: none; color: white; cursor: pointer; font-size: 16px; padding: 0 5px; display: flex; align-items: center; justify-content: center; }
+  .player-controls button:hover { color: #16a34a; }
+  .progress-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; cursor: pointer; position: relative; display: flex; align-items: center; margin: 0 10px; }
+  .progress-filled { height: 100%; background: #16a34a; border-radius: 2px; width: 0%; pointer-events: none; }
+  .progress-thumb { width: 12px; height: 12px; background: white; border-radius: 50%; position: absolute; left: 0%; transform: translateX(-50%); pointer-events: none; box-shadow: 0 0 4px rgba(0,0,0,0.5); }
+  .time-text { font-size: 12px; font-family: monospace; }
+  .vol-slider { width: 60px; cursor: pointer; accent-color: #16a34a; }
+  .speed-select { background: rgba(0,0,0,0.5); color: white; border: 1px solid #555; border-radius: 4px; padding: 2px 4px; font-size: 12px; cursor: pointer; outline: none; }
+
   .res-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; }
   .res-preview-box { width: 100%; aspect-ratio: 16/9; background: var(--bg-alt); display: flex; flex-direction: column; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); gap: 8px; }
   .res-preview-box .file-icon { font-size: 42px; }
   .res-preview-box .file-ext { font-weight: bold; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
-  .res-audio-wrap { width: 90%; margin: 0 auto; }
   .download-btn { display: inline-block; padding: 6px 16px; background: var(--primary); color: #fff; text-decoration: none; border-radius: 8px; font-size: 12px; font-weight: bold; transition: background .2s; margin-top: 4px; }
   .download-btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
+
+  .del-btn { position: absolute; top: 10px; right: 10px; background: rgba(239,68,68,0.9); color: white; border: none; border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; z-index: 20; display: none; }
+  .res-item:hover .del-btn { display: block; }
+  .del-btn:hover { background: #dc2626; }
 </style>
 </head>
 <body>
@@ -72,31 +89,39 @@
     <div id="quotaDisplay" style="font-size: 14px; font-weight: bold; color: #16a34a;">配额加载中...</div>
   </div>
 
-  <!-- 上传面板（未登录时不显示） -->
   <div class="res-card" id="uploadPanel" style="display: none;">
     <h3 style="margin-bottom: 15px; font-size: 16px;">📤 上传新资源</h3>
     <div class="upload-area">
-      <input type="text" id="resTitle" placeholder="资源标题 (如：阿凡达2)" style="flex: 1; min-width: 200px;">
+      <input type="text" id="resTitle" placeholder="资源标题" style="flex: 1; min-width: 200px;">
       <select id="resCategory">
         <option value="movie">🎬 电影</option>
         <option value="music">🎵 音乐</option>
         <option value="software">💻 软件</option>
         <option value="other">📁 其他</option>
       </select>
-      <label class="btn-upload" id="selectFileBtn">
-        选择文件 <input type="file" id="resFile">
-      </label>
+      <label class="btn-upload" id="selectFileBtn">选择文件 <input type="file" id="resFile"></label>
     </div>
     <div id="fileName" style="font-size: 12px; color: var(--muted); margin-bottom: 10px;"></div>
     
-    <div class="progress-bar" id="progressBar">
-      <div class="progress-fill" id="progressFill"></div>
-    </div>
-    
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
     <button id="startUploadBtn" class="btn-upload" style="width: 100%; margin-top: 10px; display: none;">开始上传</button>
+
+    <!-- 管理员专享：添加外链 -->
+    <div id="adminLinkPanel" style="display:none; margin-top:20px; border-top: 1px dashed var(--border); padding-top:15px;">
+      <h4 style="margin-bottom:10px; font-size:14px; color:#2563eb;">🔗 管理员：添加流媒体外链</h4>
+      <div class="upload-area">
+        <input type="text" id="linkUrl" placeholder="直链 (如 .mp4 或 .m3u8)" style="flex:2;">
+        <input type="text" id="linkTitle" placeholder="标题" style="flex:1;">
+        <select id="linkCategory">
+          <option value="movie">🎬 电影</option>
+          <option value="music">🎵 音乐</option>
+          <option value="other">📁 其他</option>
+        </select>
+        <button class="btn-upload" onclick="addLink(event)" style="background:#2563eb;">添加</button>
+      </div>
+    </div>
   </div>
 
-  <!-- 分类 Tabs -->
   <div class="cat-tabs">
     <button class="cat-tab active" data-cat="movie">🎬 电影</button>
     <button class="cat-tab" data-cat="music">🎵 音乐</button>
@@ -104,7 +129,6 @@
     <button class="cat-tab" data-cat="other">📁 其他</button>
   </div>
 
-  <!-- 资源列表区 -->
   <div class="res-grid" id="resList">
     <p style="text-align:center;width:100%;color:var(--muted);">加载中...</p>
   </div>
@@ -116,7 +140,6 @@
   let currentCategory = 'movie';
   let currentUser = null;
 
-  // 格式化文件大小
   function formatSize(bytes) {
     if (!bytes || bytes === 0) return '0 B';
     const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
@@ -124,7 +147,6 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  // API 请求封装
   async function api(url, opts = {}) {
     opts.headers = opts.headers || {};
     if (token) opts.headers['Authorization'] = 'Bearer ' + token;
@@ -138,7 +160,6 @@
     return data;
   }
 
-  // 1. 初始化检查登录状态
   async function init() {
     if (!token) return;
     try {
@@ -148,34 +169,27 @@
         document.getElementById('uploadPanel').style.display = 'block';
         const pn = document.getElementById('profile-nav');
         if (pn) pn.style.display = 'list-item';
+        document.getElementById('userArea').innerHTML = `<a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:13.5px;">${user.displayName || user.username}</a>`;
         
-        // 渲染导航栏用户信息
-        const ua = document.getElementById('userArea');
-        ua.innerHTML = `<a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:13.5px;">${user.displayName || user.username}</a>`;
-        
+        if (user.role === 'admin') {
+          document.getElementById('adminLinkPanel').style.display = 'block';
+        }
         loadQuota();
       }
-    } catch (e) {
-      console.warn('未登录或登录失效');
-    }
+    } catch (e) {}
   }
 
-  // 2. 加载配额显示
   async function loadQuota() {
     try {
       const q = await api('/api/resource/quota');
       const el = document.getElementById('quotaDisplay');
-      if (q.unlimited) {
-        el.textContent = '👑 管理员 · 无限配额';
-      } else {
-        el.textContent = `本月剩余：${formatSize(q.remaining)} / ${formatSize(q.limit)}`;
-      }
+      if (q.unlimited) el.textContent = '👑 管理员 · 无限配额';
+      else el.textContent = `剩余空间：${formatSize(q.remaining)} / 50 MB`;
     } catch (e) {
       document.getElementById('quotaDisplay').textContent = '配额加载失败';
     }
   }
 
-  // 3. 选择文件
   document.getElementById('resFile').addEventListener('change', (e) => {
     selectedFile = e.target.files[0];
     if (selectedFile) {
@@ -184,11 +198,9 @@
     }
   });
 
-  // 4. 执行上传（前端直传 B2）
   document.getElementById('startUploadBtn').addEventListener('click', async () => {
     const title = document.getElementById('resTitle').value.trim();
     const category = document.getElementById('resCategory').value;
-    
     if (!title) return alert('请输入资源标题');
     if (!selectedFile) return alert('请选择文件');
 
@@ -196,41 +208,27 @@
     const progressBar = document.getElementById('progressBar');
     const progressFill = document.getElementById('progressFill');
     
-    btn.disabled = true;
-    btn.textContent = '获取上传许可...';
-    progressBar.style.display = 'block';
+    btn.disabled = true; btn.textContent = '获取上传许可...'; progressBar.style.display = 'block';
 
     try {
-      // 4.1 从 Node 后端获取 B2 上传链接
       const { uploadUrl, objectKey } = await api('/api/resource/upload-url', {
         method: 'POST',
         body: { filename: selectedFile.name, contentType: selectedFile.type || 'application/octet-stream', fileSize: selectedFile.size }
       });
 
-      btn.textContent = '正在直传至 B2...';
-
-      // 4.2 浏览器直接 PUT 给 B2
+      btn.textContent = '正在上传...';
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('PUT', uploadUrl, true);
         xhr.setRequestHeader('Content-Type', selectedFile.type || 'application/octet-stream');
-        
         xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const percent = (e.loaded / e.total) * 100;
-            progressFill.style.width = percent + '%';
-          }
+          if (e.lengthComputable) progressFill.style.width = (e.loaded / e.total) * 100 + '%';
         };
-        
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error('B2 上传失败，请检查 CORS 配置是否生效'));
-        };
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error('B2 上传失败'));
         xhr.onerror = () => reject(new Error('网络错误或 CORS 拦截'));
         xhr.send(selectedFile);
       });
 
-      // 4.3 通知后端保存记录并扣除配额
       btn.textContent = '保存记录中...';
       await api('/api/resource/confirm', {
         method: 'POST',
@@ -238,28 +236,133 @@
       });
 
       alert('🎉 上传成功！');
-      
-      // 清空表单
       document.getElementById('resTitle').value = '';
       document.getElementById('resFile').value = '';
       selectedFile = null;
       document.getElementById('fileName').textContent = '';
-      progressBar.style.display = 'none';
-      progressFill.style.width = '0%';
-      btn.style.display = 'none';
+      progressBar.style.display = 'none'; progressFill.style.width = '0%'; btn.style.display = 'none';
       
       loadQuota();
       if (category === currentCategory) loadResources(currentCategory);
-
     } catch (err) {
       alert('❌ ' + err.message);
       btn.textContent = '重新上传';
-    } finally {
-      btn.disabled = false;
-    }
+    } finally { btn.disabled = false; }
   });
 
-  // 5. 加载对应分类的资源列表（智能识别文件类型）
+  window.addLink = async function(event) {
+    const url = document.getElementById('linkUrl').value.trim();
+    const title = document.getElementById('linkTitle').value.trim();
+    const category = document.getElementById('linkCategory').value;
+    if (!url || !title) return alert('请填写完整信息');
+    
+    const btn = event.target; btn.disabled = true; btn.textContent = '校验中...';
+    try {
+      await api('/api/admin/resource/link', { method: 'POST', body: { url, title, category } });
+      alert('✅ 外链添加成功！');
+      document.getElementById('linkUrl').value = ''; document.getElementById('linkTitle').value = '';
+      loadResources(currentCategory);
+    } catch (e) {
+      alert('❌ ' + e.message);
+    } finally { btn.disabled = false; btn.textContent = '添加'; }
+  };
+
+  window.deleteResource = async function(id) {
+    if (!confirm('确定要删除该资源吗？此操作不可恢复。')) return;
+    try {
+      await api('/api/resource/' + id, { method: 'DELETE' });
+      alert('✅ 已删除');
+      loadResources(currentCategory);
+      loadQuota();
+    } catch (e) { alert('❌ 删除失败: ' + e.message); }
+  };
+
+  // ===== 自定义播放器逻辑 =====
+  function formatTime(s) {
+    if (isNaN(s) || !isFinite(s)) return '00:00';
+    const m = Math.floor(s / 60), sec = Math.floor(s % 60), h = Math.floor(m / 60);
+    return (h > 0 ? h + ':' : '') + String(m % 60).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  }
+
+  function initPlayers() {
+    document.querySelectorAll('.player-wrapper').forEach(wrapper => {
+      if (wrapper.dataset.inited) return;
+      wrapper.dataset.inited = 'true';
+      
+      const video = wrapper.querySelector('video');
+      const playBtn = wrapper.querySelector('.play-btn');
+      const progressBar = wrapper.querySelector('.progress-bar');
+      const progressFill = wrapper.querySelector('.progress-filled');
+      const progressThumb = wrapper.querySelector('.progress-thumb');
+      const timeCurrent = wrapper.querySelector('.time-current');
+      const timeDuration = wrapper.querySelector('.time-duration');
+      const volBtn = wrapper.querySelector('.vol-btn');
+      const volSlider = wrapper.querySelector('.vol-slider');
+      const speedSel = wrapper.querySelector('.speed-select');
+      const fsBtn = wrapper.querySelector('.fullscreen-btn');
+
+      // 处理 HLS (m3u8)
+      const src = video.dataset.src;
+      if (src.includes('.m3u8') && window.Hls && Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(src);
+        hls.attachMedia(video);
+      } else {
+        video.src = src;
+      }
+
+      video.onplay = () => { playBtn.textContent = '⏸'; wrapper.classList.remove('paused'); };
+      video.onpause = () => { playBtn.textContent = '▶'; wrapper.classList.add('paused'); };
+      playBtn.onclick = () => video.paused ? video.play() : video.pause();
+
+      video.onloadedmetadata = () => timeDuration.textContent = formatTime(video.duration);
+      video.ontimeupdate = () => {
+        if (!wrapper.isSeeking) {
+          const p = (video.currentTime / video.duration) * 100;
+          progressFill.style.width = p + '%';
+          progressThumb.style.left = p + '%';
+        }
+        timeCurrent.textContent = formatTime(video.currentTime);
+      };
+
+      progressBar.onmousedown = (e) => {
+        wrapper.isSeeking = true;
+        const updateSeek = (ev) => {
+          const rect = progressBar.getBoundingClientRect();
+          let p = (ev.clientX - rect.left) / rect.width;
+          p = Math.max(0, Math.min(1, p));
+          progressFill.style.width = (p * 100) + '%';
+          progressThumb.style.left = (p * 100) + '%';
+          timeCurrent.textContent = formatTime(p * video.duration);
+        };
+        updateSeek(e);
+        const onMouseMove = (ev) => updateSeek(ev);
+        const onMouseUp = (ev) => {
+          const rect = progressBar.getBoundingClientRect();
+          let p = (ev.clientX - rect.left) / rect.width;
+          video.currentTime = Math.max(0, Math.min(1, p)) * video.duration;
+          wrapper.isSeeking = false;
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      };
+
+      volBtn.onclick = () => { video.muted = !video.muted; volBtn.textContent = video.muted ? '🔇' : '🔊'; };
+      volSlider.oninput = (e) => {
+        video.volume = e.target.value; video.muted = e.target.value == 0;
+        volBtn.textContent = video.muted ? '🔇' : (video.volume > 0.5 ? '🔊' : '🔉');
+      };
+
+      speedSel.onchange = (e) => video.playbackRate = parseFloat(e.target.value);
+      fsBtn.onclick = () => {
+        if (video.requestFullscreen) video.requestFullscreen();
+        else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+      };
+    });
+  }
+
   async function loadResources(category) {
     const listEl = document.getElementById('resList');
     listEl.innerHTML = '<p style="text-align:center;width:100%;color:var(--muted);">加载中...</p>';
@@ -272,50 +375,65 @@
       }
       
       listEl.innerHTML = data.map(item => {
-        // 获取文件后缀名
-        const ext = (item.objectKey || '').split('.').pop().toLowerCase();
+        const ext = (item.playUrl.split('?')[0] || '').split('.').pop().toLowerCase();
         let previewHtml = '';
+        const canDelete = currentUser && (currentUser.username === item.uploader || currentUser.role === 'admin');
 
-        // 根据后缀名渲染不同的预览图
-        if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
-          previewHtml = `<video class="res-video" src="${item.playUrl}" controls preload="metadata"></video>`;
-        } else if (['mp3', 'wav', 'flac', 'aac'].includes(ext)) {
-          previewHtml = `<div class="res-preview-box"><span class="file-icon">🎵</span><span class="file-ext">${ext} Audio</span><audio class="res-audio-wrap" src="${item.playUrl}" controls></audio></div>`;
+        if (item.type === 'link' || ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'm3u8'].includes(ext)) {
+          previewHtml = `
+            <div class="player-wrapper paused">
+              <video data-src="${item.playUrl}" preload="metadata"></video>
+              <div class="player-controls">
+                <button class="play-btn">▶</button>
+                <span class="time-current">00:00</span>
+                <div class="progress-bar">
+                  <div class="progress-filled"></div>
+                  <div class="progress-thumb"></div>
+                </div>
+                <span class="time-duration">00:00</span>
+                <button class="vol-btn">🔊</button>
+                <input type="range" class="vol-slider" min="0" max="1" step="0.05" value="1">
+                <select class="speed-select">
+                  <option value="0.5">0.5x</option>
+                  <option value="1" selected>1.0x</option>
+                  <option value="1.5">1.5x</option>
+                  <option value="2">2.0x</option>
+                </select>
+                <button class="fullscreen-btn">⛶</button>
+              </div>
+            </div>`;
+        } else if (['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext)) {
+          previewHtml = `<div class="res-preview-box"><span class="file-icon">🎵</span><span class="file-ext">${ext} Audio</span><audio src="${item.playUrl}" controls style="width:90%; margin-top:5px;"></audio></div>`;
         } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
           previewHtml = `<img class="res-img" src="${item.playUrl}" alt="${item.title}" loading="lazy">`;
         } else {
-          // 其他未知文件（zip, pdf, exe 等）
           let icon = '📄';
           if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) icon = '📦';
           else if (['pdf'].includes(ext)) icon = '📕';
-          else if (['exe', 'msi', 'apk'].includes(ext)) icon = '💻';
-          
-          previewHtml = `<div class="res-preview-box">
-              <span class="file-icon">${icon}</span>
-              <span class="file-ext">${ext} 文件</span>
-              <a class="download-btn" href="${item.playUrl}" target="_blank" download>⬇️ 点击下载</a>
-            </div>`;
+          previewHtml = `<div class="res-preview-box"><span class="file-icon">${icon}</span><span class="file-ext">${ext}</span><a class="download-btn" href="${item.playUrl}" target="_blank" download>⬇️ 点击下载</a></div>`;
         }
 
         return `
           <div class="res-item">
+            ${canDelete ? `<button class="del-btn" onclick="deleteResource('${item.id}')">🗑️ 删除</button>` : ''}
             ${previewHtml}
             <div class="res-info">
               <div class="res-title">${item.title}</div>
               <div class="res-meta">
                 <span>👤 ${item.uploader}</span>
-                <span>${formatSize(item.fileSize)}</span>
+                <span>${item.type === 'link' ? '🔗 外链' : formatSize(item.fileSize)}</span>
               </div>
             </div>
           </div>
         `;
       }).join('');
+      
+      initPlayers();
     } catch (e) {
       listEl.innerHTML = '<p style="text-align:center;width:100%;color:#ef4444;">加载失败</p>';
     }
   }
 
-  // 6. 分类 Tab 切换
   document.querySelectorAll('.cat-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
@@ -325,7 +443,6 @@
     });
   });
 
-  // 启动
   (async function() {
     await init();
     loadResources(currentCategory);
