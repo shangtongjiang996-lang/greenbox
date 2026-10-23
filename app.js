@@ -156,12 +156,7 @@ const b2Client = new S3Client({
   },
 });
 
-const MONTHLY_LIMIT = 2.5 * 1024 * 1024 * 1024; // 2.5 GB
-
-function getCurrentMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+const USER_TOTAL_LIMIT = 50 * 1024 * 1024; // 普通用户总容量 50 MB
 
 // ======== REST API ========
 app.post('/api/register', async (req, res) => {
@@ -416,36 +411,23 @@ app.post('/api/resource/upload-url', async (req, res) => {
   if (!session) return res.status(401).json({ error: '请先登录' });
 
   const { filename, contentType, fileSize } = req.body;
-  if (!filename || !contentType || !fileSize) {
-    return res.status(400).json({ error: '缺少文件信息' });
-  }
-  if (fileSize > MONTHLY_LIMIT) {
-    return res.status(400).json({ error: '单个文件不能超过 2GB' });
-  }
+  if (!filename || !contentType || !fileSize) return res.status(400).json({ error: '缺少文件信息' });
 
-  // 配额检查
+  // 配额检查（管理员无限，普通用户上限 50MB）
   if (session.role !== 'admin') {
-    const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
+    if (fileSize > USER_TOTAL_LIMIT) return res.status(400).json({ error: '单个文件不能超过 50MB' });
+    const quotaKey = `upload_quota:${session.username}`;
     const used = parseInt(await kvGet(quotaKey) || '0', 10);
-    if (used + fileSize > MONTHLY_LIMIT) {
-      return res.status(429).json({ error: `本月额度不足，剩余 ${((MONTHLY_LIMIT - used) / 1024 / 1024).toFixed(1)} MB` });
+    if (used + fileSize > USER_TOTAL_LIMIT) {
+      return res.status(429).json({ error: `空间不足。已用 ${(used / 1024 / 1024).toFixed(1)} MB，总容量 50 MB` });
     }
   }
 
   const ext = filename.split('.').pop();
   const objectKey = `resources/${session.username}/${crypto.randomUUID()}.${ext}`;
-
-  // 生成直传命令
-  const command = new PutObjectCommand({
-    Bucket: process.env.B2_BUCKET_NAME,
-    Key: objectKey,
-    ContentType: contentType,
-  });
-
-  // 生成 B2 直传链接（1小时有效）
+  const command = new PutObjectCommand({ Bucket: process.env.B2_BUCKET_NAME, Key: objectKey, ContentType: contentType });
   const uploadUrl = await getSignedUrl(b2Client, command, { expiresIn: 3600 });
   
-  // 因为改用前端直传，原 /api/resource/confirm 接口依然保留，前端传完后再调它保存记录
   res.json({ uploadUrl, objectKey });
 });
 app.post('/api/resource/confirm', async (req, res) => {
@@ -457,9 +439,9 @@ app.post('/api/resource/confirm', async (req, res) => {
 
   // 扣除配额
   if (session.role !== 'admin') {
-    const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
+    const quotaKey = `upload_quota:${session.username}`;
     const used = parseInt(await kvGet(quotaKey) || '0', 10);
-    await kvPut(quotaKey, used + fileSize, { expirationTtl: 62 * 24 * 3600 });
+    await kvPut(quotaKey, used + fileSize); // 取消了按月过期，改为永久计算
   }
 
   // 生成播放链接（7天有效）
@@ -478,6 +460,7 @@ app.post('/api/resource/confirm', async (req, res) => {
     category: ['movie', 'music', 'software', 'other'].includes(category) ? category : 'other',
     fileSize,
     uploader: session.username,
+    type: 'file', // 新增标记：文件类型
     createdAt: Date.now(),
   };
   
@@ -494,19 +477,76 @@ app.post('/api/resource/confirm', async (req, res) => {
 app.get('/api/resource/quota', async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
+  if (session.role === 'admin') return res.json({ unlimited: true, used: 0, limit: -1 });
 
-  if (session.role === 'admin') {
-    return res.json({ unlimited: true, used: 0, limit: -1 });
+  const quotaKey = `upload_quota:${session.username}`;
+  const used = parseInt(await kvGet(quotaKey) || '0', 10);
+  res.json({ unlimited: false, used, limit: USER_TOTAL_LIMIT, remaining: Math.max(0, USER_TOTAL_LIMIT - used) });
+});
+
+// 管理员添加外链
+app.post('/api/admin/resource/link', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session || session.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
+
+  const { url, title, category } = req.body;
+  if (!url || !title) return res.status(400).json({ error: '参数缺失' });
+
+  try {
+    const check = await fetch(url, { method: 'HEAD', timeout: 5000 });
+    if (!check.ok && check.status !== 206) throw new Error('无法访问链接');
+  } catch (e) {
+    return res.status(400).json({ error: '链接无效或校验失败：' + e.message });
   }
 
-  const quotaKey = `upload_quota:${session.username}:${getCurrentMonth()}`;
-  const used = parseInt(await kvGet(quotaKey) || '0', 10);
-  res.json({
-    unlimited: false,
-    used,
-    limit: MONTHLY_LIMIT,
-    remaining: Math.max(0, MONTHLY_LIMIT - used),
-  });
+  const resourceId = 'res_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+  const record = {
+    id: resourceId, objectKey: 'external', playUrl: url,
+    title: String(title).slice(0, 100),
+    category: ['movie', 'music', 'software', 'other'].includes(category) ? category : 'other',
+    fileSize: 0, uploader: session.username, type: 'link', createdAt: Date.now(),
+  };
+
+  await kvPut(`resource:${resourceId}`, record);
+  const indexKey = `resource_index:${record.category}`;
+  const index = (await kvGet(indexKey)) || [];
+  index.unshift(resourceId);
+  await kvPut(indexKey, index.slice(0, 500));
+
+  res.json({ success: true, resourceId });
+});
+
+// 删除资源（退空间，删B2文件）
+app.delete('/api/resource/:id', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+
+  const resourceId = req.params.id;
+  const record = await kvGet(`resource:${resourceId}`);
+  if (!record) return res.status(404).json({ error: '资源不存在' });
+
+  if (record.uploader !== session.username && session.role !== 'admin') return res.status(403).json({ error: '没有权限' });
+
+  if (record.type === 'file' && record.objectKey) {
+    try {
+      const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+      await b2Client.send(new DeleteObjectCommand({ Bucket: process.env.B2_BUCKET_NAME, Key: record.objectKey }));
+    } catch (e) { console.error('B2 删除失败:', e); }
+
+    // 退配额（仅普通用户）
+    if (session.role !== 'admin' && record.fileSize > 0) {
+      const quotaKey = `upload_quota:${record.uploader}`;
+      const used = parseInt(await kvGet(quotaKey) || '0', 10);
+      await kvPut(quotaKey, Math.max(0, used - record.fileSize));
+    }
+  }
+
+  await kvDelete(`resource:${resourceId}`);
+  const indexKey = `resource_index:${record.category}`;
+  const index = (await kvGet(indexKey)) || [];
+  await kvPut(indexKey, index.filter(id => id !== resourceId));
+
+  res.json({ success: true });
 });
 
 app.get('/api/resource/list/:category', async (req, res) => {
