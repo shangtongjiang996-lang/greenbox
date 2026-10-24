@@ -25,6 +25,21 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
+// ===== 自动处理无后缀的页面访问（如 /login 重定向到 /login.html） =====
+app.get(/^([^.]+)$/, (req, res, next) => {
+  const path = req.path;
+  // 如果是 API、Socket、或者工具路径，直接放行，不要拦截
+  if (path.startsWith('/api') || path.startsWith('/tool') || path.startsWith('/socket.io') || path === '/ping') {
+    return next();
+  }
+  // 如果只是根目录 '/'，交给后续处理
+  if (path === '/') {
+    return next();
+  }
+  // 自动重定向到对应的 .html 文件
+  res.redirect(`${path}.html`);
+});
+
 const upload = multer({ 
   storage: multer.memoryStorage(), 
   limits: { fileSize: 50 * 1024 * 1024 } // 限制最大 50MB，防止撑爆 Render 内存
