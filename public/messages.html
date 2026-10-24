@@ -23,12 +23,7 @@
     flex-direction: column;
   }
 
-  /* ===== 强制修复导航栏布局 ===== */
-  .navbar .container {
-    flex-wrap: nowrap !important;
-    height: 60px !important;
-    overflow: hidden;
-  }
+  /* 恢复全局导航栏一致 */
   .user-area {
     display: flex;
     align-items: center;
@@ -42,8 +37,10 @@
     max-height: 28px !important;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--primary, var(--primary));
+    border: 2px solid var(--primary);
     flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--primary-light); color: var(--primary-dark); font-weight: bold; font-size: 14px;
   }
 
   /* ===== 主布局 ===== */
@@ -997,6 +994,8 @@
 
 <div class="dm-toast" id="dmToast"></div>
 
+<!-- 引入公共 script.js 修复月亮按钮 -->
+<script src="script.js"></script>
 <script>
 (function () {
   'use strict';
@@ -1051,7 +1050,7 @@
   // 彻底修复的头像生成工具
   function avatarHtml(username, hasAvatar, opts) {
     const o = opts || {};
-    const cls = o.cls || 'dm-avatar'; // 允许外部传入类名，默认 dm-avatar
+    const cls = o.cls || 'dm-avatar';
     const withDot = o.withDot !== false;
     const online = !!o.online;
     const initial = (username || '?').slice(0,1).toUpperCase();
@@ -1133,7 +1132,8 @@
     if (!me) { el.innerHTML = ''; return; }
     const av = me.hasAvatar
       ? `<img class="user-avatar-mini" src="/api/user/avatar/${encodeURIComponent(me.username)}?t=${Date.now()}" onerror="this.style.display='none'">`
-      : '';
+      : `<div class="user-avatar-mini">${(me.username||'U').slice(0,1).toUpperCase()}</div>`;
+      
     el.innerHTML = `
       ${av}
       <a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:13.5px;">${esc(me.displayName || me.username)}</a>
@@ -1680,7 +1680,6 @@
   function renderMessageHtml(m) {
     const isSelf = m.from === me.username;
     
-    // 【彻底修复】：区分是我发的还是对方发的，使用正确的头像，并直接传入尺寸类名，避免替换失败
     const peer = isSelf ? me.username : (currentConvo ? currentConvo.peer : m.from);
     const hasAv = isSelf ? me.hasAvatar : (currentConvo ? currentConvo.peerAvatar : false);
     const av = avatarHtml(peer, hasAv, { cls: 'dm-msg-avatar', withDot: false });

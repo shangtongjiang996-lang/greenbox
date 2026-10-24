@@ -134,6 +134,8 @@
   </div>
 </div>
 
+<!-- 引入公共 script.js 修复月亮按钮 -->
+<script src="script.js"></script>
 <script>
   const token = localStorage.getItem('greenbox_token');
   let selectedFile = null;
@@ -169,7 +171,16 @@
         document.getElementById('uploadPanel').style.display = 'block';
         const pn = document.getElementById('profile-nav');
         if (pn) pn.style.display = 'list-item';
-        document.getElementById('userArea').innerHTML = `<a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:13.5px;">${user.displayName || user.username}</a>`;
+        
+        // 修复：添加默认头像
+        const av = user.hasAvatar 
+          ? `<img class="user-avatar-mini" src="/api/user/avatar/${encodeURIComponent(user.username)}?t=${Date.now()}" onerror="this.style.display='none'">`
+          : `<div class="user-avatar-mini" style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;">${(user.username||'U').slice(0,1).toUpperCase()}</div>`;
+
+        document.getElementById('userArea').innerHTML = `
+          ${av}
+          <a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:13.5px;">${user.displayName || user.username}</a>
+        `;
         
         if (user.role === 'admin') {
           document.getElementById('adminLinkPanel').style.display = 'block';
