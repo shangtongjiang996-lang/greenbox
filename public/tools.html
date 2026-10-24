@@ -12,7 +12,7 @@
     }
     .user-avatar-mini {
       width: 28px; height: 28px; border-radius: 50%;
-      object-fit: cover; border: 2px solid var(--primary, #16a34a);
+      object-fit: cover; border: 2px solid var(--primary, var(--primary));
       vertical-align: middle; margin-right: 6px;
     }
     .notif-btn {
@@ -87,7 +87,7 @@
     }
     .notif-header {
       padding: 16px 18px;
-      background: linear-gradient(135deg, #16a34a, #15803d);
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       color: white;
       display: flex;
       justify-content: space-between;
@@ -156,13 +156,13 @@
       border: 1px solid transparent;
     }
     .notif-item:hover {
-      border-color: var(--primary, #16a34a);
+      border-color: var(--primary, var(--primary));
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(22, 163, 74, 0.08);
     }
     .notif-item.unread {
       background: linear-gradient(135deg, rgba(22,163,74,0.08), rgba(22,163,74,0.03));
-      border-left: 3px solid var(--primary, #16a34a);
+      border-left: 3px solid var(--primary, var(--primary));
     }
     .notif-item-head {
       display: flex;
@@ -220,7 +220,7 @@
       vertical-align: middle;
     }
     .notif-item-type.info { background: #dbeafe; color: #1e40af; }
-    .notif-item-type.success { background: #dcfce7; color: #166534; }
+    .notif-item-type.success { background: var(--primary-light); color: #166534; }
     .notif-item-type.warning { background: #fef3c7; color: #854d0e; }
     .notif-item-type.error { background: #fee2e2; color: #b91c1c; }
     [data-theme="dark"] .notif-item.unread {

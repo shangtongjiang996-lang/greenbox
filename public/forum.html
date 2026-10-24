@@ -13,8 +13,8 @@
     --forum-border: var(--border, #e2e8f0);
     --forum-text: var(--text, #0f172a);
     --forum-muted: var(--muted, #64748b);
-    --forum-primary: #16a34a;
-    --forum-primary-light: #dcfce7;
+    --forum-primary: var(--primary);
+    --forum-primary-light: var(--primary-light);
   }
   body { background: var(--forum-bg); }
 
@@ -55,7 +55,7 @@
     height: 28px !important;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--primary, #16a34a);
+    border: 2px solid var(--primary, var(--primary));
     flex-shrink: 0;
   }
 
@@ -98,7 +98,7 @@
   }
   .cat-item:hover { background: var(--forum-bg); }
   .cat-item.active {
-    background: var(--forum-primary-light); color: #15803d; font-weight: 700;
+    background: var(--forum-primary-light); color: var(--primary-dark); font-weight: 700;
   }
   [data-theme="dark"] .cat-item.active {
     background: rgba(34,197,94,0.15); color: #4ade80;
@@ -156,7 +156,7 @@
 
   .new-post-btn {
     padding: 11px 22px;
-    background: linear-gradient(135deg, #16a34a, #15803d);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white; border: none; border-radius: 12px;
     font-family: inherit; font-size: 14px; font-weight: 700;
     cursor: pointer; box-shadow: 0 4px 14px rgba(22,163,74,0.35);
@@ -206,7 +206,7 @@
     border-radius: 50% !important;
     object-fit: cover !important;
     border: 2px solid var(--forum-border);
-    background: linear-gradient(135deg, #16a34a, #15803d);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white;
     display: flex; align-items: center; justify-content: center;
     font-size: 16px; font-weight: 700;
@@ -262,7 +262,7 @@
   .post-meta span { display: inline-flex; align-items: center; gap: 4px; }
   .post-cat {
     display: inline-flex; align-items: center; gap: 4px;
-    background: var(--forum-primary-light); color: #15803d;
+    background: var(--forum-primary-light); color: var(--primary-dark);
     padding: 2px 10px; border-radius: 10px;
     font-size: 11.5px; font-weight: 600;
   }
@@ -343,7 +343,7 @@
   .fab {
     position: fixed; right: 20px; bottom: 90px;
     width: 56px; height: 56px; border-radius: 50%;
-    background: linear-gradient(135deg, #16a34a, #15803d);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white; border: none; font-size: 26px;
     cursor: pointer; box-shadow: 0 8px 24px rgba(22,163,74,0.4);
     z-index: 100; display: none;
@@ -472,7 +472,7 @@
     border-radius: 50% !important;
     object-fit: cover !important;
     border: 2px solid var(--forum-primary-light);
-    background: linear-gradient(135deg, #16a34a, #15803d); color: white;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white;
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; font-weight: 700; cursor: pointer;
     transition: transform 0.15s;
@@ -540,7 +540,7 @@
   }
   .action-btn:hover { border-color: var(--forum-primary); color: var(--forum-primary); }
   .action-btn.active {
-    background: var(--forum-primary-light); color: #15803d;
+    background: var(--forum-primary-light); color: var(--primary-dark);
     border-color: var(--forum-primary); font-weight: 700;
   }
   .action-btn.faved {
@@ -567,7 +567,7 @@
     border-radius: 50% !important;
     object-fit: cover !important;
     flex-shrink: 0;
-    background: linear-gradient(135deg, #16a34a, #15803d); color: white;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white;
     display: flex; align-items: center; justify-content: center;
     font-size: 14px; font-weight: 700;
     border: 2px solid var(--forum-border);
@@ -631,7 +631,7 @@
   }
   .comment-send {
     align-self: flex-end; padding: 10px 22px;
-    background: linear-gradient(135deg, #16a34a, #15803d);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white; border: none; border-radius: 12px;
     font-family: inherit; font-size: 14px; font-weight: 700;
     cursor: pointer; transition: all 0.15s; height: 44px;
@@ -649,7 +649,7 @@
     pointer-events: none; max-width: 90vw; white-space: nowrap;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .toast.success { background: #16a34a; }
+  .toast.success { background: var(--primary); }
   .toast.error { background: #dc2626; }
 
   .ext-link-confirm { text-align: center; padding: 8px 4px; }

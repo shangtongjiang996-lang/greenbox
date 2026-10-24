@@ -26,7 +26,7 @@
     .profile-hero {
       position: relative;
       padding: 3rem 2rem 2rem;
-      background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
       color: white;
       text-align: center;
       overflow: hidden;
@@ -76,7 +76,7 @@
       height: 34px;
       border-radius: 50%;
       background: white;
-      color: #16a34a;
+      color: var(--primary);
       border: none;
       cursor: pointer;
       display: flex;
@@ -161,7 +161,7 @@
     .profile-field input:focus,
     .profile-field textarea:focus,
     .profile-field select:focus {
-      border-color: #16a34a;
+      border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
     }
     .profile-field .hint {
@@ -191,7 +191,7 @@
       text-decoration: none;
     }
     .pbtn-primary {
-      background: linear-gradient(135deg, #16a34a, #15803d);
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       color: white;
       box-shadow: 0 4px 12px rgba(22,163,74,0.3);
     }
@@ -241,7 +241,7 @@
     .stat-box .num {
       font-size: 1.5rem;
       font-weight: 800;
-      color: #16a34a;
+      color: var(--primary);
     }
     .stat-box .lbl {
       font-size: 0.78rem;
@@ -312,7 +312,7 @@
     .avatar-preview-box img {
       width: 100%; height: 100%; object-fit: cover;
     }
-    .avatar-preview-box.has-image { border-style: solid; border-color: #16a34a; }
+    .avatar-preview-box.has-image { border-style: solid; border-color: var(--primary); }
 
     .file-pick-btn {
       display: block;
@@ -329,8 +329,8 @@
       background: transparent;
     }
     .file-pick-btn:hover {
-      border-color: #16a34a;
-      color: #16a34a;
+      border-color: var(--primary);
+      color: var(--primary);
       background: rgba(22,163,74,0.04);
     }
     .avatar-modal-tips {
@@ -348,7 +348,7 @@
 
     .user-avatar-mini {
       width: 28px; height: 28px; border-radius: 50%;
-      object-fit: cover; border: 2px solid var(--primary, #16a34a);
+      object-fit: cover; border: 2px solid var(--primary, var(--primary));
       vertical-align: middle; margin-right: 6px;
     }
 

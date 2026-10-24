@@ -21,7 +21,7 @@
     position: relative;
     border-radius: 24px;
     overflow: hidden;
-    background: linear-gradient(135deg, #16a34a 0%, #15803d 55%, #14532d 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 55%, #14532d 100%);
     padding: 3rem 2rem 2rem;
     color: white;
     box-shadow: 0 16px 48px rgba(22,163,74,0.25);
@@ -201,7 +201,7 @@
   }
   .ua-btn:disabled { opacity: 0.6; cursor: not-allowed; }
   .ua-btn-primary {
-    background: linear-gradient(135deg, #16a34a, #15803d);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white;
     box-shadow: 0 4px 12px rgba(22,163,74,0.3);
   }
@@ -227,8 +227,8 @@
     background: #fecaca;
   }
   .ua-btn-success {
-    background: #dcfce7;
-    color: #15803d;
+    background: var(--primary-light);
+    color: var(--primary-dark);
   }
   .ua-btn-success:hover:not(:disabled) {
     background: #bbf7d0;
@@ -407,7 +407,7 @@
     text-align: center;
   }
   .toast-msg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .toast-msg.success { background: #16a34a; }
+  .toast-msg.success { background: var(--primary); }
   .toast-msg.error { background: #dc2626; }
 
   /* ===== 移动端 ===== */
