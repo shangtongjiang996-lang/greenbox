@@ -164,6 +164,24 @@ main h2 { font-size: 1.3rem; font-weight: 700; margin: 2.4rem 0 0.8rem; }
 .user-area .btn-danger-outline { background: transparent; border-color: var(--border); color: var(--danger); }
 .user-area .btn-danger-outline:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
 
+/* === 彻底防止头像撑爆布局 === */
+.user-avatar-mini {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  border: 2px solid var(--primary) !important;
+  vertical-align: middle;
+  margin-right: 6px;
+  flex-shrink: 0 !important; /* 防止被 flex 挤压 */
+  background: var(--bg-alt);
+  display: inline-block;
+}
+
 /* ===== 首页 Hero：点阵板背景，左对齐 ===== */
 .hero {
   position: relative;
