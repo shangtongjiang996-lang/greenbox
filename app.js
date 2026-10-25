@@ -24,7 +24,56 @@ const io = new Server(server, {
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
+// ===== SEO: 允许搜索引擎抓取所有页面 =====
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Allow: /
+# 屏蔽不需要收录的接口和后台
+Disallow: /api/
+Disallow: /admin.html
+Disallow: /tool/
 
+# 站点地图地址
+Sitemap: https://greenboxhweb.com/sitemap.xml
+`);
+});
+
+// ===== SEO: 站点地图 (Sitemap) =====
+app.get('/sitemap.xml', (req, res) => {
+  res.type('application/xml');
+  // 注意：这里需要把 greenboxweb.com 换成你实际的域名
+  const baseUrl = 'https://greenboxhweb.com';
+  const today = new Date().toISOString().split('T')[0];
+  
+  // 这里列举你希望被搜索引擎收录的静态页面
+  const staticPages = [
+    '',
+    '/tools.html',
+    '/changelog.html',
+    '/forum.html',
+    '/resources.html',
+    '/gomoku-online.html',
+    '/login.html',
+    '/register.html'
+  ];
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+
+  staticPages.forEach(page => {
+    xml += `
+  <url>
+    <loc>${baseUrl}${page}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${page === '' ? 'daily' : 'weekly'}</changefreq>
+    <priority>${page === '' ? '1.0' : '0.8'}</priority>
+  </url>`;
+  });
+
+  xml += `\n</urlset>`;
+  res.send(xml);
+});
 // ===== 自动处理无后缀的页面访问（如 /login 重定向到 /login.html） =====
 app.get(/^([^.]+)$/, (req, res, next) => {
   const path = req.path;
