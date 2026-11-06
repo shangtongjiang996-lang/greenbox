@@ -134,7 +134,7 @@
     <div class="input-group">
       <label>在线房间</label>
       <div id="roomList" class="room-list"></div>
-      <button onclick="refreshRoomList()" style="margin-top:8px;">🔄 刷新列表</button>
+      <button onclick="refreshRoomList()" style="margin-top:8px;">刷新列表</button>
     </div>
     <hr style="margin:20px 0;border-color:#e4cf9d;">
     <div class="btn-group">
@@ -157,7 +157,7 @@
       <div class="invite-link-box" id="inviteLinkBox">
         <label>邀请链接：</label>
         <input type="text" id="inviteLinkInput" readonly>
-        <button onclick="copyInviteLink()" style="margin-top:4px;">📋 复制链接</button>
+        <button onclick="copyInviteLink()" style="margin-top:4px;">复制链接</button>
       </div>
     </div>
     <div id="joinPanel" style="display:none;">
@@ -207,7 +207,7 @@
   <!-- 聊天小窗口 -->
   <div class="chat-widget" id="chatWidget">
     <button class="chat-toggle-btn" id="chatToggle">
-      💬
+     
       <span class="chat-unread-badge" id="chatUnreadBadge" style="display:none;">0</span>
     </button>
     <div class="chat-panel" id="chatPanel">
@@ -267,23 +267,23 @@ let messageInitialized = false;
 
 // -------- 登录检查 --------
 async function checkLogin() {
-  if (!token) { statusMsg.innerHTML = '⚠️ 请先登录 (<a href="/login.html">去登录</a>)'; return false; }
+  if (!token) { statusMsg.innerHTML = '请先登录 (<a href="/login.html">去登录</a>)'; return false; }
   try {
     const res = await fetch('/api/verify', { headers: { 'Authorization': `Bearer ${token}` } });
     const data = await res.json();
     if (data.valid) {
       username = data.username;
-      statusMsg.textContent = `✅ 已登录：${username}`;
+      statusMsg.textContent = `已登录：${username}`;
       refreshRoomList();
       setInterval(refreshRoomList, 15000);
       return true;
     } else {
       localStorage.removeItem('greenbox_token'); token = null;
-      statusMsg.innerHTML = '⚠️ 登录过期 (<a href="/login.html">重新登录</a>)';
+      statusMsg.innerHTML = '登录过期 (<a href="/login.html">重新登录</a>)';
       return false;
     }
   } catch (e) {
-    statusMsg.innerHTML = '⚠️ 网络错误，请刷新重试';
+    statusMsg.innerHTML = '网络错误，请刷新重试';
     return false;
   }
 }
@@ -291,7 +291,7 @@ async function checkLogin() {
 // -------- 房间列表 --------
 async function refreshRoomList() {
   const roomListEl = document.getElementById('roomList');
-  roomListEl.innerHTML = '<p style="color:#94a3b8;">⏳ 加载房间列表...</p>';
+  roomListEl.innerHTML = '<p style="color:#94a3b8;">加载房间列表...</p>';
   if (!token) {
     roomListEl.innerHTML = '<p style="color:#94a3b8;">请先登录后查看房间</p>';
     return;
@@ -301,22 +301,22 @@ async function refreshRoomList() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const rooms = await res.json();
     if (rooms.length === 0) {
-      roomListEl.innerHTML = '<p style="color:#94a3b8;">🏠 暂无在线房间，快去创建吧</p>';
+      roomListEl.innerHTML = '<p style="color:#94a3b8;">暂无在线房间，快去创建吧</p>';
       return;
     }
     roomListEl.innerHTML = rooms.map(r => `
       <div class="room-item">
         <div class="info">
-          <span>🏠 ${r.roomId}</span>
+          <span>房间 ${r.roomId}</span>
           <span>创建者：${r.creator}</span>
-          <span>👥 ${r.onlineCount}/${r.playerCount}</span>
-          ${r.hasPassword ? '<span>🔒</span>' : ''}
+          <span>${r.onlineCount}/${r.playerCount} 人</span>
+          ${r.hasPassword ? '<span>需密码</span>' : ''}
         </div>
         <button class="btn-join" onclick="quickJoin('${r.roomId}')">加入</button>
       </div>
     `).join('');
   } catch (err) {
-    roomListEl.innerHTML = `<p style="color:#ef4444;">❌ 加载失败：${err.message}</p>`;
+    roomListEl.innerHTML = `<p style="color:#ef4444;">加载失败：${err.message}</p>`;
     console.error('房间列表加载错误:', err);
   }
 }
@@ -428,11 +428,11 @@ function connectSocketAndJoin(roomId, password, inviteToken) {
 
   socket.on('disconnect', () => {
     console.log('WebSocket 断开');
-    statusMsg.textContent = '⚠️ 连接已断开，正在重连...';
+    statusMsg.textContent = '连接已断开，正在重连...';
   });
   socket.on('reconnect', () => {
     console.log('WebSocket 重连成功');
-    statusMsg.textContent = '✅ 已重新连接';
+    statusMsg.textContent = '已重新连接';
   });
 
   // 重新开始相关（修复循环弹窗）
@@ -508,7 +508,7 @@ function applyRoom(room) {
 
   if (room.gameOver) {
     const winner = room.winner;
-    showResult(winner === 0 ? '🤝 平局！' : (winner === myColor ? '🎉 你赢了！' : '😞 对方获胜'));
+    showResult(winner === 0 ? '平局！' : (winner === myColor ? '你赢了！' : '对方获胜'));
     const messages = room.messages || [];
     updateChatMessages(messages);
     drawBoard();
@@ -522,16 +522,16 @@ function applyRoom(room) {
   }
 
   if (room.status === 'waiting') {
-    statusMsg.textContent = '⏳ 等待对手加入...';
+    statusMsg.textContent = '等待对手加入...';
     statusText.textContent = '等待对手加入';
     statusDot.className = 'status-dot black';
   } else if (room.status === 'paused') {
     if (allOnline && !room.gameOver) {
-      statusMsg.textContent = '⏳ 恢复中...';
+      statusMsg.textContent = '恢复中...';
       statusText.textContent = '恢复中...';
       statusDot.className = 'status-dot thinking';
     } else {
-      statusMsg.textContent = otherOnline ? '⏸️ 游戏暂停' : '⚠️ 对方已离开';
+      statusMsg.textContent = otherOnline ? '游戏暂停' : '对方已离开';
       statusText.textContent = otherOnline ? '游戏暂停' : '等待对方重新上线';
       statusDot.className = 'status-dot thinking';
     }
@@ -542,7 +542,7 @@ function applyRoom(room) {
     statusDot.className = 'status-dot ' + (myTurn ? (myColor===1?'black':'white') : 'thinking');
     moveTag.textContent = '第 ' + (history.length + 1) + ' 手';
   } else {
-    statusMsg.textContent = '⏳ 状态未知...';
+    statusMsg.textContent = '状态未知...';
     statusText.textContent = '状态未知';
     statusDot.className = 'status-dot thinking';
   }

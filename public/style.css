@@ -433,3 +433,14 @@ footer { margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border);
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+/* ===== 图标（SVG 雪碧图 icons.svg，颜色跟随文字） ===== */
+.ico {
+  width: 1.15em;
+  height: 1.15em;
+  display: inline-block;
+  vertical-align: -0.2em;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.ico-lg { width: 1.6em; height: 1.6em; }
+#theme-toggle, .notif-btn { display: inline-flex; align-items: center; justify-content: center; }

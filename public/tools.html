@@ -247,7 +247,7 @@
 <body>
   <nav class="navbar">
     <div class="container">
-      <a href="index.html" class="logo">🌱 GreenBox</a>
+      <a href="index.html" class="logo">GreenBox</a>
       <ul class="nav-links">
         <li><a href="index.html">首页</a></li>
         <li><a href="tools.html" class="active">工具</a></li>
@@ -258,9 +258,9 @@
         <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
       </ul>
       <div class="navbar-right">
-        <button id="theme-toggle" aria-label="切换主题">🌙</button>
+        <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
         <button class="notif-btn" id="notifBtn" title="消息中心">
-          🔔
+          <svg class="ico" aria-hidden="true"><use href="/icons.svg#bell"/></svg>
           <span class="notif-badge" id="notifBadge"></span>
         </button>
         <div class="user-area" id="userArea"></div>
@@ -269,7 +269,7 @@
   </nav>
 
   <main class="container">
-    <h1>🧰 全部工具</h1>
+    <h1>全部工具</h1>
     <div id="all-tools" class="tool-grid"></div>
   </main>
 
@@ -284,7 +284,6 @@
   <div class="notif-panel" id="notifPanel">
     <div class="notif-header">
       <div class="notif-header-title">
-        <span>🔔</span>
         <span>消息中心</span>
       </div>
       <div class="notif-header-actions">
@@ -295,7 +294,6 @@
     </div>
     <div class="notif-list" id="notifList">
       <div class="notif-empty">
-        <span class="notif-empty-icon">📭</span>
         <div>加载中...</div>
       </div>
     </div>
@@ -314,13 +312,13 @@
         if (data.tools && data.tools.length > 0) {
           container.innerHTML = data.tools.map(t => `
             <a href="${t.url}" class="tool-card" target="_blank" rel="noopener">
-              <span class="tool-icon">${t.icon}</span>
+              <span class="tool-icon">${t.icon || '<svg class="ico" aria-hidden="true"><use href="/icons.svg#tool"/></svg>'}</span>
               <h3>${t.name}</h3>
               <p>${t.description}</p>
             </a>
           `).join('');
         } else {
-          container.innerHTML = '<p style="text-align:center;padding:3rem 0;color:#94a3b8;">暂无工具，请前往后台添加 ✨</p>';
+          container.innerHTML = '<p style="text-align:center;padding:3rem 0;color:#94a3b8;">暂无工具，请前往后台添加</p>';
         }
       } catch (err) {
         console.error('加载数据失败:', err);
@@ -433,10 +431,10 @@
       async function loadNotifications() {
         const token = localStorage.getItem('greenbox_token');
         if (!token) {
-          listEl.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">🔐</span><div>请先登录</div></div>';
+          listEl.innerHTML = '<div class="notif-empty"><div>请先登录</div></div>';
           return;
         }
-        listEl.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">📭</span><div>加载中...</div></div>';
+        listEl.innerHTML = '<div class="notif-empty"><div>加载中...</div></div>';
         try {
           const res = await fetch('/api/notifications', {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -445,13 +443,13 @@
           const list = await res.json();
           renderNotifications(list);
         } catch (e) {
-          listEl.innerHTML = `<div class="notif-empty"><span class="notif-empty-icon">⚠️</span><div>加载失败</div></div>`;
+          listEl.innerHTML = `<div class="notif-empty"><div>加载失败</div></div>`;
         }
       }
 
       function renderNotifications(list) {
         if (!list || list.length === 0) {
-          listEl.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">📭</span><div>暂无消息</div></div>';
+          listEl.innerHTML = '<div class="notif-empty"><div>暂无消息</div></div>';
           return;
         }
         const typeLabel = { info: '通知', success: '成功', warning: '注意', error: '警告' };

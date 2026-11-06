@@ -435,7 +435,7 @@
 
 <nav class="navbar">
   <div class="container">
-    <a href="index.html" class="logo">🌱 GreenBox</a>
+    <a href="index.html" class="logo">GreenBox</a>
     <ul class="nav-links">
       <li><a href="index.html">首页</a></li>
       <li><a href="tools.html">工具</a></li>
@@ -446,7 +446,7 @@
       <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
     </ul>
     <div class="navbar-right">
-      <button id="theme-toggle" aria-label="切换主题">🌙</button>
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
       <div class="user-area" id="userArea"></div>
     </div>
   </div>
@@ -482,15 +482,15 @@
     <section class="user-stats">
       <div class="stat-box">
         <div class="num" id="statPosts">0</div>
-        <div class="lbl">📝 帖子</div>
+        <div class="lbl">帖子</div>
       </div>
       <div class="stat-box">
         <div class="num" id="statFriends">0</div>
-        <div class="lbl">👥 好友</div>
+        <div class="lbl">好友</div>
       </div>
       <div class="stat-box">
         <div class="num" id="statDays">-</div>
-        <div class="lbl">📅 加入天数</div>
+        <div class="lbl">加入天数</div>
       </div>
     </section>
 
@@ -500,7 +500,7 @@
 
     <section class="user-posts-section">
       <div class="user-posts-title">
-        <span>📝 TA 的帖子</span>
+        <span>TA 的帖子</span>
         <span class="count" id="postsCount">0</span>
       </div>
       <div id="postsList"></div>
@@ -509,7 +509,7 @@
 
   <!-- 错误状态 -->
   <div id="errorBox" class="state-box" style="display:none;">
-    <span class="icon">😢</span>
+    
     <div class="title" id="errTitle">出错了</div>
     <div class="desc" id="errDesc"></div>
     <a href="/forum.html" class="btn-back">返回论坛</a>
@@ -530,12 +530,12 @@
   let profile = null;
 
   const CAT_MAP = {
-    general: { name: '综合讨论', icon: '💬' },
-    tech: { name: '技术交流', icon: '💻' },
-    share: { name: '资源分享', icon: '🎁' },
-    help: { name: '求助问答', icon: '❓' },
-    show: { name: '作品展示', icon: '🎨' },
-    chat: { name: '灌水闲聊', icon: '☕' },
+    general: { name: '综合讨论' },
+    tech: { name: '技术交流' },
+    share: { name: '资源分享' },
+    help: { name: '求助问答' },
+    show: { name: '作品展示' },
+    chat: { name: '灌水闲聊' },
   };
 
   // ---------- 工具 ----------
@@ -649,11 +649,11 @@
     const initials = (p.username || '?').slice(0,1).toUpperCase();
     if (p.hasAvatar) {
       avEl.innerHTML = `
-        <img src="/api/user/avatar/${encodeURIComponent(p.username)}?t=${Date.now()}" onerror="this.parentNode.innerHTML='<span>${p.username==='admin'?'🛡️':initials}</span><div class=\\'online-dot\\' id=\\'onlineDot\\'></div>'">
+        <img src="/api/user/avatar/${encodeURIComponent(p.username)}?t=${Date.now()}" onerror="this.parentNode.innerHTML='<span>${p.username==='admin'?'管':initials}</span><div class=\\'online-dot\\' id=\\'onlineDot\\'></div>'">
         <div class="online-dot ${p.online ? 'online' : ''}" id="onlineDot"></div>`;
     } else {
       avEl.innerHTML = `
-        <span>${p.username === 'admin' ? '🛡️' : initials}</span>
+        <span>${p.username === 'admin' ? '管' : initials}</span>
         <div class="online-dot ${p.online ? 'online' : ''}" id="onlineDot"></div>`;
     }
 
@@ -662,11 +662,11 @@
 
     const roleBadge = document.getElementById('userRoleBadge');
     if (p.role === 'admin') {
-      roleBadge.textContent = '👑 管理员';
+      roleBadge.textContent = '管理员';
       roleBadge.className = 'user-role-badge admin';
       roleBadge.style.display = 'inline-block';
     } else {
-      roleBadge.textContent = '✨ 用户';
+      roleBadge.textContent = '用户';
       roleBadge.className = 'user-role-badge user';
       roleBadge.style.display = 'inline-block';
     }
@@ -700,54 +700,54 @@
 
     if (!me) {
       html += `
-        <a class="ua-btn ua-btn-outline" href="/login.html?redirect=${encodeURIComponent(location.pathname + location.search)}">🔐 登录后操作</a>`;
+        <a class="ua-btn ua-btn-outline" href="/login.html?redirect=${encodeURIComponent(location.pathname + location.search)}">登录后操作</a>`;
       el.innerHTML = html;
       return;
     }
 
     if (rel === 'self') {
-      html += `<a class="ua-btn ua-btn-primary" href="/profile.html">✏️ 编辑我的资料</a>`;
-      html += `<a class="ua-btn ua-btn-outline" href="/messages.html">💬 打开消息中心</a>`;
+      html += `<a class="ua-btn ua-btn-primary" href="/profile.html">编辑我的资料</a>`;
+      html += `<a class="ua-btn ua-btn-outline" href="/messages.html">打开消息中心</a>`;
     } else {
       // 私聊按钮
       if (p.canDM) {
-        html += `<button class="ua-btn ua-btn-primary" data-action="dm">💬 发消息</button>`;
+        html += `<button class="ua-btn ua-btn-primary" data-action="dm">发消息</button>`;
       } else if (rel !== 'blocked_by_me' && rel !== 'blocked_me') {
-        html += `<button class="ua-btn ua-btn-outline" disabled title="对方已关闭陌生人消息">💬 对方不接受消息</button>`;
+        html += `<button class="ua-btn ua-btn-outline" disabled title="对方已关闭陌生人消息">对方不接受消息</button>`;
       }
 
       // 好友状态
       if (rel === 'friend') {
-        html += `<button class="ua-btn ua-btn-success" disabled>✅ 已是好友</button>`;
+        html += `<button class="ua-btn ua-btn-success" disabled>已是好友</button>`;
       } else if (rel === 'outgoing') {
-        html += `<button class="ua-btn ua-btn-outline" disabled>⏳ 申请待确认</button>`;
+        html += `<button class="ua-btn ua-btn-outline" disabled>申请待确认</button>`;
       } else if (rel === 'incoming' && p.canAccept) {
         html += `<button class="ua-btn ua-btn-primary" data-action="accept">✓ 接受好友申请</button>`;
         html += `<button class="ua-btn ua-btn-outline" data-action="reject">✕ 拒绝</button>`;
       } else if (rel === 'blocked_by_me') {
-        html += `<button class="ua-btn ua-btn-success" data-action="unblock">🔓 解除拉黑</button>`;
+        html += `<button class="ua-btn ua-btn-success" data-action="unblock">解除拉黑</button>`;
       } else if (rel === 'blocked_me') {
-        html += `<button class="ua-btn ua-btn-outline" disabled>⚠️ 对方已将你拉黑</button>`;
+        html += `<button class="ua-btn ua-btn-outline" disabled>对方已将你拉黑</button>`;
       } else if (rel === 'none' && p.canFriendRequest) {
-        html += `<button class="ua-btn ua-btn-primary" data-action="add">➕ 加为好友</button>`;
+        html += `<button class="ua-btn ua-btn-primary" data-action="add">加为好友</button>`;
       } else if (rel === 'none' && !p.canFriendRequest) {
         html += `<button class="ua-btn ua-btn-outline" disabled>对方不接受好友申请</button>`;
       }
 
       // 拉黑 / 更多
       if (rel === 'none' || rel === 'friend' || rel === 'outgoing') {
-        html += `<button class="ua-btn ua-btn-ghost" data-action="block" title="拉黑对方">🚫 拉黑</button>`;
+        html += `<button class="ua-btn ua-btn-ghost" data-action="block" title="拉黑对方">拉黑</button>`;
       }
     }
 
     // 举报按钮（普通用户）
     if (rel !== 'self' && me && me.role !== 'admin') {
-      html += `<button class="ua-btn ua-btn-ghost" data-action="report" title="举报该用户">⚠️ 举报</button>`;
+      html += `<button class="ua-btn ua-btn-ghost" data-action="report" title="举报该用户">举报</button>`;
     }
 
     // 在线状态提示
     if (rel !== 'self') {
-      const onlineText = p.online ? '🟢 当前在线' : '⚪ 当前离线';
+      const onlineText = p.online ? '当前在线' : '当前离线';
       const dmText = p.canDM ? '' : ' · 对方关闭了陌生人消息';
       html += `<div class="hint">${onlineText}${dmText}</div>`;
     }
@@ -789,7 +789,7 @@
 
       if (act === 'accept') {
         await api('/api/social/friends/accept', { method: 'POST', body: { from: p.username } });
-        showToast('✅ 已添加为好友', 'success');
+        showToast('已添加为好友', 'success');
         await reload();
         return;
       }
@@ -836,16 +836,16 @@
     if (!posts.length) {
       el.innerHTML = `
         <div style="text-align:center;padding:2.4rem 1rem;color:var(--muted);font-size:0.9rem;">
-          🌱 还没有发布过帖子
+          还没有发布过帖子
         </div>`;
       return;
     }
 
     el.innerHTML = posts.map(p => {
-      const cat = CAT_MAP[p.category] || { name: '其他', icon: '📌' };
+      const cat = CAT_MAP[p.category] || { name: '其他' };
       const cover = p.coverImage
         ? `<div class="user-post-cover"><img src="${p.coverImage}" alt=""></div>`
-        : `<div class="user-post-cover">${cat.icon}</div>`;
+        : `<div class="user-post-cover">${cat.name.slice(0, 2)}</div>`;
       return `
         <div class="user-post-item" data-post-id="${esc(p.id)}">
           ${cover}
@@ -853,10 +853,10 @@
             <div class="user-post-title">${esc(p.title)}</div>
             <div class="user-post-excerpt">${esc(p.excerpt || '')}</div>
             <div class="user-post-meta">
-              <span class="cat">${cat.icon} ${cat.name}</span>
-              <span>👁️ ${p.views || 0}</span>
-              <span>💬 ${p.commentCount || 0}</span>
-              <span>❤️ ${p.likes || 0}</span>
+              <span class="cat">${cat.name}</span>
+              <span>${p.views || 0} 浏览</span>
+              <span>${p.commentCount || 0} 评论</span>
+              <span>${p.likes || 0} 赞</span>
               <span>${timeAgo(p.createdAt)}</span>
             </div>
           </div>

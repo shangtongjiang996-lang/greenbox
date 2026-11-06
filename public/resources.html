@@ -72,7 +72,7 @@
 <body>
 <nav class="navbar">
   <div class="container">
-    <a href="index.html" class="logo">🌱 GreenBox</a>
+    <a href="index.html" class="logo">GreenBox</a>
     <ul class="nav-links">
       <li><a href="index.html">首页</a></li>
       <li><a href="tools.html">工具</a></li>
@@ -83,7 +83,7 @@
       <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
     </ul>
     <div class="navbar-right">
-      <button id="theme-toggle" aria-label="切换主题">🌙</button>
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
       <div class="user-area" id="userArea"></div>
     </div>
   </div>
@@ -91,19 +91,19 @@
 
 <div class="res-wrap">
   <div class="res-header">
-    <h2>🎬 资源中心</h2>
+    <h2>资源中心</h2>
     <div id="quotaDisplay" style="font-size: 14px; font-weight: bold; color: #16a34a;">配额加载中...</div>
   </div>
 
   <div class="res-card" id="uploadPanel" style="display: none;">
-    <h3 style="margin-bottom: 15px; font-size: 16px;">📤 上传新资源</h3>
+    <h3 style="margin-bottom: 15px; font-size: 16px;">上传新资源</h3>
     <div class="upload-area">
       <input type="text" id="resTitle" placeholder="资源标题" style="flex: 1; min-width: 200px;">
       <select id="resCategory">
-        <option value="movie">🎬 电影</option>
-        <option value="music">🎵 音乐</option>
-        <option value="software">💻 软件</option>
-        <option value="other">📁 其他</option>
+        <option value="movie">电影</option>
+        <option value="music">音乐</option>
+        <option value="software">软件</option>
+        <option value="other">其他</option>
       </select>
       <label class="btn-upload" id="selectFileBtn">选择文件 <input type="file" id="resFile"></label>
     </div>
@@ -114,14 +114,14 @@
 
     <!-- 管理员专享：添加外链 -->
     <div id="adminLinkPanel" style="display:none; margin-top:20px; border-top: 1px dashed var(--border); padding-top:15px;">
-      <h4 style="margin-bottom:10px; font-size:14px; color:#2563eb;">🔗 管理员：添加流媒体外链</h4>
+      <h4 style="margin-bottom:10px; font-size:14px; color:#2563eb;">管理员：添加流媒体外链</h4>
       <div class="upload-area">
         <input type="text" id="linkUrl" placeholder="直链 (如 .mp4 或 .m3u8)" style="flex:2;">
         <input type="text" id="linkTitle" placeholder="标题" style="flex:1;">
         <select id="linkCategory">
-          <option value="movie">🎬 电影</option>
-          <option value="music">🎵 音乐</option>
-          <option value="other">📁 其他</option>
+          <option value="movie">电影</option>
+          <option value="music">音乐</option>
+          <option value="other">其他</option>
         </select>
         <button class="btn-upload" onclick="addLink(event)" style="background:#2563eb;">添加</button>
       </div>
@@ -129,10 +129,10 @@
   </div>
 
   <div class="cat-tabs">
-    <button class="cat-tab active" data-cat="movie">🎬 电影</button>
-    <button class="cat-tab" data-cat="music">🎵 音乐</button>
-    <button class="cat-tab" data-cat="software">💻 软件</button>
-    <button class="cat-tab" data-cat="other">📁 其他</button>
+    <button class="cat-tab active" data-cat="movie">电影</button>
+    <button class="cat-tab" data-cat="music">音乐</button>
+    <button class="cat-tab" data-cat="software">软件</button>
+    <button class="cat-tab" data-cat="other">其他</button>
   </div>
 
   <div class="res-grid" id="resList">
@@ -200,7 +200,7 @@
     try {
       const q = await api('/api/resource/quota');
       const el = document.getElementById('quotaDisplay');
-      if (q.unlimited) el.textContent = '👑 管理员 · 无限配额';
+      if (q.unlimited) el.textContent = '管理员 · 无限配额';
       else el.textContent = `剩余空间：${formatSize(q.remaining)} / 50 MB`;
     } catch (e) {
       document.getElementById('quotaDisplay').textContent = '配额加载失败';
@@ -252,7 +252,7 @@
         body: { objectKey, fileSize: selectedFile.size, title, category }
       });
 
-      alert('🎉 上传成功！');
+      alert('上传成功！');
       document.getElementById('resTitle').value = '';
       document.getElementById('resFile').value = '';
       selectedFile = null;
@@ -262,7 +262,7 @@
       loadQuota();
       if (category === currentCategory) loadResources(currentCategory);
     } catch (err) {
-      alert('❌ ' + err.message);
+      alert('' + err.message);
       btn.textContent = '重新上传';
     } finally { btn.disabled = false; }
   });
@@ -276,11 +276,11 @@
     const btn = event.target; btn.disabled = true; btn.textContent = '校验中...';
     try {
       await api('/api/admin/resource/link', { method: 'POST', body: { url, title, category } });
-      alert('✅ 外链添加成功！');
+      alert('外链添加成功！');
       document.getElementById('linkUrl').value = ''; document.getElementById('linkTitle').value = '';
       loadResources(currentCategory);
     } catch (e) {
-      alert('❌ ' + e.message);
+      alert('' + e.message);
     } finally { btn.disabled = false; btn.textContent = '添加'; }
   };
 
@@ -288,10 +288,10 @@
     if (!confirm('确定要删除该资源吗？此操作不可恢复。')) return;
     try {
       await api('/api/resource/' + id, { method: 'DELETE' });
-      alert('✅ 已删除');
+      alert('已删除');
       loadResources(currentCategory);
       loadQuota();
-    } catch (e) { alert('❌ 删除失败: ' + e.message); }
+    } catch (e) { alert('删除失败: ' + e.message); }
   };
 
   // ===== 自定义播放器逻辑 =====
@@ -366,10 +366,10 @@
         document.addEventListener('mouseup', onMouseUp);
       };
 
-      volBtn.onclick = () => { video.muted = !video.muted; volBtn.textContent = video.muted ? '🔇' : '🔊'; };
+      volBtn.onclick = () => { video.muted = !video.muted; volBtn.textContent = video.muted ? '静音' : '音量'; };
       volSlider.oninput = (e) => {
         video.volume = e.target.value; video.muted = e.target.value == 0;
-        volBtn.textContent = video.muted ? '🔇' : (video.volume > 0.5 ? '🔊' : '🔉');
+        volBtn.textContent = video.muted ? '静音' : '音量';
       };
 
       speedSel.onchange = (e) => video.playbackRate = parseFloat(e.target.value);
@@ -408,7 +408,7 @@
                   <div class="progress-thumb"></div>
                 </div>
                 <span class="time-duration">00:00</span>
-                <button class="vol-btn">🔊</button>
+                <button class="vol-btn">音量</button>
                 <input type="range" class="vol-slider" min="0" max="1" step="0.05" value="1">
                 <select class="speed-select">
                   <option value="0.5">0.5x</option>
@@ -420,25 +420,22 @@
               </div>
             </div>`;
         } else if (['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext)) {
-          previewHtml = `<div class="res-preview-box"><span class="file-icon">🎵</span><span class="file-ext">${ext} Audio</span><audio src="${item.playUrl}" controls style="width:90%; margin-top:5px;"></audio></div>`;
+          previewHtml = `<div class="res-preview-box"><span class="file-ext">${ext} Audio</span><audio src="${item.playUrl}" controls style="width:90%; margin-top:5px;"></audio></div>`;
         } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
           previewHtml = `<img class="res-img" src="${item.playUrl}" alt="${item.title}" loading="lazy">`;
         } else {
-          let icon = '📄';
-          if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) icon = '📦';
-          else if (['pdf'].includes(ext)) icon = '📕';
-          previewHtml = `<div class="res-preview-box"><span class="file-icon">${icon}</span><span class="file-ext">${ext}</span><a class="download-btn" href="${item.playUrl}" target="_blank" download>⬇️ 点击下载</a></div>`;
+          previewHtml = `<div class="res-preview-box"><span class="file-ext">${ext}</span><a class="download-btn" href="${item.playUrl}" target="_blank" download>点击下载</a></div>`;
         }
 
         return `
           <div class="res-item">
-            ${canDelete ? `<button class="del-btn" onclick="deleteResource('${item.id}')">🗑️ 删除</button>` : ''}
+            ${canDelete ? `<button class="del-btn" onclick="deleteResource('${item.id}')">删除</button>` : ''}
             ${previewHtml}
             <div class="res-info">
               <div class="res-title">${item.title}</div>
               <div class="res-meta">
-                <span>👤 ${item.uploader}</span>
-                <span>${item.type === 'link' ? '🔗 外链' : formatSize(item.fileSize)}</span>
+                <span>${item.uploader}</span>
+                <span>${item.type === 'link' ? '外链' : formatSize(item.fileSize)}</span>
               </div>
             </div>
           </div>

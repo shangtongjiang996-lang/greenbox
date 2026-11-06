@@ -902,7 +902,7 @@
 
   <nav class="navbar">
     <div class="container">
-      <a href="index.html" class="logo">🌱 GreenBox</a>
+      <a href="index.html" class="logo">GreenBox</a>
       <ul class="nav-links">
         <li><a href="index.html" class="active">首页</a></li>
         <li><a href="tools.html">工具</a></li>
@@ -913,9 +913,9 @@
         <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
       </ul>
       <div class="navbar-right">
-        <button id="theme-toggle" aria-label="切换主题">🌙</button>
+        <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
         <button class="notif-btn" id="notifBtn" title="消息中心" style="display:none;">
-          🔔
+          <svg class="ico" aria-hidden="true"><use href="/icons.svg#bell"/></svg>
           <span class="notif-badge" id="notifBadge"></span>
         </button>
         <div class="user-area" id="userArea"></div>
@@ -923,28 +923,28 @@
     </div>
   </nav>
   <main class="container">
-    <!-- 👇 新增的隐藏 SEO 文本 👇 -->
+    <!-- 新增的隐藏 SEO 文本 -->
     <div style="display: none;">
       <h2>GreenBox 绿色盒子 - 综合在线工具与社区</h2>
       <p>GreenBox 是一个绿色、免费、综合性的在线工具箱。我们提供免费在线 PDF 格式转换器，支持将 PDF 转换为 PNG、JPG 和 WebP 高清图片。提供在线五子棋联机对战大厅，免安装即点即玩。拥有丰富的资源分享中心，提供电影、音乐、软件下载。拥有活跃的社区论坛、在线聊天以及智能 AI 助手。全部功能免费在线使用，无需下载。</p>
     </div>
-    <!-- 👆 新增的隐藏 SEO 文本结束 👆 -->
+    <!-- 新增的隐藏 SEO 文本结束 -->
     <section class="hero">
-      <h1>让工具更简单 🌟</h1>
+      <h1>让工具更简单</h1>
       <p>GreenBox 汇集了日常实用小工具，全部免费、在线即用。</p>
       <a href="tools.html" class="btn-primary">浏览所有工具 →</a>
     </section>
     <section class="featured-tools">
-      <h2>🔧 热门工具</h2>
+      <h2>热门工具</h2>
       <div id="tool-list" class="tool-grid"></div>
     </section>
     <section class="online-rooms">
-      <h2>🀄 在线五子棋房间</h2>
+      <h2>在线五子棋房间</h2>
       <div id="roomList" style="margin:1rem 0;"></div>
       <a href="/gomoku-online.html" class="btn-outline">进入五子棋大厅 →</a>
     </section>
     <section class="latest-changelog">
-      <h2>📝 最新更新</h2>
+      <h2>最新更新</h2>
       <div id="latest-changelog"></div>
       <a href="changelog.html" class="btn-outline">查看完整日志</a>
     </section>
@@ -959,7 +959,7 @@
   <!-- 密码升级弹窗 -->
   <div id="passwordModal" class="modal-overlay hidden">
     <div class="modal-card">
-      <div class="modal-title">🔐 安全升级</div>
+      <div class="modal-title">安全升级</div>
       <p style="color:#475569; margin-bottom:1rem;">为了增强账户安全性，请设置一个新密码。</p>
       <input type="password" id="newPassword" class="modal-input" placeholder="新密码（至少6位）" autocomplete="new-password">
       <input type="password" id="confirmPassword" class="modal-input" placeholder="确认密码">
@@ -979,7 +979,7 @@
       <div class="ai-update-glow-2"></div>
       <button class="ai-update-close" id="aiUpdateClose" title="关闭">✕</button>
       <div class="ai-update-icon">
-        🤖
+        <svg class="ico" aria-hidden="true"><use href="/icons.svg#spark"/></svg>
         <span class="ai-update-badge">NEW</span>
       </div>
       <h2 class="ai-update-title">
@@ -989,14 +989,14 @@
         GreenBox 现在有智能 AI 助手啦！可以帮你解答问题、编写代码、查找资料，随时随地提供帮助。
       </p>
       <ul class="ai-update-features">
-        <li><span class="feat-icon">💬</span> 实时对话</li>
-        <li><span class="feat-icon">🧠</span> 深度思考</li>
-        <li><span class="feat-icon">💾</span> 云端记录</li>
-        <li><span class="feat-icon">📚</span> 预设问题</li>
+        <li>实时对话</li>
+        <li>深度思考</li>
+        <li>云端记录</li>
+        <li>预设问题</li>
       </ul>
       <div class="ai-update-actions">
         <button class="ai-update-btn primary" id="aiUpdateOpen">
-          <span>✨</span> 立即体验
+          立即体验
         </button>
         <button class="ai-update-btn secondary" id="aiUpdateLater">
           稍后再说
@@ -1014,7 +1014,6 @@
   <div class="notif-panel" id="notifPanel">
     <div class="notif-header">
       <div class="notif-header-title">
-        <span>🔔</span>
         <span>消息中心</span>
       </div>
       <div class="notif-header-actions">
@@ -1025,14 +1024,13 @@
     </div>
     <div class="notif-list" id="notifList">
       <div class="notif-empty">
-        <span class="notif-empty-icon">📭</span>
         <div>加载中...</div>
       </div>
     </div>
   </div>
 
   <!-- AI 聊天助手 -->
-  <button class="ai-chat-btn" id="aiChatBtn" title="打开 AI 助手">💬</button>
+  <button class="ai-chat-btn" id="aiChatBtn" title="打开 AI 助手"><svg class="ico" aria-hidden="true"><use href="/icons.svg#chat"/></svg></button>
   <div class="ai-chat-panel" id="aiChatPanel">
     <aside class="ai-sidebar" id="aiSidebar">
       <div class="ai-sidebar-head">
@@ -1046,34 +1044,31 @@
       <div class="ai-chat-header">
         <div class="title-row">
           <button class="ai-hbtn" id="aiToggleSidebar" title="展开/收起会话列表">
-            <span class="icon">☰</span>
             <span class="label">会话</span>
           </button>
           <div class="title-block">
-            <div class="title">🤖 GreenBox AI</div>
+            <div class="title">GreenBox AI</div>
             <span class="quota" id="aiChatQuota">加载中...</span>
           </div>
         </div>
         <div class="actions">
           <button class="ai-hbtn" id="aiThinkBtn" title="开启后 AI 会先思考再回答">
-            <span class="icon">🧠</span>
+            <span class="icon"><svg class="ico" aria-hidden="true"><use href="/icons.svg#spark"/></svg></span>
             <span class="label">深度思考</span>
           </button>
           <button class="ai-hbtn" id="aiFullscreenBtn" title="全屏/退出全屏">
-            <span class="icon">⛶</span>
             <span class="label">全屏</span>
           </button>
           <button class="ai-hbtn" id="aiExportBtn" title="导出当前对话为 JSON">
-            <span class="icon">⬇️</span>
+            <span class="icon"><svg class="ico" aria-hidden="true"><use href="/icons.svg#download"/></svg></span>
             <span class="label">导出</span>
           </button>
           <button class="ai-hbtn" id="aiClearBtn" title="清空当前会话所有消息">
-            <span class="icon">🗑️</span>
+            <span class="icon"><svg class="ico" aria-hidden="true"><use href="/icons.svg#trash"/></svg></span>
             <span class="label">清空</span>
           </button>
           <button class="ai-hbtn" id="aiChatClose" title="关闭聊天窗口">
-            <span class="icon">✕</span>
-          </button>
+            </button>
         </div>
       </div>
 
@@ -1183,7 +1178,7 @@
         const tools = (data.tools || []).slice(0, 3);
         toolContainer.innerHTML = tools.map(t => `
           <a href="${t.url}" class="tool-card" target="_blank" rel="noopener">
-            <span class="tool-icon">${t.icon}</span>
+            <span class="tool-icon">${t.icon || '<svg class="ico" aria-hidden="true"><use href="/icons.svg#tool"/></svg>'}</span>
             <h3>${t.name}</h3>
             <p>${t.description}</p>
           </a>
@@ -1206,20 +1201,20 @@
 
     async function loadRoomList() {
       const container = document.getElementById('roomList');
-      container.innerHTML = '<p style="color:#94a3b8;">⏳ 加载中...</p>';
+      container.innerHTML = '<p style="color:#94a3b8;">加载中...</p>';
       try {
         const res = await fetch('/api/rooms');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const rooms = await res.json();
-        if (rooms.length === 0) { container.innerHTML = '<p style="color:#94a3b8;">🏠 暂无在线房间</p>'; return; }
+        if (rooms.length === 0) { container.innerHTML = '<p style="color:#94a3b8;">暂无在线房间</p>'; return; }
         const list = rooms.slice(0, 5);
         container.innerHTML = list.map(r => `
           <div class="room-item">
             <div class="info">
-              <span>🏠 ${r.roomId}</span>
+              <span>房间 ${r.roomId}</span>
               <span>创建者：${r.creator}</span>
-              <span>👥 ${r.onlineCount}/${r.playerCount}</span>
-              ${r.hasPassword ? '<span>🔒</span>' : ''}
+              <span>${r.onlineCount}/${r.playerCount} 人</span>
+              ${r.hasPassword ? '<span>需密码</span>' : ''}
             </div>
             <a href="/gomoku-online.html" class="btn-primary-sm">加入</a>
           </div>
@@ -1227,7 +1222,7 @@
         if (rooms.length > 5) {
           container.innerHTML += `<p style="text-align:right;font-size:0.9rem;color:var(--muted);margin-top:0.5rem;">还有 ${rooms.length-5} 个房间，点击下方进入大厅查看</p>`;
         }
-      } catch (err) { container.innerHTML = `<p style="color:#ef4444;">❌ 加载失败：${err.message}</p>`; }
+      } catch (err) { container.innerHTML = `<p style="color:#ef4444;">加载失败：${err.message}</p>`; }
     }
 
     renderUserArea();
@@ -1287,10 +1282,10 @@
       async function loadNotifications() {
         const token = localStorage.getItem('greenbox_token');
         if (!token) {
-          listEl.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">🔐</span><div>请先登录</div></div>';
+          listEl.innerHTML = '<div class="notif-empty"><div>请先登录</div></div>';
           return;
         }
-        listEl.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">📭</span><div>加载中...</div></div>';
+        listEl.innerHTML = '<div class="notif-empty"><div>加载中...</div></div>';
         try {
           const res = await fetch('/api/notifications', {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -1299,13 +1294,13 @@
           const list = await res.json();
           renderNotifications(list);
         } catch (e) {
-          listEl.innerHTML = `<div class="notif-empty"><span class="notif-empty-icon">⚠️</span><div>加载失败</div></div>`;
+          listEl.innerHTML = `<div class="notif-empty"><div>加载失败</div></div>`;
         }
       }
 
       function renderNotifications(list) {
         if (!list || list.length === 0) {
-          listEl.innerHTML = '<div class="notif-empty"><span class="notif-empty-icon">📭</span><div>暂无消息</div></div>';
+          listEl.innerHTML = '<div class="notif-empty"><div>暂无消息</div></div>';
           return;
         }
         const typeLabel = { info: '通知', success: '成功', warning: '注意', error: '警告' };
@@ -1439,7 +1434,7 @@
       const quickRow = document.getElementById('aiQuickRow');
 
       let cfg = {
-        welcomeMessage: '你好！我是 GreenBox 的 AI 助手 ✨',
+        welcomeMessage: '你好！我是 GreenBox 的 AI 助手',
         presetQuestions: [],
         quickPhrases: [],
         enableDeepThink: true,
@@ -1511,19 +1506,19 @@
         row.className = 'ai-msg-row ' + role;
         const avatar = document.createElement('div');
         avatar.className = 'ai-avatar';
-        avatar.textContent = role === 'user' ? '👤' : '🤖';
+        avatar.textContent = role === 'user' ? '我' : 'AI';
         const bubble = document.createElement('div');
         bubble.className = 'ai-bubble';
 
         let html = '';
         if (role === 'assistant' && thought) {
-          html += `<details class="ai-thought"><summary>💭 思考过程</summary><div class="ai-thought-content">${escapeHtml(thought)}</div></details>`;
+          html += `<details class="ai-thought"><summary>思考过程</summary><div class="ai-thought-content">${escapeHtml(thought)}</div></details>`;
         }
         html += `<div class="msg-content">${role === 'user' ? escapeHtml(content) : renderMarkdown(content)}</div>`;
         html += `<div class="ai-msg-actions">
-          <button data-act="copy">📋 复制</button>
-          ${role === 'assistant' ? '<button data-act="regen">🔄 重新生成</button>' : ''}
-          <button data-act="del">🗑️ 删除</button>
+          <button data-act="copy">复制</button>
+          ${role === 'assistant' ? '<button data-act="regen">重新生成</button>' : ''}
+          <button data-act="del">删除</button>
         </div>`;
 
         bubble.innerHTML = html;
@@ -1539,7 +1534,7 @@
             if (act === 'copy') {
               navigator.clipboard.writeText(content).then(() => {
                 b.textContent = '✓ 已复制';
-                setTimeout(() => b.textContent = '📋 复制', 1200);
+                setTimeout(() => b.textContent = '复制', 1200);
               });
             } else if (act === 'del') {
               if (typeof msgIndex === 'number' && msgIndex >= 0) {
@@ -1571,7 +1566,7 @@
           const row = document.createElement('div');
           row.className = 'ai-msg-row assistant';
           row.innerHTML = `
-            <div class="ai-avatar">🤖</div>
+            <div class="ai-avatar">AI</div>
             <div class="ai-bubble">
               <div class="msg-content">${renderMarkdown(cfg.welcomeMessage)}</div>
             </div>
@@ -1581,7 +1576,7 @@
         if (Array.isArray(cfg.presetQuestions) && cfg.presetQuestions.length > 0) {
           const presetDiv = document.createElement('div');
           presetDiv.className = 'ai-preset';
-          presetDiv.innerHTML = `<div class="ai-preset-title">💡 试试这样问我</div>`;
+          presetDiv.innerHTML = `<div class="ai-preset-title">试试这样问我</div>`;
           cfg.presetQuestions.forEach(q => {
             const b = document.createElement('button');
             b.className = 'ai-preset-btn';
@@ -1751,7 +1746,7 @@
           const data = await res.json();
           if (data.unlimited) {
             isUnlimited = true;
-            quotaEl.textContent = '👑 管理员 · 无限次数';
+            quotaEl.textContent = '管理员 · 无限次数';
             remaining = Infinity;
             input.disabled = false;
             sendBtn.disabled = false;
@@ -1765,7 +1760,7 @@
 
       function updateQuotaText(rem, lim) {
         if (rem === null || rem === undefined) { quotaEl.textContent = '剩余 -- 次'; return; }
-        if (lim === -1 || isUnlimited) { quotaEl.textContent = '👑 管理员 · 无限次数'; return; }
+        if (lim === -1 || isUnlimited) { quotaEl.textContent = '管理员 · 无限次数'; return; }
         quotaEl.textContent = `今日剩余 ${rem}/${lim} 次`;
         if (rem <= 0) {
           input.disabled = true;
@@ -1797,10 +1792,10 @@
         const row = document.createElement('div');
         row.className = 'ai-msg-row assistant';
         row.innerHTML = `
-          <div class="ai-avatar">🤖</div>
+          <div class="ai-avatar">AI</div>
           <div class="ai-bubble">
             <details class="ai-thought" style="display:none;">
-              <summary>💭 思考过程</summary>
+              <summary>思考过程</summary>
               <div class="ai-thought-content"></div>
             </details>
             <div class="msg-content"><div class="ai-typing"><span></span><span></span><span></span></div></div>
@@ -1844,7 +1839,7 @@
 
           if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
-            contentEl.innerHTML = `<span style="color:#ef4444;">❌ ${escapeHtml(errData.error || '请求失败')}</span>`;
+            contentEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(errData.error || '请求失败')}</span>`;
             sending = false;
             sendBtn.disabled = false;
             if (res.status === 429) { remaining = 0; updateQuotaText(0, 0); }
@@ -1869,7 +1864,7 @@
               try { json = JSON.parse(raw); } catch (e) { continue; }
 
               if (json.error) {
-                contentEl.innerHTML = `<span style="color:#ef4444;">❌ ${escapeHtml(json.error)}</span>`;
+                contentEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(json.error)}</span>`;
                 continue;
               }
 
@@ -1885,7 +1880,7 @@
                     hasThought = true;
                     thoughtDetails.style.display = 'block';
                     thoughtDetails.open = true;
-                    contentEl.innerHTML = '<div style="color:var(--ai-muted);font-size:13px;padding:4px 0;">💭 正在深度思考...</div>';
+                    contentEl.innerHTML = '<div style="color:var(--ai-muted);font-size:13px;padding:4px 0;">正在深度思考...</div>';
                   }
                   if (thoughtContentEl.textContent !== t) {
                     thoughtContentEl.textContent = t;
@@ -1920,7 +1915,7 @@
                 fullText = json.reply || fullText;
                 if (json.unlimited) {
                   isUnlimited = true;
-                  quotaEl.textContent = '👑 管理员 · 无限次数';
+                  quotaEl.textContent = '管理员 · 无限次数';
                   remaining = Infinity;
                 } else if (json.remaining !== undefined && json.remaining >= 0) {
                   remaining = json.remaining;
@@ -1949,7 +1944,7 @@
 
         } catch (err) {
           console.error('Send error:', err);
-          contentEl.innerHTML = `<span style="color:#ef4444;">❌ 网络错误：${escapeHtml(err.message)}</span>`;
+          contentEl.innerHTML = `<span style="color:#ef4444;">网络错误：${escapeHtml(err.message)}</span>`;
         } finally {
           sending = false;
           if (isUnlimited || remaining === null || remaining > 0) sendBtn.disabled = false;

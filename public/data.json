@@ -4,19 +4,19 @@
       "name": "PDF 合并器",
       "description": "在线合并多个 PDF 文件，免费且安全。",
       "url": "https://example.com/pdf-merge",
-      "icon": "📄"
+      "icon": ""
     },
     {
       "name": "图片压缩工具",
       "description": "批量压缩 PNG/JPEG，质量可调。",
       "url": "https://example.com/image-compress",
-      "icon": "🖼️"
+      "icon": ""
     },
     {
       "name": "JSON 格式化",
       "description": "快速格式化并校验 JSON 数据。",
       "url": "https://example.com/json-formatter",
-      "icon": "🔧"
+      "icon": ""
     }
   ],
   "changelogs": [

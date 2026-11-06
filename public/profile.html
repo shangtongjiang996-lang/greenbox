@@ -366,7 +366,7 @@
 <body>
   <nav class="navbar">
     <div class="container">
-      <a href="index.html" class="logo">🌱 GreenBox</a>
+      <a href="index.html" class="logo">GreenBox</a>
       <ul class="nav-links">
         <li><a href="index.html">首页</a></li>
         <li><a href="tools.html">工具</a></li>
@@ -377,7 +377,7 @@
         <li><a href="/profile.html" class="active">个人中心</a></li>
       </ul>
       <div class="navbar-right">
-        <button id="theme-toggle" aria-label="切换主题">🌙</button>
+        <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
         <div class="user-area" id="userArea"></div>
       </div>
     </div>
@@ -387,8 +387,8 @@
     <div class="profile-card">
       <div class="profile-hero">
         <div class="avatar-container">
-          <div class="avatar-big" id="avatarBig">👤</div>
-          <button class="avatar-edit-btn" id="avatarEditBtn" title="更换头像">📷</button>
+          <div class="avatar-big" id="avatarBig"><svg class="ico" aria-hidden="true"><use href="/icons.svg#user"/></svg></div>
+          <button class="avatar-edit-btn" id="avatarEditBtn" title="更换头像"><svg class="ico" aria-hidden="true"><use href="/icons.svg#camera"/></svg></button>
         </div>
         <div class="profile-display-name" id="displayNameEl">加载中...</div>
         <div class="profile-username" id="usernameEl">@username</div>
@@ -399,40 +399,40 @@
         <div class="profile-stats" id="profileStats">
           <div class="stat-box">
             <div class="num" id="statSessions">-</div>
-            <div class="lbl">💬 对话</div>
+            <div class="lbl">对话</div>
           </div>
           <div class="stat-box">
             <div class="num" id="statTools">-</div>
-            <div class="lbl">🔧 工具</div>
+            <div class="lbl">工具</div>
           </div>
           <div class="stat-box">
             <div class="num" id="statDays">-</div>
-            <div class="lbl">📅 天</div>
+            <div class="lbl">天</div>
           </div>
         </div>
 
         <div class="profile-section" style="margin-bottom:1rem;">
           <div class="btn-row" style="gap:0.6rem;">
             <a class="pbtn pbtn-primary" id="goMyProfileBtn" href="#" style="text-decoration:none;">
-              👤 查看我的主页
+              查看我的主页
             </a>
             <a class="pbtn pbtn-outline" href="/messages.html" style="text-decoration:none;">
-              💬 打开消息中心
+              打开消息中心
             </a>
           </div>
         </div>
 
         <div class="profile-section admin-card" id="adminSection" style="display:none;padding:1.2rem;border-radius:14px;">
-          <div class="profile-section-title">👑 管理员专属</div>
+          <div class="profile-section-title">管理员专属</div>
           <div class="btn-row">
             <a href="/admin.html" class="pbtn pbtn-admin" style="width:100%;justify-content:center;">
-              ⚙️ 打开管理后台
+              打开管理后台
             </a>
           </div>
         </div>
 
         <div class="profile-section">
-          <div class="profile-section-title">✏️ 编辑资料</div>
+          <div class="profile-section-title">编辑资料</div>
           <div class="profile-field">
             <label>昵称</label>
             <input type="text" id="inputDisplayName" placeholder="取一个响亮的名字吧" maxlength="20">
@@ -444,13 +444,13 @@
             <div class="hint"><span id="bioCount">0</span>/100</div>
           </div>
           <div class="btn-row">
-            <button class="pbtn pbtn-primary" id="saveProfileBtn">💾 保存修改</button>
+            <button class="pbtn pbtn-primary" id="saveProfileBtn">保存修改</button>
             <button class="pbtn pbtn-outline" id="resetProfileBtn">重置</button>
           </div>
         </div>
 
         <div class="profile-section">
-          <div class="profile-section-title">🔐 隐私与好友设置</div>
+          <div class="profile-section-title">隐私与好友设置</div>
 
           <div class="profile-field">
             <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.92rem;">
@@ -484,24 +484,24 @@
           </div>
 
           <div class="btn-row">
-            <button class="pbtn pbtn-primary" id="savePrivacyBtn">💾 保存隐私设置</button>
-            <button class="pbtn pbtn-outline" id="reloadPrivacyBtn">🔄 重新加载</button>
+            <button class="pbtn pbtn-primary" id="savePrivacyBtn">保存隐私设置</button>
+            <button class="pbtn pbtn-outline" id="reloadPrivacyBtn">重新加载</button>
           </div>
           <div id="privacyMsg" style="margin-top:0.5rem;font-weight:500;font-size:0.9rem;"></div>
         </div>
 
         <div class="profile-section">
-          <div class="profile-section-title">🔒 账号安全</div>
+          <div class="profile-section-title">账号安全</div>
           <div class="btn-row">
-            <button class="pbtn pbtn-outline" id="changePwdBtn">🔑 修改密码</button>
+            <button class="pbtn pbtn-outline" id="changePwdBtn">修改密码</button>
           </div>
         </div>
 
         <div class="profile-section">
-          <div class="profile-section-title">⚠️ 危险操作</div>
+          <div class="profile-section-title">危险操作</div>
           <div class="btn-row">
-            <button class="pbtn pbtn-outline" id="logoutBtn">🚪 退出登录</button>
-            <button class="pbtn pbtn-danger" id="deleteAccountBtn" style="display:none;">🗑️ 注销账号</button>
+            <button class="pbtn pbtn-outline" id="logoutBtn">退出登录</button>
+            <button class="pbtn pbtn-danger" id="deleteAccountBtn" style="display:none;">注销账号</button>
           </div>
         </div>
       </div>
@@ -515,15 +515,15 @@
 
   <div class="avatar-modal-overlay" id="avatarModal">
     <div class="avatar-modal">
-      <h3>📷 更换头像</h3>
-      <div class="avatar-preview-box" id="avatarPreviewBox">👤</div>
-      <label class="file-pick-btn" for="avatarFileInput">📁 选择图片文件</label>
+      <h3>更换头像</h3>
+      <div class="avatar-preview-box" id="avatarPreviewBox"><svg class="ico" aria-hidden="true"><use href="/icons.svg#user"/></svg></div>
+      <label class="file-pick-btn" for="avatarFileInput">选择图片文件</label>
       <input type="file" id="avatarFileInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;">
       <div class="avatar-modal-tips">
         支持 JPG / PNG / GIF / WEBP，大小不超过 500KB
       </div>
       <div class="avatar-modal-actions">
-        <button class="pbtn pbtn-outline" id="avatarRemoveBtn" style="display:none;">🗑️ 移除头像</button>
+        <button class="pbtn pbtn-outline" id="avatarRemoveBtn" style="display:none;">移除头像</button>
         <button class="pbtn pbtn-outline" id="avatarCancelBtn">取消</button>
         <button class="pbtn pbtn-primary" id="avatarUploadBtn" disabled>上传</button>
       </div>
@@ -532,7 +532,7 @@
 
   <div class="avatar-modal-overlay" id="pwdModal">
     <div class="avatar-modal">
-      <h3>🔑 修改密码</h3>
+      <h3>修改密码</h3>
       <div class="profile-field">
         <label>新密码</label>
         <input type="password" id="pwdNew" placeholder="至少6位" autocomplete="new-password">
@@ -596,10 +596,10 @@
 
       const roleBadge = document.getElementById('roleBadge');
       if (data.role === 'admin') {
-        roleBadge.textContent = '👑 管理员';
+        roleBadge.textContent = '管理员';
         roleBadge.style.background = 'rgba(250,204,21,0.35)';
       } else {
-        roleBadge.textContent = '✨ 普通用户';
+        roleBadge.textContent = '普通用户';
       }
 
       renderAvatar(data.username, data.hasAvatar);
@@ -629,9 +629,9 @@
       const box = document.getElementById('avatarBig');
       if (hasAvatar) {
         const url = `/api/user/avatar/${encodeURIComponent(username)}?t=` + Date.now();
-        box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentNode.textContent='👤';">`;
+        box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentNode.textContent='我';">`;
       } else {
-        box.textContent = username === 'admin' ? '🛡️' : '👤';
+        box.innerHTML = username === 'admin' ? '<svg class="ico" aria-hidden="true"><use href="/icons.svg#shield"/></svg>' : '<svg class="ico" aria-hidden="true"><use href="/icons.svg#user"/></svg>';
       }
     }
 
@@ -700,15 +700,15 @@
           body: JSON.stringify(payload)
         });
         if (res.ok) {
-          msg.textContent = '✅ 已保存';
+          msg.textContent = '已保存';
           msg.style.color = '#16a34a';
           showToast('隐私设置已保存', 'success');
         } else {
-          msg.textContent = '❌ 保存失败';
+          msg.textContent = '保存失败';
           msg.style.color = '#ef4444';
         }
       } catch (e) {
-        msg.textContent = '❌ 网络错误';
+        msg.textContent = '网络错误';
         msg.style.color = '#ef4444';
       }
       setTimeout(() => { msg.textContent = ''; }, 2400);
@@ -735,7 +735,7 @@
         if (data.success) {
           document.getElementById('displayNameEl').textContent = displayName || currentUser.username;
           originalProfile = { displayName, bio };
-          showToast('✅ 资料已保存', 'success');
+          showToast('资料已保存', 'success');
         } else {
           showToast('保存失败：' + (data.error || '未知错误'), 'error');
         }
@@ -743,7 +743,7 @@
         showToast('网络错误，请稍后重试', 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = '💾 保存修改';
+        btn.textContent = '保存修改';
       }
     });
 
@@ -777,7 +777,7 @@
         avatarPreviewBox.classList.add('has-image');
         avatarRemoveBtn.style.display = 'inline-flex';
       } else {
-        avatarPreviewBox.textContent = currentUser.username === 'admin' ? '🛡️' : '👤';
+        avatarPreviewBox.innerHTML = currentUser.username === 'admin' ? '<svg class="ico" aria-hidden="true"><use href="/icons.svg#shield"/></svg>' : '<svg class="ico" aria-hidden="true"><use href="/icons.svg#user"/></svg>';
         avatarRemoveBtn.style.display = 'none';
       }
       avatarUploadBtn.disabled = true;
@@ -826,7 +826,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          showToast('✅ 头像已更新', 'success');
+          showToast('头像已更新', 'success');
           avatarModal.classList.remove('show');
           currentUser.hasAvatar = true;
           renderAvatar(currentUser.username, true);
@@ -905,7 +905,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          showToast('✅ 密码已修改', 'success');
+          showToast('密码已修改', 'success');
           pwdModal.classList.remove('show');
         } else {
           errEl.textContent = data.error || '修改失败';
@@ -936,7 +936,7 @@
     });
 
     document.getElementById('deleteAccountBtn').addEventListener('click', async () => {
-      if (!confirm('⚠️ 确定要注销账号吗？此操作将永久删除您的所有数据，不可恢复！')) return;
+      if (!confirm('确定要注销账号吗？此操作将永久删除您的所有数据，不可恢复！')) return;
       if (!confirm('二次确认：真的要注销吗？')) return;
 
       try {

@@ -174,11 +174,12 @@
   .dm-convo-item.active { background: var(--dm-accent-light); }
   [data-theme="dark"] .dm-convo-item.active { background: rgba(34,197,94,0.14); }
   .dm-convo-item.pinned::before {
-    content: '📌';
+    content: '';
     position: absolute;
-    top: 4px; right: 6px;
-    font-size: 10px;
-    opacity: .7;
+    top: 8px; right: 8px;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--primary);
+    opacity: .8;
   }
 
   /* 严格约束列表头像 */
@@ -846,7 +847,7 @@
 
 <nav class="navbar">
   <div class="container">
-    <a href="index.html" class="logo">🌱 GreenBox</a>
+    <a href="index.html" class="logo">GreenBox</a>
     <ul class="nav-links">
       <li><a href="index.html">首页</a></li>
       <li><a href="tools.html">工具</a></li>
@@ -857,7 +858,7 @@
       <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
     </ul>
     <div class="navbar-right">
-      <button id="theme-toggle" aria-label="切换主题">🌙</button>
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
       <div class="user-area" id="userArea"></div>
     </div>
   </div>
@@ -868,23 +869,22 @@
   <aside class="dm-sidebar" id="dmSidebar">
     <div class="dm-side-head">
       <div class="dm-tab-row">
-        <button class="dm-tab-btn active" data-tab="convos">💬 会话</button>
-        <button class="dm-tab-btn" data-tab="friends">👥 好友</button>
-        <button class="dm-tab-btn" data-tab="requests">📨 申请<span class="badge" id="dmReqBadge" style="display:none;">0</span></button>
-        <button class="dm-tab-btn" data-tab="finder">🔍 找人</button>
+        <button class="dm-tab-btn active" data-tab="convos">会话</button>
+        <button class="dm-tab-btn" data-tab="friends">好友</button>
+        <button class="dm-tab-btn" data-tab="requests">申请<span class="badge" id="dmReqBadge" style="display:none;">0</span></button>
+        <button class="dm-tab-btn" data-tab="finder">找人</button>
       </div>
       <input class="dm-search" id="dmSearch" placeholder="搜索会话 / 好友…" style="display:none;">
     </div>
 
     <div class="dm-list" id="dmList">
       <div class="dm-empty">
-        <span class="icon">⏳</span>
         <div>加载中…</div>
       </div>
     </div>
 
     <div class="dm-side-foot">
-      <button class="dm-icon-btn" id="dmSettingsBtn" title="隐私与好友设置">⚙️</button>
+      <button class="dm-icon-btn" id="dmSettingsBtn" title="隐私与好友设置"><svg class="ico" aria-hidden="true"><use href="/icons.svg#gear"/></svg></button>
       <button class="dm-icon-btn" id="dmRefreshBtn" title="刷新" style="width:auto;padding:0 10px;font-size:12px;">刷新</button>
       <span class="dm-status-dot" id="dmStatus">离线</span>
     </div>
@@ -893,7 +893,7 @@
   <!-- ============ 右侧聊天区 ============ -->
   <main class="dm-main" id="dmMain">
     <div class="dm-placeholder" id="dmPlaceholder">
-      <div class="icon">💬</div>
+      
       <div class="title">选择一个会话开始聊天</div>
       <div class="sub">或者到左侧「好友 / 找人」发起新对话</div>
     </div>
@@ -907,9 +907,9 @@
           <div class="sub" id="dmChatSub">-</div>
         </div>
         <div class="dm-chat-actions">
-          <button class="dm-icon-btn" id="dmPinBtn" title="置顶会话">📌</button>
-          <button class="dm-icon-btn" id="dmMuteBtn" title="免打扰">🔔</button>
-          <button class="dm-icon-btn" id="dmProfileBtn" title="查看对方主页">👤</button>
+          <button class="dm-icon-btn" id="dmPinBtn" title="置顶会话"><svg class="ico" aria-hidden="true"><use href="/icons.svg#pin"/></svg></button>
+          <button class="dm-icon-btn" id="dmMuteBtn" title="免打扰"><svg class="ico" aria-hidden="true"><use href="/icons.svg#bell"/></svg></button>
+          <button class="dm-icon-btn" id="dmProfileBtn" title="查看对方主页"><svg class="ico" aria-hidden="true"><use href="/icons.svg#user"/></svg></button>
           <button class="dm-icon-btn" id="dmMoreBtn" title="更多">⋮</button>
         </div>
       </div>
@@ -942,7 +942,7 @@
 <!-- ============ 隐私设置弹窗 ============ -->
 <div class="dm-modal-overlay" id="dmSettingsModal">
   <div class="dm-modal">
-    <h3>⚙️ 隐私与好友设置</h3>
+    <h3>隐私与好友设置</h3>
     <label class="check-row">
       <input type="checkbox" id="setAllowStranger">
       <span>允许陌生人发起会话</span>
@@ -969,7 +969,7 @@
 <!-- ============ 添加好友弹窗 ============ -->
 <div class="dm-modal-overlay" id="dmAddFriendModal">
   <div class="dm-modal">
-    <h3>➕ 添加好友</h3>
+    <h3>添加好友</h3>
     <label>对方用户名（ID）</label>
     <input type="text" id="addFriendUsername" placeholder="输入对方的用户名" autocomplete="off">
     <label>验证消息 <span class="hint">可选</span></label>
@@ -1054,7 +1054,7 @@
     const withDot = o.withDot !== false;
     const online = !!o.online;
     const initial = (username || '?').slice(0,1).toUpperCase();
-    const showEmoji = username === 'admin' ? '🛡️' : initial;
+    const showEmoji = username === 'admin' ? '管' : initial;
     
     // 图片加载失败时，自动隐藏图片层，露出底层的文字或emoji
     const img = hasAvatar
@@ -1121,7 +1121,6 @@
   function renderNeedLogin() {
     document.getElementById('dmList').innerHTML = `
       <div class="dm-empty">
-        <span class="icon">🔐</span>
         <div>请先登录后查看消息</div>
         <a href="/login.html?redirect=/messages.html">去登录</a>
       </div>`;
@@ -1323,7 +1322,7 @@
     if (arr.length === 0) {
       el.innerHTML = `
         <div class="dm-empty">
-          <span class="icon">💬</span>
+          
           <div>${kw ? '没有找到匹配的会话' : '暂无会话'}</div>
           ${kw ? '' : '<div class="sub">到「好友 / 找人」开始聊天吧</div>'}
         </div>`;
@@ -1362,12 +1361,11 @@
     });
     let html = `
       <div style="padding:10px 14px;">
-        <button class="dm-btn dm-btn-confirm" id="dmAddFriendBtn" style="width:100%;font-size:13px;">➕ 添加好友</button>
+        <button class="dm-btn dm-btn-confirm" id="dmAddFriendBtn" style="width:100%;font-size:13px;">添加好友</button>
       </div>`;
     if (arr.length === 0) {
       html += `
         <div class="dm-empty">
-          <span class="icon">👥</span>
           <div>${kw ? '没有找到匹配的好友' : '暂无好友'}</div>
           ${kw ? '' : '<div class="sub">在论坛或找人页发现感兴趣的人</div>'}
         </div>`;
@@ -1386,8 +1384,8 @@
               <div class="dm-friend-sub">@${esc(f.username)}</div>
             </div>
             <div class="dm-friend-actions">
-              <button class="dm-mini-btn" title="私聊" data-chat="${esc(f.username)}">💬</button>
-              <button class="dm-mini-btn" title="主页" data-profile="${esc(f.username)}">👤</button>
+              <button class="dm-mini-btn" title="私聊" data-chat="${esc(f.username)}"><svg class="ico" aria-hidden="true"><use href="/icons.svg#chat"/></svg></button>
+              <button class="dm-mini-btn" title="主页" data-profile="${esc(f.username)}"><svg class="ico" aria-hidden="true"><use href="/icons.svg#user"/></svg></button>
             </div>
           </div>`;
       }).join('');
@@ -1412,7 +1410,6 @@
     if (inc.length === 0 && out.length === 0) {
       el.innerHTML = `
         <div class="dm-empty">
-          <span class="icon">📨</span>
           <div>暂无好友申请</div>
         </div>`;
       return;
@@ -1476,8 +1473,8 @@
       <div class="dm-finder-search">
         <input class="dm-search" id="finderInput" placeholder="输入用户名精确查找…" style="display:block;">
         <div class="btn-row">
-          <button class="dm-btn dm-btn-confirm" id="finderBtn" style="flex:1;">🔍 查找</button>
-          <button class="dm-btn dm-btn-cancel" id="finderAddBtn">➕ 添加</button>
+          <button class="dm-btn dm-btn-confirm" id="finderBtn" style="flex:1;">查找</button>
+          <button class="dm-btn dm-btn-cancel" id="finderAddBtn">添加</button>
         </div>
       </div>
       <div class="dm-finder-result" id="finderResult"></div>`;
@@ -1496,7 +1493,7 @@
     const kw = input.value.trim();
     if (!kw) { document.getElementById('finderResult').innerHTML = ''; finderResults = null; return; }
     const resultEl = document.getElementById('finderResult');
-    resultEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">⏳ 查找中…</div>';
+    resultEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">查找中…</div>';
     try {
       const data = await api('/api/social/user/' + encodeURIComponent(kw));
       finderResults = data;
@@ -1515,14 +1512,14 @@
     let relText = '';
     let relBtn = '';
     if (u.relation === 'self') relText = '这是你自己';
-    else if (u.relation === 'friend') { relText = '✅ 已是好友'; }
-    else if (u.relation === 'outgoing') relText = '⏳ 已发送申请，等待对方处理';
+    else if (u.relation === 'friend') { relText = '已是好友'; }
+    else if (u.relation === 'outgoing') relText = '已发送申请，等待对方处理';
     else if (u.relation === 'incoming') {
-      relText = '📩 对方已向你发送申请';
+      relText = '对方已向你发送申请';
       relBtn = `<button class="dm-btn dm-btn-confirm" id="finderAcceptBtn">立即接受</button>`;
     }
-    else if (u.relation === 'blocked_by_me') relText = '⚠️ 你已拉黑对方';
-    else if (u.relation === 'blocked_me') relText = '⚠️ 对方已将你拉黑';
+    else if (u.relation === 'blocked_by_me') relText = '你已拉黑对方';
+    else if (u.relation === 'blocked_me') relText = '对方已将你拉黑';
 
     el.innerHTML = `
       <div style="display:flex;gap:12px;align-items:center;padding:14px;background:var(--bg-alt);border-radius:14px;margin-bottom:10px;">
@@ -1533,13 +1530,13 @@
           ${u.bio ? `<div style="font-size:12.5px;color:var(--muted);margin-top:4px;">${esc(u.bio)}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;">
-          ${u.canDM ? `<button class="dm-mini-btn" data-cid-peer="${esc(u.username)}" title="私聊">💬</button>` : ''}
-          <button class="dm-mini-btn" data-view-user="${esc(u.username)}" title="主页">👤</button>
+          ${u.canDM ? `<button class="dm-mini-btn" data-cid-peer="${esc(u.username)}" title="私聊"><svg class="ico" aria-hidden="true"><use href="/icons.svg#chat"/></svg></button>` : ''}
+          <button class="dm-mini-btn" data-view-user="${esc(u.username)}" title="主页"><svg class="ico" aria-hidden="true"><use href="/icons.svg#user"/></svg></button>
         </div>
       </div>
       ${relText ? `<div style="padding:6px 4px;font-size:12.5px;color:var(--muted);">${relText}</div>` : ''}
       ${relBtn}
-      ${u.canFriendRequest ? `<button class="dm-btn dm-btn-confirm" id="finderReqBtn" style="width:100%;margin-top:8px;">➕ 发送好友申请</button>` : ''}
+      ${u.canFriendRequest ? `<button class="dm-btn dm-btn-confirm" id="finderReqBtn" style="width:100%;margin-top:8px;">发送好友申请</button>` : ''}
     `;
 
     el.querySelectorAll('[data-cid-peer]').forEach(b => {
@@ -1625,8 +1622,8 @@
     const avEl = document.getElementById('dmChatAvatar');
     const initial = (c.peer || '?').slice(0,1).toUpperCase();
     avEl.innerHTML = c.peerAvatar
-      ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" onerror="this.style.display='none'"><span style="position:absolute;pointer-events:none;">${c.peer==='admin'?'🛡️':initial}</span>`
-      : (c.peer === 'admin' ? '🛡️' : initial);
+      ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" onerror="this.style.display='none'"><span style="position:absolute;pointer-events:none;">${c.peer==='admin'?'管':initial}</span>`
+      : (c.peer === 'admin' ? '管' : initial);
     document.getElementById('dmChatName').textContent = c.peerName || c.peer;
     const subEl = document.getElementById('dmChatSub');
     if (c.online) {
@@ -1638,7 +1635,7 @@
     }
     document.getElementById('dmPinBtn').classList.toggle('active', !!c.pinned);
     document.getElementById('dmMuteBtn').classList.toggle('active', !!c.muted);
-    document.getElementById('dmMuteBtn').textContent = c.muted ? '🔕' : '🔔';
+    document.getElementById('dmMuteBtn').innerHTML = c.muted ? '<svg class="ico" aria-hidden="true"><use href="/icons.svg#bell-off"/></svg>' : '<svg class="ico" aria-hidden="true"><use href="/icons.svg#bell"/></svg>';
   }
 
   function markConvoRead() {
@@ -1665,7 +1662,7 @@
   function renderMessages() {
     const el = document.getElementById('dmMessages');
     if (!currentMessages.length) {
-      el.innerHTML = '<div class="dm-date-divider">暂无消息，打个招呼吧 👋</div>';
+      el.innerHTML = '<div class="dm-date-divider">暂无消息，打个招呼吧</div>';
       return;
     }
     const groups = groupByDate(currentMessages);
@@ -1690,7 +1687,7 @@
     if (m.recalled) {
       return `
         <div class="dm-msg-row ${isSelf?'self':'peer'}" data-mid="${esc(m.id)}">
-          <div class="dm-msg-avatar">${peer==='admin'?'🛡️':(peer||'?').slice(0,1).toUpperCase()}</div>
+          <div class="dm-msg-avatar">${peer==='admin'?'管':(peer||'?').slice(0,1).toUpperCase()}</div>
           <div class="dm-bubble-wrap">
             <div class="dm-bubble recalled">对方撤回了一条消息</div>
           </div>
@@ -1720,9 +1717,9 @@
           </div>
           <div class="dm-msg-actions">
             <button data-act="reply" data-mid="${esc(m.id)}">↩ 回复</button>
-            <button data-act="copy" data-mid="${esc(m.id)}">📋 复制</button>
-            ${canRecall ? `<button data-act="recall" data-mid="${esc(m.id)}">↩️ 撤回</button>` : ''}
-            ${isSelf ? `<button data-act="del-local" data-mid="${esc(m.id)}">🗑️ 删除</button>` : ''}
+            <button data-act="copy" data-mid="${esc(m.id)}">复制</button>
+            ${canRecall ? `<button data-act="recall" data-mid="${esc(m.id)}">↩ 撤回</button>` : ''}
+            ${isSelf ? `<button data-act="del-local" data-mid="${esc(m.id)}">删除</button>` : ''}
           </div>
         </div>
       </div>`;
@@ -1900,13 +1897,13 @@
     if (!currentConvo) return;
     const body = document.getElementById('dmMoreBody');
     body.innerHTML = `
-      <button class="dm-btn dm-btn-cancel" data-action="pin" style="text-align:left;">📌 ${currentConvo.pinned ? '取消置顶' : '置顶会话'}</button>
-      <button class="dm-btn dm-btn-cancel" data-action="mute" style="text-align:left;">${currentConvo.muted ? '🔔 取消免打扰' : '🔕 免打扰'}</button>
-      <button class="dm-btn dm-btn-cancel" data-action="profile" style="text-align:left;">👤 查看对方主页</button>
-      <button class="dm-btn dm-btn-cancel" data-action="remark" style="text-align:left;">✏️ 设置备注</button>
-      <button class="dm-btn dm-btn-cancel" data-action="block" style="text-align:left;color:#dc2626;">🚫 拉黑对方</button>
-      <button class="dm-btn dm-btn-cancel" data-action="delete" style="text-align:left;color:#dc2626;">🗑️ 删除会话</button>
-      <button class="dm-btn dm-btn-cancel" data-action="unfriend" style="text-align:left;color:#dc2626;">💔 解除好友关系</button>
+      <button class="dm-btn dm-btn-cancel" data-action="pin" style="text-align:left;">${currentConvo.pinned ? '取消置顶' : '置顶会话'}</button>
+      <button class="dm-btn dm-btn-cancel" data-action="mute" style="text-align:left;">${currentConvo.muted ? '取消免打扰' : '免打扰'}</button>
+      <button class="dm-btn dm-btn-cancel" data-action="profile" style="text-align:left;">查看对方主页</button>
+      <button class="dm-btn dm-btn-cancel" data-action="remark" style="text-align:left;">设置备注</button>
+      <button class="dm-btn dm-btn-cancel" data-action="block" style="text-align:left;color:#dc2626;">拉黑对方</button>
+      <button class="dm-btn dm-btn-cancel" data-action="delete" style="text-align:left;color:#dc2626;">删除会话</button>
+      <button class="dm-btn dm-btn-cancel" data-action="unfriend" style="text-align:left;color:#dc2626;">解除好友关系</button>
     `;
     body.querySelectorAll('[data-action]').forEach(b => {
       b.addEventListener('click', async () => {
@@ -1950,7 +1947,7 @@
       const idx = convos.findIndex(c => c.id === currentConvo.id);
       if (idx >= 0) convos[idx].muted = next;
       document.getElementById('dmMuteBtn').classList.toggle('active', next);
-      document.getElementById('dmMuteBtn').textContent = next ? '🔕' : '🔔';
+      document.getElementById('dmMuteBtn').innerHTML = next ? '<svg class="ico" aria-hidden="true"><use href="/icons.svg#bell-off"/></svg>' : '<svg class="ico" aria-hidden="true"><use href="/icons.svg#bell"/></svg>';
       showToast(next ? '已开启免打扰' : '已关闭免打扰', 'success');
     } catch (e) { showToast(e.message, 'error'); }
   }

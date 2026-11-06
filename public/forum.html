@@ -707,7 +707,7 @@
 <body>
   <nav class="navbar">
     <div class="container">
-      <a href="index.html" class="logo">🌱 GreenBox</a>
+      <a href="index.html" class="logo">GreenBox</a>
       <ul class="nav-links">
         <li><a href="index.html">首页</a></li>
         <li><a href="tools.html">工具</a></li>
@@ -718,7 +718,7 @@
         <li id="profile-nav" style="display:none;"><a href="/profile.html">个人中心</a></li>
       </ul>
       <div class="navbar-right">
-        <button id="theme-toggle" aria-label="切换主题">🌙</button>
+        <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
         <!-- 只在这个容器里放用户信息 -->
         <div class="user-area" id="userArea"></div>
       </div>
@@ -728,12 +728,12 @@
   <main class="forum-wrap">
     <!-- 侧栏 -->
     <aside class="sidebar">
-      <div class="sidebar-title">📂 板块</div>
+      <div class="sidebar-title">板块</div>
       <div class="cat-list" id="catList"></div>
       <div class="forum-stats">
-        <div>📝 帖子：<b id="statPosts">-</b></div>
-        <div>💬 评论：<b id="statComments">-</b></div>
-        <div>👁️ 浏览：<b id="statViews">-</b></div>
+        <div>帖子：<b id="statPosts">-</b></div>
+        <div>评论：<b id="statComments">-</b></div>
+        <div>浏览：<b id="statViews">-</b></div>
       </div>
     </aside>
 
@@ -741,23 +741,22 @@
     <div class="main-area">
       <div class="forum-toolbar">
         <div class="search-box">
-          <span class="si">🔍</span>
+          <span class="si"><svg class="ico" aria-hidden="true"><use href="/icons.svg#search"/></svg></span>
           <input type="text" id="searchInput" placeholder="搜索帖子...">
           <button class="clear" id="searchClear" title="清除">✕</button>
         </div>
         <div class="sort-tabs">
-          <button class="sort-tab active" data-sort="new">🕐 最新</button>
-          <button class="sort-tab" data-sort="hot">🔥 最热</button>
-          <button class="sort-tab" data-sort="views">👁️ 最多浏览</button>
+          <button class="sort-tab active" data-sort="new">最新</button>
+          <button class="sort-tab" data-sort="hot">最热</button>
+          <button class="sort-tab" data-sort="views">最多浏览</button>
         </div>
         <button class="new-post-btn" id="newPostBtn">
-          <span>✏️</span> 发帖
+          发帖
         </button>
       </div>
 
       <div class="post-list" id="postList">
         <div class="empty-state">
-          <span class="icon">⏳</span>
           <div>加载中...</div>
         </div>
       </div>
@@ -765,13 +764,13 @@
       <div class="pagination" id="pagination"></div>
     </div>
   </main>
-  <button class="fab" id="fabBtn" title="发帖">✏️</button>
+  <button class="fab" id="fabBtn" title="发帖"><svg class="ico" aria-hidden="true"><use href="/icons.svg#edit"/></svg></button>
 
   <!-- ========== 发帖弹窗 ========== -->
   <div class="modal-overlay" id="newPostModal">
     <div class="modal-box">
       <div class="modal-head">
-        <h2>✏️ 发布新帖</h2>
+        <h2>发布新帖</h2>
         <button class="modal-close" id="newPostClose">✕</button>
       </div>
       <div class="modal-body">
@@ -791,7 +790,7 @@
           <label>图片（最多 3 张，每张 ≤ 500KB）</label>
           <div class="img-upload-area" id="postImagesArea">
             <button class="upload-btn" id="postUploadBtn" type="button">
-              <span class="icon">📷</span>
+              <span class="icon"><svg class="ico" aria-hidden="true"><use href="/icons.svg#camera"/></svg></span>
               <span>添加图片</span>
             </button>
           </div>
@@ -817,7 +816,7 @@
         <button class="modal-close" id="postDetailClose">✕</button>
       </div>
       <div class="modal-body" id="postDetailBody">
-        <div class="empty-state"><span class="icon">⏳</span><div>加载中...</div></div>
+        <div class="empty-state"><div>加载中...</div></div>
       </div>
     </div>
   </div>
@@ -826,27 +825,24 @@
   <div class="modal-overlay" id="repostModal">
     <div class="modal-box" style="max-width: 440px;">
       <div class="modal-head">
-        <h2>🔄 转发帖子</h2>
+        <h2>转发帖子</h2>
         <button class="modal-close" id="repostClose">✕</button>
       </div>
       <div class="modal-body">
         <div class="repost-options" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
           <button class="repost-opt" id="repostCopyLink" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-alt);border:1.5px solid var(--border);border-radius:12px;cursor:pointer;text-align:left;font-family:inherit;color:var(--text);width:100%;transition:all .15s;">
-            <span style="font-size:22px;flex-shrink:0;">🔗</span>
             <div style="flex:1;">
               <div style="font-weight:700;font-size:14px;">复制链接</div>
               <div style="font-size:12px;color:var(--muted);margin-top:2px;">把帖子链接复制到剪贴板</div>
             </div>
           </button>
           <button class="repost-opt" id="repostShare" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-alt);border:1.5px solid var(--border);border-radius:12px;cursor:pointer;text-align:left;font-family:inherit;color:var(--text);width:100%;transition:all .15s;">
-            <span style="font-size:22px;flex-shrink:0;">📤</span>
             <div style="flex:1;">
               <div style="font-weight:700;font-size:14px;">分享到...</div>
               <div style="font-size:12px;color:var(--muted);margin-top:2px;">调用系统分享或复制分享文本</div>
             </div>
           </button>
           <button class="repost-opt" id="repostWithComment" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-alt);border:1.5px solid var(--border);border-radius:12px;cursor:pointer;text-align:left;font-family:inherit;color:var(--text);width:100%;transition:all .15s;">
-            <span style="font-size:22px;flex-shrink:0;">💬</span>
             <div style="flex:1;">
               <div style="font-weight:700;font-size:14px;">带评论转发</div>
               <div style="font-size:12px;color:var(--muted);margin-top:2px;">附上你的看法，让更多人看到</div>
@@ -872,7 +868,7 @@
     <div class="modal-box" style="max-width: 460px;">
       <div class="modal-body">
         <div class="ext-link-confirm">
-          <span class="icon">🔗</span>
+          <span class="icon"><svg class="ico" aria-hidden="true"><use href="/icons.svg#link"/></svg></span>
           <h3>即将离开 GreenBox</h3>
           <p>你正在访问一个外部链接，请注意账户和信息安全。</p>
           <span class="url" id="extLinkUrl"></span>
@@ -979,7 +975,7 @@
     // 修复后的头像生成函数，避免 onerror 嵌套引号错误
     function authorAvatarHtml(username, hasAvatar, size, extraClass) {
       var initial = (username || '?').slice(0, 1).toUpperCase();
-      var showEmoji = username === 'admin' ? '🛡️' : initial;
+      var showEmoji = username === 'admin' ? '管' : initial;
       var cls = extraClass || 'post-avatar';
       var sizeStyle = size ? 'width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size*0.4) + 'px;' : '';
       var safeUser = escapeHtml(username);
@@ -1121,10 +1117,9 @@
     
     function renderCategories() {
       const list = document.getElementById('catList');
-      const all = [{ id: 'all', name: '全部', icon: '🌐' }].concat(categories);
+      const all = [{ id: 'all', name: '全部' }].concat(categories);
       list.innerHTML = all.map(c => `
         <button class="cat-item ${currentCategory === c.id ? 'active' : ''}" data-cat="${c.id}">
-          <span class="ci">${c.icon}</span>
           <span>${c.name}</span>
         </button>
       `).join('');
@@ -1142,7 +1137,7 @@
       const wrap = document.getElementById('newPostCats');
       wrap.innerHTML = categories.map(c => `
         <button type="button" class="cat-pill ${selectedPostCategory === c.id ? 'active' : ''}" data-pcat="${c.id}">
-          ${c.icon} ${c.name}
+          ${c.name}
         </button>
       `).join('');
       wrap.querySelectorAll('.cat-pill').forEach(btn => {
@@ -1169,7 +1164,7 @@
     // ============================================================
     async function loadPosts() {
       const list = document.getElementById('postList');
-      list.innerHTML = '<div class="empty-state"><span class="icon">⏳</span><div>加载中...</div></div>';
+      list.innerHTML = '<div class="empty-state"><div>加载中...</div></div>';
 
       try {
         const params = new URLSearchParams({
@@ -1187,7 +1182,7 @@
         renderPosts(data.items || []);
         renderPagination(data.page, data.totalPages);
       } catch (e) {
-        list.innerHTML = '<div class="empty-state"><span class="icon">⚠️</span><div>加载失败</div></div>';
+        list.innerHTML = '<div class="empty-state"><div>加载失败</div></div>';
       }
     }
 
@@ -1196,7 +1191,6 @@
       if (!posts || posts.length === 0) {
         list.innerHTML = `
           <div class="empty-state">
-            <span class="icon">📭</span>
             <div>暂无帖子</div>
             <div style="font-size:12px;margin-top:8px;opacity:0.7;">成为第一个发帖的人吧！</div>
           </div>
@@ -1208,12 +1202,12 @@
       categories.forEach(c => catMap[c.id] = c);
 
       list.innerHTML = posts.map(p => {
-        const cat = catMap[p.category] || { name: '其他', icon: '📌' };
+        const cat = catMap[p.category] || { name: '其他' };
         const isFaved = myFavSet.has(p.id);
         const avatarHtml = authorAvatarHtml(p.author, p.authorHasAvatar, null, 'post-avatar');
         const coverHtml = p.coverImage
           ? `<div class="post-cover"><img src="${p.coverImage}" data-lightbox="${p.coverImage}" onclick="event.stopPropagation()" alt=""></div>`
-          : (p.hasLinks ? `<div class="post-cover">🔗</div>` : '');
+          : (p.hasLinks ? `<div class="post-cover"><svg class="ico" aria-hidden="true"><use href="/icons.svg#link"/></svg></div>` : '');
 
         return `
           <div class="post-card ${p.pinned ? 'pinned' : ''}" data-post-id="${p.id}">
@@ -1223,22 +1217,22 @@
             </div>
             <div class="post-main">
               <div class="post-header">
-                ${p.pinned ? '<span class="pin-badge">📌 置顶</span>' : ''}
+                ${p.pinned ? '<span class="pin-badge">置顶</span>' : ''}
                 <span class="post-time">${timeAgo(p.createdAt)}</span>
               </div>
               <div class="post-title">${escapeHtml(p.title)}</div>
               <div class="post-excerpt">${escapeHtml(p.excerpt || '')}</div>
               <div class="post-meta">
-                <span class="post-cat">${cat.icon} ${cat.name}</span>
+                <span class="post-cat">${cat.name}</span>
                 ${(p.tags || []).slice(0, 2).map(t => `<span class="post-tag">#${escapeHtml(t)}</span>`).join('')}
-                <span>👁️ ${p.views || 0}</span>
-                <span>💬 ${p.commentCount || 0}</span>
-                <span>👍 ${p.likes || 0}</span>
+                <span>${p.views || 0} 浏览</span>
+                <span>${p.commentCount || 0} 评论</span>
+                <span>${p.likes || 0} 赞</span>
               </div>
             </div>
             <div class="post-quick-actions">
-              <button class="quick-btn ${isFaved ? 'active' : ''}" data-action="fav" data-post-id="${p.id}" title="收藏">${isFaved ? '⭐' : '☆'}</button>
-              <button class="quick-btn" data-action="repost" data-post-id="${p.id}" title="转发">🔄</button>
+              <button class="quick-btn ${isFaved ? 'active' : ''}" data-action="fav" data-post-id="${p.id}" title="收藏">${isFaved ? '★' : '☆'}</button>
+              <button class="quick-btn" data-action="repost" data-post-id="${p.id}" title="转发">转发</button>
             </div>
             ${coverHtml}
           </div>
@@ -1274,7 +1268,7 @@
         if (res.favorited) {
           myFavSet.add(postId);
           btn.classList.add('active');
-          btn.textContent = '⭐';
+          btn.textContent = '★';
           showToast('已收藏', 'success');
         } else {
           myFavSet.delete(postId);
@@ -1323,12 +1317,12 @@
     async function openPostDetail(postId) {
       currentPostId = postId;
       document.getElementById('postDetailModal').classList.add('show');
-      document.getElementById('postDetailBody').innerHTML = '<div class="empty-state"><span class="icon">⏳</span><div>加载中...</div></div>';
+      document.getElementById('postDetailBody').innerHTML = '<div class="empty-state"><div>加载中...</div></div>';
 
       try {
         const res = await fetch(`/api/forum/posts/${postId}`);
         if (!res.ok) {
-          document.getElementById('postDetailBody').innerHTML = '<div class="empty-state"><span class="icon">⚠️</span><div>帖子不存在或已被删除</div></div>';
+          document.getElementById('postDetailBody').innerHTML = '<div class="empty-state"><div>帖子不存在或已被删除</div></div>';
           return;
         }
         const post = await res.json();
@@ -1343,14 +1337,14 @@
 
         renderPostDetail(post, currentComments);
       } catch (e) {
-        document.getElementById('postDetailBody').innerHTML = '<div class="empty-state"><span class="icon">⚠️</span><div>加载失败</div></div>';
+        document.getElementById('postDetailBody').innerHTML = '<div class="empty-state"><div>加载失败</div></div>';
       }
     }
 
     function renderPostDetail(post, comments) {
       const catMap = {};
       categories.forEach(c => catMap[c.id] = c);
-      const cat = catMap[post.category] || { name: '其他', icon: '📌' };
+      const cat = catMap[post.category] || { name: '其他' };
 
       const isOwner = currentUser && (currentUser.username === post.author);
       const isAdmin = currentUser && currentUser.role === 'admin';
@@ -1372,10 +1366,10 @@
 
       const linksHtml = (post.links || []).length > 0
         ? `<div style="margin-bottom:20px;">
-            <div style="font-size:12px;color:var(--forum-muted);font-weight:700;margin-bottom:8px;">🔗 内容中的链接（点击前会确认）</div>
+            <div style="font-size:12px;color:var(--forum-muted);font-weight:700;margin-bottom:8px;">内容中的链接（点击前会确认）</div>
             ${post.links.map(url => `
               <a class="link-card" href="#" data-ext-link="${escapeHtml(url)}">
-                <span class="licon">🌐</span>
+                <span class="licon"><svg class="ico" aria-hidden="true"><use href="/icons.svg#link"/></svg></span>
                 <span class="ltext">${escapeHtml(url)}</span>
                 <span class="lgo">↗</span>
               </a>
@@ -1389,7 +1383,7 @@
             const cHasAvatar = !!c.authorAvatar;
             const cAvatarHtml = cHasAvatar
               ? `<img class="comment-avatar" src="${c.authorAvatar}" alt="" data-user="${escapeHtml(c.author)}" onerror="this.style.display='none'">`
-              : `<div class="comment-avatar" data-user="${escapeHtml(c.author)}">${c.author === 'admin' ? '🛡️' : (c.author || '?').slice(0,1).toUpperCase()}</div>`;
+              : `<div class="comment-avatar" data-user="${escapeHtml(c.author)}">${c.author === 'admin' ? '管' : (c.author || '?').slice(0,1).toUpperCase()}</div>`;
             const cImages = (c.images || []).length > 0
               ? `<div class="comment-images">${c.images.map(img => `<img src="${img}" data-lightbox="${img}" alt="">`).join('')}</div>`
               : '';
@@ -1417,7 +1411,7 @@
           ${avatarHtml}
           <div style="cursor:pointer;" data-user="${escapeHtml(post.author)}">
             <div class="post-detail-author-name" data-user="${escapeHtml(post.author)}">${escapeHtml(post.authorDisplay || post.author)}</div>
-            <div style="font-size:12px;margin-top:2px;">${formatTime(post.createdAt)} · ${cat.icon} ${cat.name}</div>
+            <div style="font-size:12px;margin-top:2px;">${formatTime(post.createdAt)} · ${cat.name}</div>
           </div>
         </div>
 
@@ -1433,36 +1427,36 @@
 
         <div class="post-actions">
           <button class="action-btn ${isLiked ? 'active' : ''}" id="likeBtn">
-            <span>${isLiked ? '❤️' : '🤍'}</span> <span id="likeCount">${(post.likes || []).length}</span>
+            <span>${isLiked ? '♥' : '♡'}</span> <span id="likeCount">${(post.likes || []).length}</span>
           </button>
           <button class="action-btn ${isFaved ? 'faved' : ''}" id="favBtn">
-            <span>${isFaved ? '⭐' : '☆'}</span> <span>${isFaved ? '已收藏' : '收藏'}</span>
+            <span>${isFaved ? '★' : '☆'}</span> <span>${isFaved ? '已收藏' : '收藏'}</span>
           </button>
           <button class="action-btn" id="repostBtn">
-            🔄 转发
+            转发
           </button>
           <span style="display:inline-flex;align-items:center;gap:6px;color:var(--forum-muted);font-size:13px;padding:8px 12px;">
-            👁️ ${post.views || 0} · 💬 ${post.commentCount || 0}
+            ${post.views || 0} 浏览 · ${post.commentCount || 0} 评论
           </span>
           ${canEdit ? `
             <button class="action-btn danger" id="deletePostBtn" style="margin-left:auto;">
-              🗑️ 删除帖子
+              删除帖子
             </button>
           ` : ''}
           ${isAdmin && !canEdit ? `
             <button class="action-btn danger" id="deletePostBtn" style="margin-left:auto;">
-              🗑️ 删除（管理员）
+              删除（管理员）
             </button>
           ` : ''}
           ${isAdmin ? `
             <button class="action-btn" id="pinBtn" style="${canEdit ? '' : 'margin-left:auto;'}">
-              📌 ${post.pinned ? '取消置顶' : '置顶'}
+              ${post.pinned ? '取消置顶' : '置顶'}
             </button>
           ` : ''}
         </div>
 
         <div class="comments-title">
-          💬 评论 <span style="color:var(--forum-muted);font-size:13px;">(${comments.length})</span>
+          评论 <span style="color:var(--forum-muted);font-size:13px;">(${comments.length})</span>
         </div>
         <div id="commentsList">${commentsHtml}</div>
 
@@ -1486,7 +1480,7 @@
             if (data.success) {
               document.getElementById('likeCount').textContent = data.count;
               likeBtn.classList.toggle('active', data.liked);
-              likeBtn.querySelector('span').textContent = data.liked ? '❤️' : '🤍';
+              likeBtn.querySelector('span').textContent = data.liked ? '♥' : '♡';
             }
           } catch (e) { showToast('网络错误', 'error'); }
         });
@@ -1501,7 +1495,7 @@
             if (res.favorited) {
               myFavSet.add(post.id);
               favBtn.classList.add('faved');
-              favBtn.querySelector('span:first-child').textContent = '⭐';
+              favBtn.querySelector('span:first-child').textContent = '★';
               favBtn.querySelector('span:last-child').textContent = '已收藏';
             } else {
               myFavSet.delete(post.id);
@@ -1681,7 +1675,7 @@
       `).join('');
       wrap.innerHTML = btns + (postImages.length < 3 ? `
         <button class="upload-btn" id="postUploadBtn" type="button">
-          <span class="icon">📷</span>
+          <span class="icon"><svg class="ico" aria-hidden="true"><use href="/icons.svg#camera"/></svg></span>
           <span>添加图片</span>
         </button>
       ` : '');

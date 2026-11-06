@@ -582,7 +582,7 @@
 <!-- ============ 非法访问页面 ============ -->
 <div class="forbidden-wrap" id="forbiddenPage" style="display:none;">
   <div class="forbidden-card">
-    <div class="forbidden-icon">🚫</div>
+    
     <div class="forbidden-code">403 FORBIDDEN</div>
     <h1 class="forbidden-title">非法访问</h1>
     <p class="forbidden-desc">
@@ -591,8 +591,8 @@
       <span style="font-size:0.85rem;color:#94a3b8;">如果你认为这是一个错误，请联系站点管理员。</span>
     </p>
     <div class="forbidden-actions">
-      <a href="/" class="forbidden-btn primary">🏠 返回首页</a>
-      <a href="/profile.html" class="forbidden-btn secondary">👤 个人中心</a>
+      <a href="/" class="forbidden-btn primary">返回首页</a>
+      <a href="/profile.html" class="forbidden-btn secondary">个人中心</a>
     </div>
   </div>
 </div>
@@ -601,52 +601,52 @@
 <div class="container" id="mainContainer" style="display:none;">
   <div id="dashboard" class="hidden">
     <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-      <h1>🌱 GreenBox 管理</h1>
+      <h1>GreenBox 管理</h1>
       <span style="color:#64748b;font-size:0.9rem;">最后保存：<span id="last-saved">从未</span></span>
     </div>
 
     <div class="stats">
-      <div class="stat-item"><div class="number" id="tool-count">0</div><div class="label">🔧 工具</div></div>
-      <div class="stat-item"><div class="number" id="log-count">0</div><div class="label">📝 更新日志</div></div>
-      <div class="stat-item"><div class="number" id="total-items">0</div><div class="label">📦 总条目</div></div>
-      <div class="stat-item"><div class="number" id="active-rooms">0</div><div class="label">🏠 活跃房间</div></div>
-      <div class="stat-item"><div class="number" id="notif-count">0</div><div class="label">📢 通知</div></div>
+      <div class="stat-item"><div class="number" id="tool-count">0</div><div class="label">工具</div></div>
+      <div class="stat-item"><div class="number" id="log-count">0</div><div class="label">更新日志</div></div>
+      <div class="stat-item"><div class="number" id="total-items">0</div><div class="label">总条目</div></div>
+      <div class="stat-item"><div class="number" id="active-rooms">0</div><div class="label">活跃房间</div></div>
+      <div class="stat-item"><div class="number" id="notif-count">0</div><div class="label">通知</div></div>
     </div>
 
     <div class="tab-bar">
-      <button class="tab-btn active" data-tab="tools">🔧 工具管理</button>
-      <button class="tab-btn" data-tab="changelog">📝 更新日志</button>
-      <button class="tab-btn" data-tab="users">👥 用户管理</button>
-      <button class="tab-btn" data-tab="files">📁 文件管理</button>
-      <button class="tab-btn" data-tab="rooms">🏠 房间管理</button>
-      <button class="tab-btn" data-tab="chat">💬 AI 助手</button>
-      <button class="tab-btn" data-tab="notify">📢 通知管理</button>
-      <button class="tab-btn" data-tab="settings">⚙️ 设置</button>
+      <button class="tab-btn active" data-tab="tools">工具管理</button>
+      <button class="tab-btn" data-tab="changelog">更新日志</button>
+      <button class="tab-btn" data-tab="users">用户管理</button>
+      <button class="tab-btn" data-tab="files">文件管理</button>
+      <button class="tab-btn" data-tab="rooms">房间管理</button>
+      <button class="tab-btn" data-tab="chat">AI 助手</button>
+      <button class="tab-btn" data-tab="notify">通知管理</button>
+      <button class="tab-btn" data-tab="settings">设置</button>
     </div>
 
     <!-- 工具管理 -->
     <div id="tab-tools" class="tab-content active">
       <div class="card">
-        <h2>🔧 工具列表 <span style="font-size:0.8rem;font-weight:400;color:#94a3b8;">（点击图标区域按钮更换图标）</span></h2>
+        <h2>工具列表 <span style="font-size:0.8rem;font-weight:400;color:#94a3b8;">（点击图标区域按钮更换图标）</span></h2>
         <div id="tools-list"></div>
         <button class="btn btn-primary" onclick="addTool()">+ 添加新工具（手动）</button>
       </div>
       <div class="card">
-        <h2>📤 上传新工具（自动添加）</h2>
+        <h2>上传新工具（自动添加）</h2>
         <p style="color:#64748b;margin-bottom:1rem;">上传 .html 文件，自动添加到工具列表并通过 <code>/tool/ID</code> 访问。</p>
         <form id="upload-form" enctype="multipart/form-data">
           <div class="upload-area">
             <div style="display:flex; flex-direction: column; gap: 0.3rem; min-width: 200px;">
               <label style="font-size:0.85rem; color:#64748b;">图标</label>
               <div class="icon-mode-toggle">
-                <button type="button" class="icon-mode-btn active" data-mode="emoji">😀 Emoji</button>
-                <button type="button" class="icon-mode-btn" data-mode="upload">🖼️ 上传图片</button>
-                <button type="button" class="icon-mode-btn" data-mode="url">🔗 图片链接</button>
+                <button type="button" class="icon-mode-btn active" data-mode="emoji">Emoji</button>
+                <button type="button" class="icon-mode-btn" data-mode="upload">上传图片</button>
+                <button type="button" class="icon-mode-btn" data-mode="url">图片链接</button>
               </div>
               <div id="icon-emoji-area">
-                <div class="icon-preview" id="icon-preview">🔧</div>
+                <div class="icon-preview" id="icon-preview"><svg class="ico" aria-hidden="true"><use href="/icons.svg#tool"/></svg></div>
                 <div class="emoji-grid" id="emoji-grid"></div>
-                <input type="hidden" id="tool-icon-emoji" value="🔧">
+                <input type="hidden" id="tool-icon-emoji" value="">
               </div>
               <div id="icon-upload-area" style="display:none;">
                 <input type="file" id="tool-icon-file" accept="image/*" style="width:100%;">
@@ -661,12 +661,12 @@
           </div>
           <div style="margin:0.8rem 0;">
             <div class="file-input-wrapper">
-              <span class="file-input-btn">📁 选择 HTML 文件</span>
+              <span class="file-input-btn">选择 HTML 文件</span>
               <input type="file" id="tool-file" accept=".html" required>
             </div>
             <span id="tool-file-name" class="file-name"></span>
           </div>
-          <button type="submit" class="btn btn-primary" style="padding:0.8rem 2rem; font-size:1.05rem;">📤 上传并添加到工具列表</button>
+          <button type="submit" class="btn btn-primary" style="padding:0.8rem 2rem; font-size:1.05rem;">上传并添加到工具列表</button>
         </form>
         <div id="upload-status"></div>
       </div>
@@ -675,7 +675,7 @@
     <!-- 更新日志 -->
     <div id="tab-changelog" class="tab-content">
       <div class="card">
-        <h2>📝 更新日志</h2>
+        <h2>更新日志</h2>
         <div id="changelogs-list"></div>
         <button class="btn btn-primary" onclick="addChangelog()">+ 添加新日志</button>
       </div>
@@ -684,34 +684,34 @@
     <!-- 用户管理 -->
     <div id="tab-users" class="tab-content">
       <div class="card">
-        <h2>👥 用户管理</h2>
+        <h2>用户管理</h2>
         <div id="users-list"><p style="color:#94a3b8;">加载中...</p></div>
-        <button class="btn btn-primary" onclick="loadUsers()">🔄 刷新列表</button>
+        <button class="btn btn-primary" onclick="loadUsers()">刷新列表</button>
       </div>
     </div>
 
     <!-- 文件管理 -->
     <div id="tab-files" class="tab-content">
       <div class="card">
-        <h2>📁 文件管理（上传的工具 HTML）</h2>
+        <h2>文件管理（上传的工具 HTML）</h2>
         <div id="files-list"><p style="color:#94a3b8;">加载中...</p></div>
-        <button class="btn btn-primary" onclick="loadFiles()">🔄 刷新列表</button>
+        <button class="btn btn-primary" onclick="loadFiles()">刷新列表</button>
       </div>
     </div>
 
     <!-- 房间管理 -->
     <div id="tab-rooms" class="tab-content">
       <div class="card">
-        <h2>🏠 房间管理</h2>
+        <h2>房间管理</h2>
         <div id="rooms-list"><p style="color:#94a3b8;">加载中...</p></div>
-        <button class="btn btn-primary" onclick="loadAdminRooms()">🔄 刷新房间列表</button>
+        <button class="btn btn-primary" onclick="loadAdminRooms()">刷新房间列表</button>
       </div>
     </div>
 
     <!-- AI 助手配置 -->
     <div id="tab-chat" class="tab-content">
       <div class="card">
-        <h2>⚙️ AI 助手 - 基础配置</h2>
+        <h2>AI 助手 - 基础配置</h2>
         <div class="cfg-grid">
           <div class="cfg-field">
             <label>模型</label>
@@ -741,7 +741,7 @@
       </div>
 
       <div class="card">
-        <h2>📝 提示词配置</h2>
+        <h2>提示词配置</h2>
         <div class="cfg-field" style="margin-bottom:1rem;">
           <label>系统提示词（System Prompt）</label>
           <textarea id="cfg-systemPrompt" rows="4" placeholder="定义 AI 的角色和基本行为"></textarea>
@@ -767,7 +767,7 @@
       </div>
 
       <div class="card">
-        <h2>💡 预设问题 &amp; 快捷短语</h2>
+        <h2>预设问题 &amp; 快捷短语</h2>
         <div class="cfg-field" style="margin-bottom:1rem;">
           <label>预设问题（每行一条，最多 10 条）</label>
           <textarea id="cfg-presetQuestions" rows="4" placeholder="介绍一下 GreenBox 有哪些工具&#10;五子棋怎么玩？&#10;你能帮我写代码吗？"></textarea>
@@ -779,19 +779,19 @@
           <div class="hint">输入框上方的一键填充短语</div>
         </div>
         <div style="margin-top:1.2rem;display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;">
-          <button class="btn btn-primary" onclick="saveChatConfig()">💾 保存全部配置</button>
-          <button class="btn btn-outline" onclick="loadChatConfig()">🔄 重新加载</button>
+          <button class="btn btn-primary" onclick="saveChatConfig()">保存全部配置</button>
+          <button class="btn btn-outline" onclick="loadChatConfig()">重新加载</button>
           <span id="chat-cfg-msg" style="font-weight:500;"></span>
         </div>
       </div>
 
       <div class="card">
-        <h2>👥 每日对话配额</h2>
+        <h2>每日对话配额</h2>
         <p style="color:#64748b;margin-bottom:1rem;">
           默认每个用户每天 <strong id="chat-default-display">20</strong> 次。0 = 禁止使用。
         </p>
         <div style="margin-bottom:1.5rem;padding:1rem;background:#f8fafc;border-radius:12px;">
-          <label style="font-weight:600;display:block;margin-bottom:0.5rem;">🌐 默认每日限额</label>
+          <label style="font-weight:600;display:block;margin-bottom:0.5rem;">默认每日限额</label>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
             <input type="number" id="chat-default-limit" min="0" max="10000" value="20"
                    style="width:120px;padding:0.5rem 0.8rem;border:1px solid #e2e8f0;border-radius:10px;">
@@ -799,14 +799,14 @@
           </div>
         </div>
         <div id="chat-users-list"><p style="color:#94a3b8;">加载中...</p></div>
-        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadChatLimits()">🔄 刷新用户列表</button>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadChatLimits()">刷新用户列表</button>
       </div>
     </div>
 
     <!-- 通知管理 -->
     <div id="tab-notify" class="tab-content">
       <div class="card">
-        <h2>📤 发送新通知</h2>
+        <h2>发送新通知</h2>
         <div class="notif-form-grid">
           <div class="cfg-field">
             <label>标题 *</label>
@@ -815,10 +815,10 @@
           <div class="cfg-field">
             <label>类型</label>
             <select id="notif-type">
-              <option value="info">ℹ️ 普通通知</option>
-              <option value="success">✅ 成功/好消息</option>
-              <option value="warning">⚠️ 提醒</option>
-              <option value="error">🚨 重要警告</option>
+              <option value="info">普通通知</option>
+              <option value="success">成功/好消息</option>
+              <option value="warning">提醒</option>
+              <option value="error">重要警告</option>
             </select>
           </div>
         </div>
@@ -831,8 +831,8 @@
           <label>接收者</label>
           <div class="notif-target-row">
             <select id="notif-target-type" style="flex: 1; min-width: 150px;">
-              <option value="all">🌐 所有用户</option>
-              <option value="specific">👤 指定用户</option>
+              <option value="all">所有用户</option>
+              <option value="specific">指定用户</option>
             </select>
             <select id="notif-target-user" style="flex: 1; min-width: 150px; display: none;">
               <option value="">-- 选择用户 --</option>
@@ -841,22 +841,22 @@
           <div class="hint">选择「所有用户」会群发，选择「指定用户」只发给一个人</div>
         </div>
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-          <button class="btn btn-primary" id="notif-send-btn" style="padding: 0.7rem 2rem;">📨 发送通知</button>
+          <button class="btn btn-primary" id="notif-send-btn" style="padding: 0.7rem 2rem;">发送通知</button>
           <button class="btn btn-outline" id="notif-clear-form-btn">清空表单</button>
         </div>
       </div>
 
       <div class="card">
-        <h2>📋 已发送通知 <span style="font-size:0.8rem;font-weight:400;color:#94a3b8;">（点击删除按钮可移除）</span></h2>
+        <h2>已发送通知 <span style="font-size:0.8rem;font-weight:400;color:#94a3b8;">（点击删除按钮可移除）</span></h2>
         <div id="admin-notif-list"><p style="color:#94a3b8;">加载中...</p></div>
-        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadAdminNotifications()">🔄 刷新列表</button>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadAdminNotifications()">刷新列表</button>
       </div>
     </div>
 
     <!-- 设置 -->
     <div id="tab-settings" class="tab-content">
       <div class="card">
-        <h2>⚙️ 修改管理员密码</h2>
+        <h2>修改管理员密码</h2>
         <div style="max-width:400px;">
           <div style="margin-bottom:1rem;">
             <label style="display:block;font-weight:500;margin-bottom:0.3rem;">新密码</label>
@@ -874,9 +874,9 @@
 
     <div class="card">
       <div class="action-bar">
-        <button class="btn btn-primary" onclick="saveAll()">💾 保存全部修改</button>
-        <button class="btn btn-danger" onclick="clearAllData()">🗑️ 清空所有数据</button>
-        <button class="btn btn-outline" onclick="window.open('/tools.html','_blank')">🔗 预览工具页</button>
+        <button class="btn btn-primary" onclick="saveAll()">保存全部修改</button>
+        <button class="btn btn-danger" onclick="clearAllData()">清空所有数据</button>
+        <button class="btn btn-outline" onclick="window.open('/tools.html','_blank')">预览工具页</button>
       </div>
       <div id="save-msg"></div>
     </div>
@@ -894,18 +894,18 @@
       <button class="modal-close" onclick="closeIconModal()">✕</button>
     </div>
     <div class="icon-mode-toggle">
-      <button type="button" class="icon-mode-btn active" data-mode="emoji">😀 Emoji</button>
-      <button type="button" class="icon-mode-btn" data-mode="upload">🖼️ 上传图片</button>
-      <button type="button" class="icon-mode-btn" data-mode="url">🔗 图片链接</button>
+      <button type="button" class="icon-mode-btn active" data-mode="emoji">Emoji</button>
+      <button type="button" class="icon-mode-btn" data-mode="upload">上传图片</button>
+      <button type="button" class="icon-mode-btn" data-mode="url">图片链接</button>
     </div>
     <div id="modal-icon-emoji-area">
-      <div class="icon-preview" id="modal-icon-preview">🔧</div>
+      <div class="icon-preview" id="modal-icon-preview"><svg class="ico" aria-hidden="true"><use href="/icons.svg#tool"/></svg></div>
       <div class="emoji-grid" id="modal-emoji-grid"></div>
-      <input type="hidden" id="modal-icon-emoji" value="🔧">
+      <input type="hidden" id="modal-icon-emoji" value="">
     </div>
     <div id="modal-icon-upload-area" style="display:none;">
       <div class="file-input-wrapper">
-        <span class="file-input-btn">📁 选择图片文件</span>
+        <span class="file-input-btn">选择图片文件</span>
         <input type="file" id="modal-icon-file" accept="image/*">
       </div>
       <div style="margin-top:0.3rem; font-size:0.8rem; color:#64748b;">选择图片文件，将自动转为图标</div>
@@ -1061,7 +1061,7 @@ function setupUploadIconSelector() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      preview.textContent = '🖼️';
+      preview.textContent = '图片';
       emojiInput.value = ev.target.result;
     };
     reader.readAsDataURL(file);
@@ -1070,13 +1070,13 @@ function setupUploadIconSelector() {
 
 function getUploadIconValue() {
   const mode = document.querySelector('#upload-form .icon-mode-btn.active')?.dataset.mode;
-  if (mode === 'emoji') return document.getElementById('tool-icon-emoji').value || '🔧';
+  if (mode === 'emoji') return document.getElementById('tool-icon-emoji').value || '';
   if (mode === 'upload') {
     const val = document.getElementById('tool-icon-emoji').value;
-    return val.startsWith('data:image') ? val : '🔧';
+    return val.startsWith('data:image') ? val : '';
   }
   if (mode === 'url') return document.getElementById('tool-icon-url').value.trim();
-  return '🔧';
+  return '';
 }
 
 // ---------- 图标模态框 ----------
@@ -1116,7 +1116,7 @@ function setupModalIconSelector() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      preview.textContent = '🖼️';
+      preview.textContent = '图片';
       emojiInput.value = ev.target.result;
     };
     reader.readAsDataURL(file);
@@ -1131,15 +1131,15 @@ function openIconModal(target) {
   const preview = document.getElementById('modal-icon-preview');
   const uploadFileInput = document.getElementById('modal-icon-file');
 
-  let currentIcon = '🔧';
+  let currentIcon = '';
   if (target !== 'upload') {
     const tool = currentData.tools[target];
-    currentIcon = tool.icon || '🔧';
+    currentIcon = tool.icon || '';
   }
   emojiInput.value = currentIcon;
   urlInput.value = currentIcon;
   uploadFileInput.value = '';
-  preview.textContent = currentIcon.startsWith('data:') ? '🖼️' : currentIcon;
+  preview.textContent = currentIcon.startsWith('data:') ? '图片' : currentIcon;
   document.getElementById('iconModal').classList.add('active');
 }
 
@@ -1150,17 +1150,17 @@ function closeIconModal() {
 
 function applyIconChange() {
   if (iconModalTarget === null) return;
-  let newIcon = '🔧';
+  let newIcon = '';
   const mode = currentModalMode;
-  if (mode === 'emoji') newIcon = document.getElementById('modal-icon-emoji').value || '🔧';
+  if (mode === 'emoji') newIcon = document.getElementById('modal-icon-emoji').value || '';
   else if (mode === 'upload') {
     const val = document.getElementById('modal-icon-emoji').value;
-    newIcon = val.startsWith('data:image') ? val : '🔧';
-  } else if (mode === 'url') newIcon = document.getElementById('modal-icon-url').value.trim() || '🔧';
+    newIcon = val.startsWith('data:image') ? val : '';
+  } else if (mode === 'url') newIcon = document.getElementById('modal-icon-url').value.trim() || '';
 
   if (iconModalTarget === 'upload') {
     document.getElementById('tool-icon-emoji').value = newIcon;
-    document.getElementById('icon-preview').textContent = newIcon.startsWith('data:') ? '🖼️' : newIcon;
+    document.getElementById('icon-preview').textContent = newIcon.startsWith('data:') ? '图片' : newIcon;
   } else {
     currentData.tools[iconModalTarget].icon = newIcon;
     renderTools();
@@ -1189,15 +1189,15 @@ function renderTools() {
         <div class="icon-cell">
           ${iconHtml}
           <input value="${t.icon || ''}" placeholder="图标" readonly onfocus="this.blur()" style="width:90px; cursor:pointer;" onclick="openIconModal(${i})">
-          <button type="button" class="emoji-pick-btn" onclick="openIconModal(${i})" title="更换图标">🎨</button>
+          <button type="button" class="emoji-pick-btn" onclick="openIconModal(${i})" title="更换图标"><svg class="ico" aria-hidden="true"><use href="/icons.svg#edit"/></svg></button>
         </div>
         <input value="${t.name || ''}" placeholder="名称" onchange="updateTool(${i}, 'name', this.value)" style="flex:1.5;">
         <input value="${t.description || ''}" placeholder="描述" onchange="updateTool(${i}, 'description', this.value)" style="flex:2;">
         <input value="${t.url || ''}" placeholder="链接" onchange="updateTool(${i}, 'url', this.value)" style="flex:2;">
         <div style="display:flex;gap:0.3rem;">
-          <button class="btn-icon" onclick="moveTool(${i}, -1)" title="上移">⬆️</button>
-          <button class="btn-icon" onclick="moveTool(${i}, 1)" title="下移">⬇️</button>
-          <button class="btn-icon" onclick="previewTool('${t.url || ''}')" title="预览链接">🔗</button>
+          <button class="btn-icon" onclick="moveTool(${i}, -1)" title="上移">↑</button>
+          <button class="btn-icon" onclick="moveTool(${i}, 1)" title="下移">↓</button>
+          <button class="btn-icon" onclick="previewTool('${t.url || ''}')" title="预览链接"><svg class="ico" aria-hidden="true"><use href="/icons.svg#link"/></svg></button>
           <button class="btn btn-danger btn-sm" onclick="removeTool(${i})">删除</button>
         </div>
       </div>
@@ -1206,7 +1206,7 @@ function renderTools() {
 }
 
 function renderIcon(icon) {
-  if (!icon) return '<span>🔧</span>';
+  if (!icon) return '<svg class="ico" aria-hidden="true"><use href="/icons.svg#tool"/></svg>';
   if (icon.startsWith('data:image') || icon.startsWith('http')) return `<img src="${icon}" alt="icon" style="width:24px;height:24px;object-fit:contain;border-radius:4px;">`;
   return `<span style="font-size:1.5rem;">${icon}</span>`;
 }
@@ -1231,7 +1231,7 @@ function renderChangelogs() {
 window.updateTool = (idx, key, val) => { currentData.tools[idx][key] = val; };
 window.updateChangelog = (idx, key, val) => { currentData.changelogs[idx][key] = val; };
 window.updateChangelogText = (idx, val) => { currentData.changelogs[idx].changes = val.split('\n').filter(s => s.trim()); };
-window.addTool = () => { currentData.tools.push({ name: '新工具', description: '', url: '#', icon: '🔧' }); renderTools(); updateStats(); };
+window.addTool = () => { currentData.tools.push({ name: '新工具', description: '', url: '#', icon: '' }); renderTools(); updateStats(); };
 window.removeTool = (idx) => { if (confirm('确定删除该工具吗？')) { currentData.tools.splice(idx, 1); renderTools(); updateStats(); } };
 window.addChangelog = () => { const today = new Date().toISOString().slice(0,10); currentData.changelogs.unshift({ version: 'v1.0.0', date: today, changes: ['新增功能'] }); renderChangelogs(); updateStats(); };
 window.removeChangelog = (idx) => { if (confirm('确定删除该更新日志吗？')) { currentData.changelogs.splice(idx, 1); renderChangelogs(); updateStats(); } };
@@ -1241,7 +1241,7 @@ window.previewTool = (url) => { if (url && url !== '#') window.open(url, '_blank
 // ---------- 保存 / 清空 ----------
 window.saveAll = async function() {
   const msg = document.getElementById('save-msg');
-  msg.innerHTML = '⏳ 保存中...';
+  msg.innerHTML = '保存中...';
   try {
     const res = await fetch(`/api/update`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(currentData) });
     const result = await res.json();
@@ -1249,17 +1249,17 @@ window.saveAll = async function() {
       const now = new Date().toLocaleString('zh-CN');
       localStorage.setItem('greenbox_last_saved', now);
       document.getElementById('last-saved').textContent = now;
-      msg.innerHTML = '✅ 保存成功！网站已更新。';
+      msg.innerHTML = '保存成功！网站已更新。';
       showToast('保存成功！', 'success');
     } else {
-      msg.innerHTML = '❌ 保存失败：' + (result.error || '未知错误');
+      msg.innerHTML = '保存失败：' + (result.error || '未知错误');
       showToast('保存失败', 'error');
     }
-  } catch(e) { msg.innerHTML = '❌ 网络错误'; showToast('网络错误', 'error'); }
+  } catch(e) { msg.innerHTML = '网络错误'; showToast('网络错误', 'error'); }
 };
 
 window.clearAllData = function() {
-  if (!confirm('⚠️ 确定要清空所有工具和更新日志吗？此操作不可撤销！')) return;
+  if (!confirm('确定要清空所有工具和更新日志吗？此操作不可撤销！')) return;
   if (!confirm('二次确认：真的要全部清空吗？')) return;
   currentData.tools = []; currentData.changelogs = [];
   renderAll();
@@ -1299,15 +1299,15 @@ document.getElementById('upload-form').addEventListener('submit', async function
     const res = await fetch(`/api/tool/upload`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: formData });
     const result = await res.json();
     if (result.success) {
-      status.textContent = `✅ 上传成功！工具 ID: ${result.id}，访问链接: ${result.url}`;
+      status.textContent = `上传成功！工具 ID: ${result.id}，访问链接: ${result.url}`;
       status.style.color = '#16a34a';
       const dataRes = await fetch(`/api/data`);
       const data = await dataRes.json();
       currentData = data || { tools: [], changelogs: [] };
       renderAll();
       document.getElementById('upload-form').reset();
-      document.getElementById('tool-icon-emoji').value = '🔧';
-      document.getElementById('icon-preview').textContent = '🔧';
+      document.getElementById('tool-icon-emoji').value = '';
+      document.getElementById('icon-preview').innerHTML = '<svg class="ico" aria-hidden="true"><use href="/icons.svg#tool"/></svg>';
       document.getElementById('tool-icon-url').value = '';
       document.getElementById('tool-icon-file').value = '';
       document.getElementById('tool-file-name').textContent = '';
@@ -1315,12 +1315,12 @@ document.getElementById('upload-form').addEventListener('submit', async function
       showToast('工具上传成功！', 'success');
       loadFiles();
     } else {
-      status.textContent = '❌ 上传失败：' + (result.error || '未知错误');
+      status.textContent = '上传失败：' + (result.error || '未知错误');
       status.style.color = '#ef4444';
       showToast('上传失败', 'error');
     }
   } catch (err) {
-    status.textContent = '❌ 网络错误：' + err.message;
+    status.textContent = '网络错误：' + err.message;
     status.style.color = '#ef4444';
     showToast('网络错误', 'error');
   }
@@ -1342,8 +1342,8 @@ async function loadUsers() {
     container.innerHTML = users.map(u => {
       const isAdmin = u.username === 'admin';
       const avatarHtml = u.hasAvatar
-        ? `<img class="user-avatar-sm" src="/api/user/avatar/${encodeURIComponent(u.username)}?t=${Date.now()}" alt="" onerror="this.textContent='👤';this.removeAttribute('src');">`
-        : `<div class="user-avatar-sm">${isAdmin ? '🛡️' : '👤'}</div>`;
+        ? `<img class="user-avatar-sm" src="/api/user/avatar/${encodeURIComponent(u.username)}?t=${Date.now()}" alt="" onerror="this.textContent='用';this.removeAttribute('src');">`
+        : `<div class="user-avatar-sm">${isAdmin ? '管' : '用'}</div>`;
       return `
         <div class="user-item">
           ${avatarHtml}
@@ -1359,9 +1359,9 @@ async function loadUsers() {
             </select>
           `}
           ${!isAdmin ? `
-            <button class="btn btn-outline btn-sm" onclick="viewPassword('${u.username}')">👁️ 查看密码</button>
-            <button class="btn btn-outline btn-sm" onclick="resetPassword('${u.username}')">🔑 重置密码</button>
-            <button class="btn btn-outline btn-sm" onclick="sendNotifTo('${u.username}')">📢 发通知</button>
+            <button class="btn btn-outline btn-sm" onclick="viewPassword('${u.username}')">查看密码</button>
+            <button class="btn btn-outline btn-sm" onclick="resetPassword('${u.username}')">重置密码</button>
+            <button class="btn btn-outline btn-sm" onclick="sendNotifTo('${u.username}')">发通知</button>
             <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">删除</button>
           ` : ''}
         </div>
@@ -1460,9 +1460,9 @@ async function loadFiles() {
           <span style="color:#94a3b8;font-size:0.8rem;">${(f.size/1024).toFixed(1)} KB</span>
           <span style="color:#64748b;font-size:0.8rem;">类别：${f.category}</span>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-            <button class="btn btn-outline btn-sm" onclick="previewFile('${f.id}')">👁️ 预览</button>
-            <button class="btn btn-outline btn-sm" onclick="editFile('${f.id}')">✏️ 编辑信息</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.id}')">🗑️ 删除</button>
+            <button class="btn btn-outline btn-sm" onclick="previewFile('${f.id}')">预览</button>
+            <button class="btn btn-outline btn-sm" onclick="editFile('${f.id}')">编辑信息</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteFile('${f.id}')">删除</button>
           </div>
           <div id="preview-${f.id}" style="display:none;" class="file-preview"></div>
         </div>
@@ -1486,7 +1486,7 @@ window.previewFile = async function(id) {
 window.editFile = async function(id) {
   const newName = prompt('请输入新名称：');
   if (newName === null) return;
-  const newIcon = prompt('请输入新图标（Emoji 或图片 URL）：', '🔧');
+  const newIcon = prompt('请输入新图标（Emoji 或图片 URL）：', '');
   if (newIcon === null) return;
   try {
     const res = await fetch(`/api/admin/tools/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ name: newName, icon: newIcon }) });
@@ -1519,7 +1519,7 @@ async function loadAdminRooms() {
 
     container.innerHTML = rooms.map(r => {
       const playersStr = (r.players || []).map(p => `${p.username}(${p.online ? '在线' : '离线'})`).join('、');
-      const statusBadge = { waiting: '🟡 等待中', playing: '🟢 游戏中', paused: '⏸️ 暂停', finished: '🏁 已结束', closed: '🔴 已关闭' }[r.status] || r.status;
+      const statusBadge = { waiting: '等待中', playing: '游戏中', paused: '暂停', finished: '已结束', closed: '已关闭' }[r.status] || r.status;
       return `
         <div class="room-item">
           <div style="flex:1;">
@@ -1529,7 +1529,7 @@ async function loadAdminRooms() {
               <span>创建者：${r.creator}</span>
               <span>玩家：${playersStr || '无'}</span>
               <span>人数：${r.onlineCount}/${r.playerCount}</span>
-              ${r.hasPassword ? '<span>🔒</span>' : ''}
+              ${r.hasPassword ? '<span>需密码</span>' : ''}
             </div>
             <div class="room-meta">创建：${new Date(r.createdAt).toLocaleString()} | 最后活跃：${new Date(r.lastActive).toLocaleString()}</div>
           </div>
@@ -1611,13 +1611,13 @@ window.saveChatConfig = async function() {
     });
     const data = await res.json();
     if (data.success) {
-      msg.textContent = '✅ 已保存'; msg.style.color = '#16a34a';
+      msg.textContent = '已保存'; msg.style.color = '#16a34a';
       showToast('配置已保存', 'success');
     } else {
-      msg.textContent = '❌ ' + (data.error || '保存失败'); msg.style.color = '#ef4444';
+      msg.textContent = (data.error || '保存失败'); msg.style.color = '#ef4444';
     }
   } catch (e) {
-    msg.textContent = '❌ ' + e.message; msg.style.color = '#ef4444';
+    msg.textContent = e.message; msg.style.color = '#ef4444';
   }
   setTimeout(() => { msg.textContent = ''; }, 3000);
 };
@@ -1773,7 +1773,7 @@ function setupNotifyForm() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast('✅ 通知已发送', 'success');
+        showToast('通知已发送', 'success');
         document.getElementById('notif-title').value = '';
         contentEl.value = '';
         countEl.textContent = '0';
@@ -1785,7 +1785,7 @@ function setupNotifyForm() {
       showToast('网络错误：' + e.message, 'error');
     } finally {
       sendBtn.disabled = false;
-      sendBtn.textContent = '📨 发送通知';
+      sendBtn.textContent = '发送通知';
     }
   });
 }
@@ -1822,7 +1822,7 @@ async function loadAdminNotifications() {
 
     container.innerHTML = list.map(n => {
       const time = new Date(n.createdAt).toLocaleString('zh-CN');
-      const targetText = n.target === 'all' ? '🌐 所有用户' : `👤 ${n.target}`;
+      const targetText = n.target === 'all' ? '所有用户' : `${n.target}`;
       return `
         <div class="notif-item ${n.type}">
           <div class="notif-item-head">
@@ -1838,7 +1838,7 @@ async function loadAdminNotifications() {
           </div>
           <div class="notif-item-content">${escapeHtmlAdmin(n.content)}</div>
           <div class="notif-item-actions">
-            <button class="btn btn-danger btn-sm" onclick="deleteAdminNotif('${n.id}')">🗑️ 删除</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteAdminNotif('${n.id}')">删除</button>
           </div>
         </div>
       `;
@@ -1878,12 +1878,12 @@ window.changePassword = async function() {
     const res = await fetch('/api/admin/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ newPassword: newPwd }) });
     const data = await res.json();
     if (data.success) {
-      msg.innerHTML = '<span style="color:#16a34a;">✅ 密码修改成功</span>';
+      msg.innerHTML = '<span style="color:#16a34a;">密码修改成功</span>';
       document.getElementById('new-pwd').value = '';
       document.getElementById('confirm-pwd').value = '';
       showToast('密码已更新', 'success');
-    } else msg.innerHTML = '<span style="color:#ef4444;">❌ ' + data.error + '</span>';
-  } catch (err) { msg.innerHTML = '<span style="color:#ef4444;">❌ 错误：' + err.message + '</span>'; }
+    } else msg.innerHTML = '<span style="color:#ef4444;">' + data.error + '</span>';
+  } catch (err) { msg.innerHTML = '<span style="color:#ef4444;">错误：' + err.message + '</span>'; }
 };
 
 window.onload = function() {

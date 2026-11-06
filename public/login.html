@@ -16,7 +16,7 @@
 <body>
 <div class="auth-wrap">
 <div class="auth-card">
-  <div class="auth-brand"><span class="mark">🌱</span><span class="name">GreenBox</span></div>
+  <div class="auth-brand"><span class="mark">G</span><span class="name">GreenBox</span></div>
   <h1>欢迎回来</h1>
   <div class="sub">登录后管理你的工具箱</div>
   <div class="form-group">
@@ -27,7 +27,7 @@
     <label for="password">密码</label>
     <div class="input-wrap">
       <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password">
-      <button type="button" class="password-toggle" id="togglePassword" aria-label="显示或隐藏密码">👁️</button>
+      <button type="button" class="password-toggle" id="togglePassword" aria-label="显示或隐藏密码"><svg class="ico" aria-hidden="true"><use href="/icons.svg#eye"/></svg></button>
     </div>
   </div>
   <button class="btn-primary" id="loginBtn">登录</button>
@@ -44,7 +44,7 @@
   toggleBtn.addEventListener('click', () => {
     const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
     passwordInput.setAttribute('type', type);
-    toggleBtn.textContent = type === 'password' ? '👁️' : '👁️‍🗨️';
+    toggleBtn.innerHTML = type === 'password' ? '<svg class="ico" aria-hidden="true"><use href="/icons.svg#eye"/></svg>' : '<svg class="ico" aria-hidden="true"><use href="/icons.svg#eye-off"/></svg>';
   });
   document.getElementById('loginBtn').addEventListener('click', async () => {
     const username = document.getElementById('username').value.trim();
