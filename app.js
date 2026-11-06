@@ -638,7 +638,7 @@ const DEFAULT_CHAT_CONFIG = {
   temperature: 0.7,
   maxTokens: 2000,
   systemPrompt: '你是 GreenBox 网站的 AI 助手，回答简洁、友好、准确。涉及本站工具（如五子棋、PDF合并器）时可主动介绍。',
-  welcomeMessage: '你好！我是 GreenBox 的 AI 助手 ✨\n有什么可以帮你的吗？',
+  welcomeMessage: '你好！我是 GreenBox 的 AI 助手\n有什么可以帮你的吗？',
   presetQuestions: [
     '介绍一下 GreenBox 有哪些工具',
     '五子棋怎么玩？',
@@ -1519,12 +1519,12 @@ app.post('/api/admin/view-password', async (req, res) => {
 //  论坛系统
 // ============================================================
 const FORUM_CATEGORIES = [
-  { id: 'general', name: '综合讨论', icon: '💬' },
-  { id: 'tech', name: '技术交流', icon: '💻' },
-  { id: 'share', name: '资源分享', icon: '🎁' },
-  { id: 'help', name: '求助问答', icon: '❓' },
-  { id: 'show', name: '作品展示', icon: '🎨' },
-  { id: 'chat', name: '灌水闲聊', icon: '☕' },
+  { id: 'general', name: '综合讨论' },
+  { id: 'tech', name: '技术交流' },
+  { id: 'share', name: '资源分享' },
+  { id: 'help', name: '求助问答' },
+  { id: 'show', name: '作品展示' },
+  { id: 'chat', name: '灌水闲聊' },
 ];
 
 function genPostId() { return 'P' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -2255,7 +2255,7 @@ registerSocialSocket(io, { getSession });
 // ======== 启动服务器 ========
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
-  console.log(`🔌 WebSocket 已就绪（五子棋 + 私聊）`);
-  console.log(`💬 社交模块已挂载（好友 / 私聊 / 用户主页 / 收藏 / 转发）`);
+  console.log(`GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
+  console.log(`WebSocket 已就绪（五子棋 + 私聊）`);
+  console.log(`社交模块已挂载（好友 / 私聊 / 用户主页 / 收藏 / 转发）`);
 });
