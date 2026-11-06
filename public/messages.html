@@ -529,6 +529,8 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    position: relative;
+    min-width: 0;
   }
   .dm-msg-row.self .dm-bubble-wrap { align-items: flex-end; }
   .dm-bubble {
@@ -537,7 +539,7 @@
     line-height: 1.5;
     font-size: 14px;
     word-break: break-word;
-    white-space: pre-wrap;
+    white-space: normal;   /* 原为 pre-wrap：模板里的缩进/换行被当成空行，把气泡撑得很大 */
     background: var(--card-bg);
     color: var(--text);
     border: 1px solid var(--border);
@@ -551,6 +553,7 @@
     border-bottom-right-radius: 6px;
   }
   .dm-msg-row.peer .dm-bubble { border-bottom-left-radius: 6px; }
+  .dm-bubble .msg-text { white-space: pre-wrap; }
   .dm-bubble.recalled {
     font-style: italic;
     color: var(--muted) !important;
@@ -587,13 +590,28 @@
   }
 
   .dm-msg-actions {
+    position: absolute;
+    bottom: calc(100% - 2px);
     display: flex;
-    gap: 4px;
+    gap: 2px;
+    padding: 2px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     opacity: 0;
+    pointer-events: none;
     transition: opacity .15s;
-    margin-top: 2px;
+    z-index: 3;
+    white-space: nowrap;
   }
-  .dm-msg-row:hover .dm-msg-actions { opacity: 1; }
+  .dm-msg-row.peer .dm-msg-actions { left: 0; }
+  .dm-msg-row.self .dm-msg-actions { right: 0; }
+  .dm-msg-row:hover .dm-msg-actions,
+  .dm-msg-actions:focus-within { opacity: 1; pointer-events: auto; }
+  @media (hover: none) {
+    .dm-msg-actions { position: static; opacity: 1; pointer-events: auto; box-shadow: none; background: none; border: none; padding: 0; margin-top: 2px; }
+  }
   .dm-msg-actions button {
     background: var(--bg-alt);
     border: none;
@@ -1712,7 +1730,7 @@
         <div class="dm-bubble-wrap">
           <div class="dm-bubble">
             ${quoteHtml}
-            <div>${linkify(m.content)}</div>
+            <div class="msg-text">${linkify(m.content)}</div>
             <div class="msg-time">${timeStr}${readTag}</div>
           </div>
           <div class="dm-msg-actions">
