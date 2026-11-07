@@ -609,7 +609,7 @@ app.get('/api/resource/list/:category', async (req, res) => {
     if (!item) continue;
     // B2 预签名链接最长 7 天，入库时存的那份会过期（资源中心里表现为点开 403）。
     // 这里按 objectKey 在每次读取时重新签名，保证文件始终可打开。
-    if (item.type === 'file' && item.objectKey && item.objectKey !== 'external') {
+    if (item.objectKey && item.objectKey !== 'external' && item.type !== 'link') {
       try {
         const cmd = new GetObjectCommand({
           Bucket: process.env.B2_BUCKET_NAME,
