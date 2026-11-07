@@ -101,6 +101,11 @@ const USERNAME_RE = /^[a-zA-Z0-9_\u4e00-\u9fa5]{3,20}$/;
 
 function isValidUsername(u) { return typeof u === 'string' && USERNAME_RE.test(u) && !RESERVED_USERNAMES.includes(u.toLowerCase()); }
 function isValidPassword(p) { return typeof p === 'string' && p.length >= 6 && p.length <= 72; }
+// 展示型文本统一清洗：去掉控制字符和尖括号，配合前端转义形成双层防护
+function cleanTitle(input, fallback = '未命名资源', max = 100) {
+  const s = String(input || '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim();
+  return s ? s.slice(0, max) : fallback;
+}
 function toHex(buffer) { return Array.from(new Uint8Array(buffer)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
 function clientIp(req) { return req.headers['cf-connecting-ip'] || req.ip || 'unknown'; }
 
@@ -134,27 +139,10 @@ async function verifyUserRecord(user, password) {
   return { ok: true, needsUpgrade: true, upgradedRecord: upgraded };
 }
 
-function getEncryptionKey() {
-  const key = process.env.ENCRYPTION_KEY;
-  if (!key) throw new Error('ENCRYPTION_KEY 未配置');
-  return crypto.createHash('sha256').update(key).digest();
-}
-
-function encryptPassword(plain) {
-  const key = getEncryptionKey();
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  const encrypted = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
-  return { iv: iv.toString('hex'), data: encrypted.toString('hex') };
-}
-
-function decryptPassword(encObj) {
-  const key = getEncryptionKey();
-  const iv = Buffer.from(encObj.iv, 'hex');
-  const encrypted = Buffer.from(encObj.data, 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
-}
+// 说明：旧版本曾把用户密码用 AES 可逆加密后再存一份（encryptedPassword），
+// 并允许管理员在后台"查看密码"。这会让 Redis / ENCRYPTION_KEY 一旦泄露就等于
+// 全站明文密码泄露，已彻底移除。用户忘记密码时请使用后台的"重置密码"。
+// 旧数据里残留的 encryptedPassword 字段不会再被读取，会在下次改密/重置时自然消失。
 
 async function getSession(token) {
   if (!token) return null;
@@ -232,7 +220,6 @@ app.post('/api/register', async (req, res) => {
   const users = await kvGet('users') || {};
   if (users[username]) return res.status(409).json({ error: '用户名已存在' });
   const record = await createUserRecord(password);
-  record.encryptedPassword = encryptPassword(password);
   users[username] = record;
   await kvPut('users', users);
   res.json({ success: true, message: '注册成功' });
@@ -260,12 +247,11 @@ app.post('/api/login', async (req, res) => {
   
   if (result.needsUpgrade) {
     const upgraded = result.upgradedRecord;
-    upgraded.encryptedPassword = user.encryptedPassword || encryptPassword(password);
     users[username] = upgraded;
     await kvPut('users', users);
   }
   const token = await createSession(username, user.role || 'user');
-  const needsUpgrade = !user.encryptedPassword || user.algo !== 'pbkdf2-sha256';
+  const needsUpgrade = user.algo !== 'pbkdf2-sha256' || !user.iterations;
   res.json({ success: true, token, username, role: user.role || 'user', needsUpgrade });
 });
 
@@ -280,7 +266,7 @@ app.get('/api/verify', async (req, res) => {
   if (session.username !== 'admin') {
     const users = await kvGet('users') || {};
     const user = users[session.username];
-    needsUpgrade = !!(user && (!user.encryptedPassword || user.algo !== 'pbkdf2-sha256'));
+    needsUpgrade = !!(user && (user.algo !== 'pbkdf2-sha256' || !user.iterations));
   }
 
   res.json({
@@ -312,7 +298,6 @@ app.post('/api/change-my-password', async (req, res) => {
   if (!user) return res.status(404).json({ error: '用户不存在' });
   const newRecord = await createUserRecord(newPassword);
   newRecord.role = user.role || 'user';
-  newRecord.encryptedPassword = encryptPassword(newPassword);
   newRecord.createdAt = user.createdAt || Date.now();
   users[session.username] = newRecord;
   await kvPut('users', users);
@@ -520,7 +505,7 @@ app.post('/api/resource/confirm', async (req, res) => {
     id: resourceId,
     objectKey,
     playUrl,
-    title: String(title || '未命名资源').slice(0, 100),
+    title: cleanTitle(title),
     category: ['movie', 'music', 'software', 'other'].includes(category) ? category : 'other',
     fileSize,
     uploader: session.username,
@@ -566,7 +551,7 @@ app.post('/api/admin/resource/link', async (req, res) => {
   const resourceId = 'res_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
   const record = {
     id: resourceId, objectKey: 'external', playUrl: url,
-    title: String(title).slice(0, 100),
+    title: cleanTitle(title, '未命名资源', 100),
     category: ['movie', 'music', 'software', 'other'].includes(category) ? category : 'other',
     fileSize: 0, uploader: session.username, type: 'link', createdAt: Date.now(),
   };
@@ -632,6 +617,11 @@ app.get('/api/resource/list/:category', async (req, res) => {
 // ============================================================
 const CHAT_DEFAULT_LIMIT = 20;
 const ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+// 只从环境变量读取，密钥绝不能写进源码或提交到仓库。
+const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY || '';
+if (!ZHIPU_API_KEY) {
+  console.warn('[启动警告] 未配置 ZHIPU_API_KEY，AI 聊天接口将返回 503');
+}
 
 const DEFAULT_CHAT_CONFIG = {
   model: 'glm-4-flash',
@@ -863,6 +853,10 @@ app.post('/api/chat/stream', async (req, res) => {
 
     if (messages.length === 0) return res.status(400).json({ error: '消息内容为空' });
 
+    if (!ZHIPU_API_KEY) {
+      return res.status(503).json({ error: 'AI 服务暂未配置，请联系管理员' });
+    }
+
     let sysPrompt = cfg.systemPrompt || DEFAULT_CHAT_CONFIG.systemPrompt;
 
     if (cfg.enableBrowserInfo && browserInfo && typeof browserInfo === 'object') {
@@ -888,14 +882,12 @@ app.post('/api/chat/stream', async (req, res) => {
     res.setHeader('X-Accel-Buffering', 'no');
     if (typeof res.flushHeaders === 'function') res.flushHeaders();
 
-    const apiKey = process.env.ZHIPU_API_KEY || '7b77f8d932f243ce99525a7f4194d755.QJNWfoQtfjyVQCLi';
-
     let zhipuRes;
     try {
       zhipuRes = await fetch(ZHIPU_API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${ZHIPU_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -1361,7 +1353,6 @@ app.post('/api/admin/reset-password', async (req, res) => {
   if (!users[username]) return res.status(404).json({ error: '用户不存在' });
   const newRecord = await createUserRecord(newPassword);
   newRecord.role = users[username].role || 'user';
-  newRecord.encryptedPassword = encryptPassword(newPassword);
   newRecord.createdAt = users[username].createdAt || Date.now();
   users[username] = newRecord;
   await kvPut('users', users);
@@ -1467,53 +1458,16 @@ app.post('/api/admin/rooms/close', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { roomId } = req.body;
   if (!roomId) return res.status(400).json({ error: '缺少房间号' });
-  const key = `gomoku:${roomId}`;
-  const room = await kvGet(key);
+  const room = await getRoom(roomId);
   if (!room) return res.status(404).json({ error: '房间不存在' });
   room.status = 'closed';
-  await kvPut(key, room, { expirationTtl: 60 });
+  await saveRoom(roomId, room);
+  io.to(roomId).emit('room-closed', { reason: '房间已被管理员关闭' });
   res.json({ success: true });
 });
 
-app.post('/api/admin/verify-admin', async (req, res) => {
-  const token = getBearerToken(req);
-  const session = await getSession(token);
-  if (!session || session.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
-  const { adminPassword } = req.body;
-  if (!adminPassword) return res.status(400).json({ error: '请输入管理员密码' });
-  let adminPwd = await kvGet('admin_password') || process.env.ADMIN;
-  if (!adminPwd) return res.status(503).json({ error: '管理员账户尚未配置' });
-  if (adminPassword !== adminPwd) return res.status(403).json({ error: '管理员密码错误' });
-  const tempToken = crypto.randomUUID();
-  const expires = Date.now() + 5 * 60 * 1000;
-  await kvPut(`temp_admin:${tempToken}`, JSON.stringify({ expires }), { expirationTtl: 300 });
-  res.json({ success: true, tempToken });
-});
-
-app.post('/api/admin/view-password', async (req, res) => {
-  const adminToken = getBearerToken(req);
-  const adminSession = await getSession(adminToken);
-  if (!adminSession || adminSession.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
-  const { username, tempToken } = req.body;
-  if (!username || !tempToken) return res.status(400).json({ error: '参数不完整' });
-  const tempData = await kvGet(`temp_admin:${tempToken}`);
-  if (!tempData || tempData.expires < Date.now()) {
-    await kvDelete(`temp_admin:${tempToken}`);
-    return res.status(403).json({ error: '临时令牌无效或已过期' });
-  }
-  await kvDelete(`temp_admin:${tempToken}`);
-  const users = await kvGet('users') || {};
-  const user = users[username];
-  if (!user) return res.status(404).json({ error: '用户不存在' });
-  if (username === 'admin') return res.status(400).json({ error: '不能查看管理员密码' });
-  let plainPassword = null;
-  if (user.encryptedPassword) {
-    try { plainPassword = decryptPassword(user.encryptedPassword); } catch(e) { return res.status(500).json({ error: '解密失败' }); }
-  } else {
-    plainPassword = '（无法显示明文，请重置密码）';
-  }
-  res.json({ success: true, password: plainPassword });
-});
+// 安全说明：原 /api/admin/verify-admin + /api/admin/view-password 允许管理员
+// 查看任意用户的明文密码，已删除。重置密码请用 /api/admin/reset-password。
 
 // ============================================================
 //  论坛系统
@@ -1919,6 +1873,148 @@ app.get('/api/forum/score/:username', async (req, res) => {
   const score = (await kvGet(`forum_score:${req.params.username}`)) || 0;
   res.json({ username: req.params.username, score });
 });
+// ======== 五子棋：房间存取 ========
+// REST 接口与 WebSocket 共用同一份缓存与读写函数，避免两边状态不一致
+const GOMOKU_TTL = 7200;          // 房间存活时间（秒）
+const UNDO_LIMIT = 3;             // 每人每局最多悔棋次数
+const TAKEOVER_MS = 60 * 1000;    // 掉线超过该时间，座位才允许被他人顶替
+const REQUEST_TIMEOUT_MS = 30 * 1000;
+const roomCache = new Map();
+const pendingRequests = new Map(); // roomId -> { type: 'undo' | 'restart', from, timer }
+
+async function getRoom(roomId) {
+  if (roomCache.has(roomId)) return roomCache.get(roomId);
+  const room = await kvGet(`gomoku:${roomId}`);
+  if (room && room.status !== 'closed') roomCache.set(roomId, room);
+  return room;
+}
+async function saveRoom(roomId, room) {
+  if (room.status === 'closed') {
+    roomCache.delete(roomId);
+    clearPending(roomId);
+    return kvPut(`gomoku:${roomId}`, room, { expirationTtl: 60 });
+  }
+  roomCache.set(roomId, room);
+  return kvPut(`gomoku:${roomId}`, room, { expirationTtl: GOMOKU_TTL });
+}
+function clearPending(roomId) {
+  const p = pendingRequests.get(roomId);
+  if (p && p.timer) clearTimeout(p.timer);
+  pendingRequests.delete(roomId);
+}
+// 发给客户端的房间数据：去掉密码和邀请令牌
+function sanitizeRoom(room) {
+  const { password, inviteToken, ...safe } = room;
+  safe.hasPassword = !!password;
+  safe.undoLimit = UNDO_LIMIT;
+  return safe;
+}
+function broadcastRoom(roomId, room) {
+  io.to(roomId).emit('room-update', sanitizeRoom(room));
+}
+function recalcStatus(room) {
+  if (room.status === 'closed') return;
+  if (room.gameOver) { room.status = 'finished'; return; }
+  const total = Object.keys(room.players).length;
+  const online = Object.values(room.players).filter(p => p.online).length;
+  room.status = total < 2 ? 'waiting' : (online === 2 ? 'playing' : 'paused');
+}
+function playerByName(room, username) {
+  return Object.values(room.players).find(p => p.username === username);
+}
+function opponentOf(room, username) {
+  return Object.values(room.players).find(p => p.username !== username);
+}
+async function emitToRoomUser(roomId, username, event, payload) {
+  const sockets = await io.in(roomId).fetchSockets();
+  sockets.forEach(s => { if (s.data && s.data.username === username) s.emit(event, payload); });
+}
+
+// 校验加入权限并安排座位。返回 { error, status } 或 { color, action }
+function tryJoin(room, username, password, inviteToken) {
+  if (room.status === 'closed') return { error: '房间已关闭', status: 400 };
+  const validInvite = !!(inviteToken && room.inviteToken && inviteToken === room.inviteToken);
+  const existing = playerByName(room, username);
+  if (existing) {   // 本人重连：无需再次验证密码
+    existing.online = true;
+    existing.left = false;
+    delete existing.offlineAt;
+    room.lastActive = Date.now();
+    recalcStatus(room);
+    return { color: existing.color, action: 'reconnect' };
+  }
+  if (!validInvite && room.password && room.password !== password) return { error: '密码错误', status: 403 };
+
+  const occupied = Object.keys(room.players).map(Number);
+  let color;
+  if (occupied.length < 2) {
+    color = occupied.includes(1) ? 2 : 1;
+  } else {
+    // 房间已满：只有主动离开、或掉线超过一定时间的座位才能被顶替
+    const now = Date.now();
+    const seat = Object.values(room.players).find(p => !p.online && (p.left || now - (p.offlineAt || 0) > TAKEOVER_MS));
+    if (!seat) {
+      const anyOffline = Object.values(room.players).some(p => !p.online);
+      return { error: anyOffline ? '房间已满（对方可能只是暂时掉线，请稍后再试）' : '房间已满', status: 409 };
+    }
+    color = seat.color;
+    delete room.players[color];
+  }
+  room.players[color] = { username, online: true, color };
+  room.lastActive = Date.now();
+  recalcStatus(room);
+  return { color, action: 'join' };
+}
+
+// 找到某位玩家最近一次落子在 history 中的下标（找不到返回 -1）
+function lastMoveIndexOf(room, color) {
+  for (let i = room.history.length - 1; i >= 0; i--) {
+    const { row, col } = room.history[i];
+    if (room.board[row][col] === color) return i;
+  }
+  return -1;
+}
+
+// 找出连成五子的那一条线，用于前端高亮
+function findWinLine(row, col, player, board) {
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (const [dr, dc] of dirs) {
+    const line = [{ row, col }];
+    for (let d = 1; d < 15; d++) {
+      const r = row + dr * d, c = col + dc * d;
+      if (r<0||r>=15||c<0||c>=15||board[r][c]!==player) break;
+      line.push({ row: r, col: c });
+    }
+    for (let d = 1; d < 15; d++) {
+      const r = row - dr * d, c = col - dc * d;
+      if (r<0||r>=15||c<0||c>=15||board[r][c]!==player) break;
+      line.unshift({ row: r, col: c });
+    }
+    if (line.length >= 5) return line;
+  }
+  return null;
+}
+
+function resetGame(room) {
+  // 再来一局：双方交换黑白，由原来的白方先手
+  const swapped = {};
+  for (const p of Object.values(room.players)) {
+    p.color = p.color === 1 ? 2 : 1;
+    swapped[p.color] = p;
+  }
+  room.players = swapped;
+  room.board = Array(15).fill().map(() => Array(15).fill(0));
+  room.currentPlayer = 1;
+  room.history = [];
+  room.gameOver = false;
+  delete room.winner;
+  delete room.winLine;
+  delete room.endReason;
+  room.undoCountPerPlayer = {};
+  room.lastActive = Date.now();
+  recalcStatus(room);
+}
+
 // ======== 五子棋 REST 辅助接口 ========
 app.post('/api/room/create', async (req, res) => {
   const token = getBearerToken(req);
@@ -1939,12 +2035,13 @@ app.post('/api/room/create', async (req, res) => {
     password: password || null,
     inviteToken: invite ? crypto.randomUUID() : null,
     status: 'waiting',
+    undoCountPerPlayer: {},
     lastActive: now,
     created: now,
     messages: [],
   };
   try {
-    await kvPut(`gomoku:${roomId}`, room, { expirationTtl: 7200 });
+    await saveRoom(roomId, room);
     res.json({ success: true, roomId, color, inviteToken: room.inviteToken });
   } catch (err) {
     console.error('创建房间失败:', err);
@@ -1958,48 +2055,13 @@ app.post('/api/room/join', async (req, res) => {
   if (!session) return res.status(401).json({ error: '请先登录' });
   const { roomId, password, inviteToken } = req.body;
   if (!roomId) return res.status(400).json({ error: '缺少房间号' });
-  const key = `gomoku:${roomId}`;
-  const room = await kvGet(key);
+  const room = await getRoom(roomId);
   if (!room) return res.status(404).json({ error: '房间不存在' });
-  if (room.status === 'closed' || room.status === 'finished') return res.status(400).json({ error: '房间已结束' });
-
-  let validInvite = false;
-  if (inviteToken && room.inviteToken && inviteToken === room.inviteToken) validInvite = true;
-  if (!validInvite && room.password && room.password !== password) return res.status(403).json({ error: '密码错误' });
-
-  const existingPlayer = Object.values(room.players).find(p => p.username === session.username);
-  if (existingPlayer) {
-    existingPlayer.online = true;
-    room.lastActive = Date.now();
-    const total = Object.keys(room.players).length;
-    const online = Object.values(room.players).filter(p => p.online).length;
-    room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
-    await kvPut(key, room, { expirationTtl: 7200 });
-    return res.json({ success: true, roomId, color: existingPlayer.color, action: 'reconnect' });
-  }
-
-  const occupiedColors = Object.keys(room.players).map(Number);
-  let availableColor = null;
-  if (room.status === 'waiting' || room.status === 'paused') {
-    if (occupiedColors.length < 2) availableColor = occupiedColors.includes(1) ? 2 : 1;
-    else return res.status(409).json({ error: '房间已满' });
-  } else if (room.status === 'playing') {
-    const offlinePlayer = Object.values(room.players).find(p => !p.online);
-    if (offlinePlayer) {
-      availableColor = offlinePlayer.color;
-      delete room.players[offlinePlayer.color];
-    } else return res.status(409).json({ error: '房间已满且无人离线' });
-  } else return res.status(400).json({ error: '房间状态异常' });
-  if (availableColor === null) return res.status(400).json({ error: '无法加入房间' });
-
-  room.players[availableColor] = { username: session.username, online: true, color: availableColor };
-  room.lastActive = Date.now();
-  for (const p of Object.values(room.players)) p.online = true;
-  const total = Object.keys(room.players).length;
-  const online = Object.values(room.players).filter(p => p.online).length;
-  room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
-  await kvPut(key, room, { expirationTtl: 7200 });
-  res.json({ success: true, roomId, color: availableColor, action: 'join' });
+  const result = tryJoin(room, session.username, password, inviteToken);
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  await saveRoom(roomId, room);
+  broadcastRoom(roomId, room);
+  res.json({ success: true, roomId, color: result.color, action: result.action });
 });
 
 app.post('/api/room/leave', async (req, res) => {
@@ -2008,27 +2070,19 @@ app.post('/api/room/leave', async (req, res) => {
   if (!session) return res.status(401).json({ error: '请先登录' });
   const { roomId } = req.body;
   if (!roomId) return res.status(400).json({ error: '缺少房间号' });
-  const key = `gomoku:${roomId}`;
-  const room = await kvGet(key);
+  const room = await getRoom(roomId);
   if (!room) return res.status(404).json({ error: '房间不存在' });
-  let playerFound = false;
-  for (const color of Object.keys(room.players)) {
-    if (room.players[color].username === session.username) {
-      room.players[color].online = false;
-      playerFound = true;
-      break;
-    }
-  }
-  if (!playerFound) return res.status(403).json({ error: '你不在该房间中' });
+  const me = playerByName(room, session.username);
+  if (!me) return res.status(403).json({ error: '你不在该房间中' });
+  me.online = false;
+  me.left = true;
+  me.offlineAt = Date.now();
+  clearPending(roomId);
   const onlineCount = Object.values(room.players).filter(p => p.online).length;
-  if (onlineCount === 0) {
-    room.status = 'closed';
-    await kvPut(key, room, { expirationTtl: 60 });
-  } else {
-    const total = Object.keys(room.players).length;
-    room.status = (total === 1) ? 'waiting' : 'paused';
-    await kvPut(key, room, { expirationTtl: 7200 });
-  }
+  if (onlineCount === 0) room.status = 'closed';
+  else recalcStatus(room);
+  await saveRoom(roomId, room);
+  if (room.status !== 'closed') broadcastRoom(roomId, room);
   res.json({ success: true });
 });
 
@@ -2038,23 +2092,16 @@ app.post('/api/room/heartbeat', async (req, res) => {
   if (!session) return res.status(401).json({ error: '请先登录' });
   const { roomId } = req.body;
   if (!roomId) return res.status(400).json({ error: '缺少房间号' });
-  const key = `gomoku:${roomId}`;
-  const room = await kvGet(key);
+  const room = await getRoom(roomId);
   if (!room) return res.status(404).json({ error: '房间不存在' });
-  let updated = false;
-  for (const color of Object.keys(room.players)) {
-    if (room.players[color].username === session.username) {
-      room.players[color].online = true;
-      room.lastActive = Date.now();
-      updated = true;
-      break;
-    }
-  }
-  if (!updated) return res.status(400).json({ error: '你不在该房间中' });
-  const total = Object.keys(room.players).length;
-  const online = Object.values(room.players).filter(p => p.online).length;
-  room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
-  await kvPut(key, room, { expirationTtl: 7200 });
+  const me = playerByName(room, session.username);
+  if (!me) return res.status(400).json({ error: '你不在该房间中' });
+  me.online = true;
+  me.left = false;
+  delete me.offlineAt;
+  room.lastActive = Date.now();
+  recalcStatus(room);
+  await saveRoom(roomId, room);
   res.json({ success: true });
 });
 
@@ -2064,14 +2111,16 @@ app.get('/api/rooms', async (req, res) => {
     const rooms = [];
     for (const key of list.keys) {
       const roomId = key.name.replace('gomoku:', '');
-      const room = await kvGet(key.name);
-      if (!room) continue;
+      const room = await getRoom(roomId);
+      if (!room || room.status === 'closed') continue;
+      const onlineCount = Object.values(room.players || {}).filter(p => p?.online).length;
+      if (onlineCount === 0) continue;   // 没有人在线的房间不展示
       rooms.push({
         roomId,
         creator: room.creator || '未知',
         status: room.status || 'unknown',
         playerCount: Object.keys(room.players || {}).length,
-        onlineCount: Object.values(room.players || {}).filter(p => p?.online).length,
+        onlineCount,
         hasPassword: !!room.password,
         createdAt: room.created || Date.now()
       });
@@ -2084,29 +2133,27 @@ app.get('/api/rooms', async (req, res) => {
 });
 
 app.get('/api/room/:roomId', async (req, res) => {
-  const room = await kvGet(`gomoku:${req.params.roomId}`);
+  const room = await getRoom(req.params.roomId);
   if (!room) return res.status(404).json({ error: '房间不存在' });
-  const { password, inviteToken, ...safe } = room;
-  res.json(safe);
+  res.json(sanitizeRoom(room));
 });
 
 // ======== WebSocket 实时联机（五子棋） ========
-const roomCache = new Map();
-
-async function getRoom(roomId) {
-  if (roomCache.has(roomId)) return roomCache.get(roomId);
-  const room = await kvGet(`gomoku:${roomId}`);
-  if (room) roomCache.set(roomId, room);
-  return room;
-}
-async function saveRoom(roomId, room) {
-  roomCache.set(roomId, room);
-  await kvPut(`gomoku:${roomId}`, room, { expirationTtl: 7200 });
-}
+const lastChatAt = new Map(); // username -> 时间戳，简单限流
 
 io.on('connection', (socket) => {
   console.log('新连接:', socket.id);
   socket.data = {};
+
+  // 取得当前房间与双方玩家；校验失败时直接提示并返回 null
+  async function roomContext(roomId) {
+    if (!socket.data?.roomId || socket.data.roomId !== roomId) { socket.emit('error', '未加入房间'); return null; }
+    const room = await getRoom(roomId);
+    if (!room) { socket.emit('error', '房间不存在'); return null; }
+    const me = playerByName(room, socket.data.username);
+    if (!me) { socket.emit('error', '你不在该房间中'); return null; }
+    return { room, me, opp: opponentOf(room, socket.data.username) };
+  }
 
   socket.on('join-room', async ({ roomId, token, password, inviteToken }) => {
     try {
@@ -2114,48 +2161,13 @@ io.on('connection', (socket) => {
       if (!session) return socket.emit('error', '请先登录');
       const room = await getRoom(roomId);
       if (!room) return socket.emit('error', '房间不存在');
-      if (room.status === 'closed' || room.status === 'finished') return socket.emit('error', '房间已结束');
-
-      let valid = false;
-      if (inviteToken && room.inviteToken === inviteToken) valid = true;
-      if (!valid && room.password && room.password !== password) return socket.emit('error', '密码错误');
-
-      let existingColor = null;
-      for (const [color, p] of Object.entries(room.players)) {
-        if (p.username === session.username) { existingColor = Number(color); break; }
-      }
-      if (existingColor) {
-        room.players[existingColor].online = true;
-        await saveRoom(roomId, room);
-        socket.join(roomId);
-        socket.data = { username: session.username, roomId, color: existingColor };
-        io.to(roomId).emit('room-update', room);
-        return socket.emit('joined', { color: existingColor, action: 'reconnect' });
-      }
-
-      const occupied = Object.keys(room.players).map(Number);
-      let color = null;
-      if (room.status === 'waiting' || room.status === 'paused') {
-        if (occupied.length < 2) color = occupied.includes(1) ? 2 : 1;
-        else return socket.emit('error', '房间已满');
-      } else if (room.status === 'playing') {
-        const offline = Object.values(room.players).find(p => !p.online);
-        if (offline) {
-          color = offline.color;
-          delete room.players[color];
-        } else return socket.emit('error', '房间已满且无人离线');
-      } else return socket.emit('error', '房间状态异常');
-
-      room.players[color] = { username: session.username, online: true, color };
-      const total = Object.keys(room.players).length;
-      const online = Object.values(room.players).filter(p => p.online).length;
-      room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
-      room.lastActive = Date.now();
+      const result = tryJoin(room, session.username, password, inviteToken);
+      if (result.error) return socket.emit('error', result.error);
       await saveRoom(roomId, room);
       socket.join(roomId);
-      socket.data = { username: session.username, roomId, color };
-      io.to(roomId).emit('room-update', room);
-      socket.emit('joined', { color, action: 'join' });
+      socket.data = { username: session.username, roomId, color: result.color };
+      broadcastRoom(roomId, room);
+      socket.emit('joined', { color: result.color, action: result.action });
     } catch (e) {
       socket.emit('error', e.message);
     }
@@ -2163,34 +2175,128 @@ io.on('connection', (socket) => {
 
   socket.on('make-move', async ({ roomId, row, col }) => {
     try {
-      if (!socket.data?.roomId || socket.data.roomId !== roomId) return socket.emit('error', '未加入房间');
-      const room = await getRoom(roomId);
-      if (!room) return socket.emit('error', '房间不存在');
-      if (room.gameOver) return socket.emit('error', '游戏已结束');
-      if (room.status !== 'playing') return socket.emit('error', '游戏未开始');
-      const playerEntry = Object.values(room.players).find(p => p.username === socket.data.username && p.online);
-      if (!playerEntry) return socket.emit('error', '你不在房间或已离线');
-      const player = playerEntry.color;
-      if (room.currentPlayer !== player) return socket.emit('error', '不是你的回合');
-      if (room.board[row][col] !== 0) return socket.emit('error', '该位置已有棋子');
-      
-      room.board[row][col] = player;
+      const ctx = await roomContext(roomId);
+      if (!ctx) return;
+      const { room, me } = ctx;
+      if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row >= 15 || col < 0 || col >= 15) {
+        return socket.emit('error', '落子位置无效');
+      }
+      if (room.gameOver) return socket.emit('error', '对局已结束');
+      if (room.status !== 'playing') return socket.emit('error', '对手不在线，暂时不能落子');
+      if (!me.online) return socket.emit('error', '你已离线');
+      if (room.currentPlayer !== me.color) return socket.emit('error', '还没轮到你');
+      if (room.board[row][col] !== 0) return socket.emit('error', '这里已经有棋子了');
+
+      room.board[row][col] = me.color;
       room.history.push({ row, col });
-      const win = checkWin(row, col, player, room.board);
-      if (win) {
+      clearPending(roomId);            // 落子后，之前未处理的悔棋/重开请求作废
+      const line = findWinLine(row, col, me.color, room.board);
+      if (line) {
         room.gameOver = true;
-        room.winner = player;
-        room.status = 'finished';
+        room.winner = me.color;
+        room.winLine = line;
+        room.endReason = 'five';
       } else if (room.history.length === 225) {
         room.gameOver = true;
         room.winner = 0;
-        room.status = 'finished';
+        room.endReason = 'draw';
       } else {
-        room.currentPlayer = player === 1 ? 2 : 1;
+        room.currentPlayer = me.color === 1 ? 2 : 1;
+      }
+      room.lastActive = Date.now();
+      recalcStatus(room);
+      await saveRoom(roomId, room);
+      broadcastRoom(roomId, room);
+    } catch (e) {
+      socket.emit('error', e.message);
+    }
+  });
+
+  // 悔棋 / 重新开始：先向对方发请求，对方同意后才生效
+  async function sendRequest(type, roomId) {
+    const ctx = await roomContext(roomId);
+    if (!ctx) return;
+    const { room, me, opp } = ctx;
+    if (!opp || !opp.online) return socket.emit('error', '对方不在线');
+    if (pendingRequests.has(roomId)) return socket.emit('error', '已有一个请求正在等待处理');
+    if (type === 'undo') {
+      if (room.gameOver) return socket.emit('error', '对局已结束，不能悔棋');
+      const used = (room.undoCountPerPlayer && room.undoCountPerPlayer[me.username]) || 0;
+      if (used >= UNDO_LIMIT) return socket.emit('error', '你的悔棋次数已用完');
+      if (lastMoveIndexOf(room, me.color) < 0) return socket.emit('error', '你还没有落子，无需悔棋');
+    }
+    const timer = setTimeout(async () => {
+      const cur = pendingRequests.get(roomId);
+      if (cur && cur.timer === timer) {
+        pendingRequests.delete(roomId);
+        await emitToRoomUser(roomId, me.username, 'request-result', { type, accepted: false, message: '对方没有回应，请求已取消' });
+        await emitToRoomUser(roomId, opp.username, 'request-cancel', { type });
+      }
+    }, REQUEST_TIMEOUT_MS);
+    pendingRequests.set(roomId, { type, from: me.username, timer });
+    await emitToRoomUser(roomId, opp.username, 'request', { type, from: me.username, timeout: REQUEST_TIMEOUT_MS });
+    socket.emit('notice', type === 'undo' ? '已向对方发送悔棋请求' : '已向对方发送重新开始请求');
+  }
+  socket.on('undo-request', ({ roomId }) => sendRequest('undo', roomId).catch(e => socket.emit('error', e.message)));
+  socket.on('restart-request', ({ roomId }) => sendRequest('restart', roomId).catch(e => socket.emit('error', e.message)));
+
+  socket.on('respond-request', async ({ roomId, accept }) => {
+    try {
+      const ctx = await roomContext(roomId);
+      if (!ctx) return;
+      const { room, me } = ctx;
+      const pending = pendingRequests.get(roomId);
+      if (!pending || pending.from === me.username) return socket.emit('error', '没有需要你处理的请求');
+      clearPending(roomId);
+      const { type, from } = pending;
+      if (!accept) {
+        return emitToRoomUser(roomId, from, 'request-result', {
+          type, accepted: false, message: type === 'undo' ? '对方拒绝了你的悔棋请求' : '对方拒绝了重新开始'
+        });
+      }
+      if (type === 'undo') {
+        const requester = playerByName(room, from);
+        if (!requester || room.gameOver) return;
+        const idx = lastMoveIndexOf(room, requester.color);
+        if (idx < 0) return;
+        for (let i = room.history.length - 1; i >= idx; i--) {
+          const { row, col } = room.history[i];
+          room.board[row][col] = 0;
+        }
+        room.history = room.history.slice(0, idx);
+        room.currentPlayer = requester.color;   // 轮到悔棋的人重新落子
+        room.undoCountPerPlayer = room.undoCountPerPlayer || {};
+        room.undoCountPerPlayer[from] = (room.undoCountPerPlayer[from] || 0) + 1;
+      } else {
+        resetGame(room);
       }
       room.lastActive = Date.now();
       await saveRoom(roomId, room);
-      io.to(roomId).emit('room-update', room);
+      broadcastRoom(roomId, room);
+      io.to(roomId).emit('request-result', {
+        type, accepted: true, message: type === 'undo' ? '悔棋成功' : '新的一局开始了，双方已交换黑白'
+      });
+    } catch (e) {
+      socket.emit('error', e.message);
+    }
+  });
+
+  socket.on('resign', async ({ roomId }) => {
+    try {
+      const ctx = await roomContext(roomId);
+      if (!ctx) return;
+      const { room, me, opp } = ctx;
+      if (room.gameOver) return;
+      if (!opp || room.history.length === 0) return socket.emit('error', '对局还没有开始');
+      room.gameOver = true;
+      room.winner = opp.color;
+      room.winLine = null;
+      room.endReason = 'resign';
+      room.resignedBy = me.username;
+      clearPending(roomId);
+      recalcStatus(room);
+      await saveRoom(roomId, room);
+      broadcastRoom(roomId, room);
     } catch (e) {
       socket.emit('error', e.message);
     }
@@ -2199,31 +2305,40 @@ io.on('connection', (socket) => {
   socket.on('send-message', async ({ roomId, text }) => {
     try {
       if (!socket.data?.roomId || socket.data.roomId !== roomId) return;
+      text = typeof text === 'string' ? text.trim() : '';
       if (!text || text.length > 200) return;
+      const now = Date.now();
+      if (now - (lastChatAt.get(socket.data.username) || 0) < 400) return;   // 限制刷屏
+      lastChatAt.set(socket.data.username, now);
       const room = await getRoom(roomId);
       if (!room) return;
       if (!room.messages) room.messages = [];
-      room.messages.push({ username: socket.data.username, text, time: Date.now() });
+      room.messages.push({ username: socket.data.username, text, time: now });
       if (room.messages.length > 100) room.messages = room.messages.slice(-100);
       await saveRoom(roomId, room);
-      io.to(roomId).emit('new-message', { username: socket.data.username, text });
+      io.to(roomId).emit('new-message', { username: socket.data.username, text, time: now });
     } catch (e) {}
   });
 
   socket.on('disconnect', async () => {
-    if (!socket.data?.roomId) return;
-    const room = await getRoom(socket.data.roomId);
-    if (!room) return;
-    const color = socket.data.color;
-    if (room.players[color]) {
-      room.players[color].online = false;
-      const total = Object.keys(room.players).length;
-      const online = Object.values(room.players).filter(p => p.online).length;
-      room.status = (total === 1) ? 'waiting' : (online === 2 ? 'playing' : 'paused');
+    const { roomId, username } = socket.data || {};
+    if (!roomId) return;
+    try {
+      const room = await getRoom(roomId);
+      if (!room) return;
+      // 同一用户还有别的连接在这个房间里（例如刷新页面、多开标签），就不算离线
+      const sockets = await io.in(roomId).fetchSockets();
+      if (sockets.some(s => s.data && s.data.username === username)) return;
+      const me = playerByName(room, username);
+      if (!me || !me.online) return;
+      me.online = false;
+      me.offlineAt = Date.now();
       room.lastActive = Date.now();
-      await saveRoom(socket.data.roomId, room);
-      io.to(socket.data.roomId).emit('room-update', room);
-    }
+      clearPending(roomId);
+      recalcStatus(room);
+      await saveRoom(roomId, room);
+      broadcastRoom(roomId, room);
+    } catch (e) {}
   });
 });
 
