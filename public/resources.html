@@ -155,6 +155,13 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
+  // 所有插入 innerHTML 的用户可控内容都必须先转义，防止存储型 XSS
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
   async function api(url, opts = {}) {
     opts.headers = opts.headers || {};
     if (token) opts.headers['Authorization'] = 'Bearer ' + token;
@@ -185,7 +192,7 @@
 
         document.getElementById('userArea').innerHTML = `
           ${av}
-          <a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:13.5px;">${user.displayName || user.username}</a>
+          <a href="/profile.html" style="text-decoration:none;color:var(--text);font-weight:500;font-size:13.5px;">${esc(user.displayName || user.username)}</a>
         `;
         
         if (user.role === 'admin') {
@@ -392,14 +399,19 @@
       }
       
       listEl.innerHTML = data.map(item => {
-        const ext = (item.playUrl.split('?')[0] || '').split('.').pop().toLowerCase();
+        const playUrlRaw = typeof item.playUrl === 'string' ? item.playUrl : '';
+        const ext = (playUrlRaw.split('?')[0] || '').split('.').pop().toLowerCase();
+        const playUrl = esc(playUrlRaw);
+        const title = esc(item.title || '');
+        const uploader = esc(item.uploader || '');
+        const rid = esc(item.id || '');
         let previewHtml = '';
         const canDelete = currentUser && (currentUser.username === item.uploader || currentUser.role === 'admin');
 
         if (item.type === 'link' || ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'm3u8'].includes(ext)) {
           previewHtml = `
             <div class="player-wrapper paused">
-              <video data-src="${item.playUrl}" preload="metadata"></video>
+              <video data-src="${playUrl}" preload="metadata"></video>
               <div class="player-controls">
                 <button class="play-btn">▶</button>
                 <span class="time-current">00:00</span>
@@ -420,21 +432,21 @@
               </div>
             </div>`;
         } else if (['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext)) {
-          previewHtml = `<div class="res-preview-box"><span class="file-ext">${ext} Audio</span><audio src="${item.playUrl}" controls style="width:90%; margin-top:5px;"></audio></div>`;
+          previewHtml = `<div class="res-preview-box"><span class="file-ext">${esc(ext)} Audio</span><audio src="${playUrl}" controls style="width:90%; margin-top:5px;"></audio></div>`;
         } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
-          previewHtml = `<img class="res-img" src="${item.playUrl}" alt="${item.title}" loading="lazy">`;
+          previewHtml = `<img class="res-img" src="${playUrl}" alt="${title}" loading="lazy">`;
         } else {
-          previewHtml = `<div class="res-preview-box"><span class="file-ext">${ext}</span><a class="download-btn" href="${item.playUrl}" target="_blank" download>点击下载</a></div>`;
+          previewHtml = `<div class="res-preview-box"><span class="file-ext">${esc(ext)}</span><a class="download-btn" href="${playUrl}" target="_blank" download>点击下载</a></div>`;
         }
 
         return `
           <div class="res-item">
-            ${canDelete ? `<button class="del-btn" onclick="deleteResource('${item.id}')">删除</button>` : ''}
+            ${canDelete ? `<button class="del-btn" onclick="deleteResource('${rid}')">删除</button>` : ''}
             ${previewHtml}
             <div class="res-info">
-              <div class="res-title">${item.title}</div>
+              <div class="res-title">${title}</div>
               <div class="res-meta">
-                <span>${item.uploader}</span>
+                <span>${uploader}</span>
                 <span>${item.type === 'link' ? '外链' : formatSize(item.fileSize)}</span>
               </div>
             </div>
