@@ -423,6 +423,10 @@ footer { margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border);
 .hidden { display: none !important; }
 
 /* ===== 响应式 ===== */
+/* 手机 / 平板端：导航栏随页面滚动，与首页保持一致 */
+@media (max-width: 900px) {
+  .navbar { position: static !important; top: auto !important; }
+}
 @media (max-width: 768px) {
   .navbar .container { flex-direction: column; gap: 0.5rem; }
   .nav-links { justify-content: center; }
