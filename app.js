@@ -602,11 +602,25 @@ app.get('/api/resource/list/:category', async (req, res) => {
   const category = req.params.category;
   const indexKey = `resource_index:${category}`;
   const ids = (await kvGet(indexKey)) || [];
-  
+
   const list = [];
   for (const id of ids.slice(0, 50)) {
     const item = await kvGet(`resource:${id}`);
-    if (item) list.push(item);
+    if (!item) continue;
+    // B2 预签名链接最长 7 天，入库时存的那份会过期（资源中心里表现为点开 403）。
+    // 这里按 objectKey 在每次读取时重新签名，保证文件始终可打开。
+    if (item.type === 'file' && item.objectKey && item.objectKey !== 'external') {
+      try {
+        const cmd = new GetObjectCommand({
+          Bucket: process.env.B2_BUCKET_NAME,
+          Key: item.objectKey,
+        });
+        item.playUrl = await getSignedUrl(b2Client, cmd, { expiresIn: 7 * 24 * 3600 });
+      } catch (e) {
+        console.error('资源重新签名失败:', item.objectKey, e.message);
+      }
+    }
+    list.push(item);
   }
   res.json(list);
 });
