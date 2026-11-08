@@ -40,7 +40,15 @@ if (toggle) {
       });
     }
 
-    if (!document.getElementById('other-nav')) {
+    // 个人中心页面本身不再显示“其它”入口
+    var isProfilePage = /\/profile(\.html)?\/?$/i.test(location.pathname || '');
+    var existingOther = document.getElementById('other-nav');
+    if (isProfilePage) {
+      if (existingOther) existingOther.style.display = 'none';
+      return;
+    }
+
+    if (!existingOther) {
       var li = document.createElement('li');
       li.id = 'other-nav';
       var a = document.createElement('a');
