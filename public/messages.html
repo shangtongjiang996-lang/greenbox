@@ -701,6 +701,56 @@
   .dm-send-btn:hover:not(:disabled) { transform: scale(1.08); }
   .dm-send-btn:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
 
+  /* ===== 附件 ===== */
+  .dm-attach-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-alt);
+    color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .dm-attach-btn:hover { color: var(--dm-accent); border-color: var(--dm-accent); }
+  .dm-attach-preview {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 7px 10px;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .dm-attach-file { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: baseline; }
+  .dm-attach-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+  .dm-attach-size { color: var(--muted); white-space: nowrap; }
+  .dm-attach-bar { width: 70px; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+  .dm-attach-bar div { height: 100%; width: 0; background: var(--dm-accent); transition: width .15s; }
+  .dm-attach-remove { border: none; background: transparent; color: var(--danger); cursor: pointer; font-size: 12px; }
+  .dm-attach { margin-top: 2px; max-width: 260px; width: 100%; }
+  .dm-attach img { max-width: 100%; max-height: 260px; border-radius: 10px; display: block; cursor: zoom-in; }
+  .dm-attach video { max-width: 100%; border-radius: 10px; display: block; background: #000; }
+  .dm-attach audio { width: 240px; max-width: 100%; }
+  .dm-attach-note { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .dm-attach-loading, .dm-attach-error, .dm-attach-expired {
+    font-size: 12px; color: var(--muted);
+    padding: 6px 8px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+  .dm-attach-error { color: var(--danger); }
+  .dm-file-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-alt);
+  }
+  .dm-file-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
+  .dm-file-meta { font-size: 11px; color: var(--muted); }
+  .dm-file-dl { margin-left: auto; font-size: 12px; color: var(--dm-accent); text-decoration: none; flex-shrink: 0; }
+
   /* ===== 弹窗 ===== */
   .dm-modal-overlay {
     position: fixed;
@@ -948,10 +998,24 @@
           <button data-emoji="👋">👋</button>
           <button data-emoji="🔥">🔥</button>
         </div>
-        <div class="dm-input-row">
-          <textarea id="dmInput" rows="1" placeholder="输入消息… (Enter 发送 / Shift+Enter 换行)"></textarea>
-          <button class="dm-send-btn" id="dmSendBtn">➤</button>
+        <div class="dm-attach-preview" id="dmAttachPreview" style="display:none;">
+          <div class="dm-attach-file">
+            <span class="dm-attach-name" id="dmAttachName"></span>
+            <span class="dm-attach-size" id="dmAttachSize"></span>
+          </div>
+          <div class="dm-attach-bar"><div id="dmAttachBar"></div></div>
+          <button type="button" class="dm-attach-remove" id="dmAttachRemove">移除</button>
         </div>
+        <div class="dm-input-row">
+          <button class="dm-attach-btn" id="dmAttachBtn" type="button" title="发送图片 / 视频 / 文件（最大 200MB，7 天有效）" aria-label="添加附件">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5l-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
+          </button>
+          <textarea id="dmInput" rows="1" placeholder="输入消息… (Enter 发送 / Shift+Enter 换行)"></textarea>
+          <button class="dm-send-btn" id="dmSendBtn" aria-label="发送">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 12l16-8-6 16-2.6-6.4L4 12z"/></svg>
+          </button>
+        </div>
+        <input type="file" id="dmFileInput" style="display:none;">
       </div>
     </div>
   </main>
@@ -1035,6 +1099,9 @@
   let remoteTypingTimer = null;
   let replyTo = null;
   let searchKeyword = '';
+  let pendingAttachment = null;
+  const attachmentUrls = new Map();
+  let uploading = false;
   const sentReadSet = new Set();
 
   // ============================================================
@@ -1044,6 +1111,32 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
       '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
     }[c]));
+  }
+  function fmtSize(n) {
+    const v = Number(n) || 0;
+    if (v < 1024) return v + ' B';
+    const units = ['KB', 'MB', 'GB'];
+    let x = v / 1024, i = 0;
+    while (x >= 1024 && i < units.length - 1) { x /= 1024; i++; }
+    return (x >= 10 ? x.toFixed(0) : x.toFixed(1)) + ' ' + units[i];
+  }
+  function fileKindLabel(kind) {
+    return kind === 'image' ? '图片' : kind === 'video' ? '视频' : kind === 'audio' ? '语音' : '文件';
+  }
+  function uploadToB2(url, file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', url, true);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
+      };
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300)
+        ? resolve()
+        : reject(new Error('上传失败（HTTP ' + xhr.status + '）'));
+      xhr.onerror = () => reject(new Error('上传失败，请检查网络或存储配置'));
+      xhr.send(file);
+    });
   }
   function timeAgo(ts) {
     const d = Date.now() - ts;
@@ -1609,6 +1702,8 @@
     }
     currentConvo = conv;
     currentMessages = [];
+    attachmentUrls.clear();
+    clearPendingAttachment();
     replyTo = null;
     sentReadSet.clear();
 
@@ -1689,6 +1784,7 @@
       return renderMessageHtml(g.msg);
     }).join('');
     bindMessageActions(el);
+    hydrateAttachments(el);
     el.scrollTop = el.scrollHeight;
   }
 
@@ -1717,11 +1813,14 @@
       const q = currentMessages.find(x => x.id === m.replyTo);
       if (q) {
         const qname = q.from === me.username ? '我' : (currentConvo && currentConvo.peerName || q.from);
-        const qtext = (q.content || '').slice(0, 40);
-        quoteHtml = `<div class="reply-quote"><b>${esc(qname)}：</b>${esc(qtext)}${(q.content||'').length>40?'…':''}</div>`;
+        const qtext = q.attachment
+          ? '[' + fileKindLabel(q.attachment.kind) + '] ' + (q.content || q.attachment.name || '')
+          : (q.content || '');
+        quoteHtml = `<div class="reply-quote"><b>${esc(qname)}：</b>${esc(qtext.slice(0, 40))}${qtext.length > 40 ? '…' : ''}</div>`;
       }
     }
 
+    const attachHtml = m.attachment ? attachmentPlaceholder(m) : '';
     const canRecall = isSelf && (Date.now() - m.time < 2 * 60 * 1000) && !m.recalled;
 
     return `
@@ -1730,7 +1829,8 @@
         <div class="dm-bubble-wrap">
           <div class="dm-bubble">
             ${quoteHtml}
-            <div class="msg-text">${linkify(m.content)}</div>
+            ${attachHtml}
+            ${m.content ? `<div class="msg-text">${linkify(m.content)}</div>` : ''}
             <div class="msg-time">${timeStr}${readTag}</div>
           </div>
           <div class="dm-msg-actions">
@@ -1741,6 +1841,60 @@
           </div>
         </div>
       </div>`;
+  }
+
+  function attachmentPlaceholder(m) {
+    const a = m.attachment;
+    if (!a) return '';
+    if (a.expiresAt && Date.now() > a.expiresAt) {
+      return '<div class="dm-attach"><div class="dm-attach-expired">文件已过期（7 天有效）</div></div>';
+    }
+    return `<div class="dm-attach" data-attach-mid="${esc(m.id)}"><div class="dm-attach-loading">正在加载附件…</div></div>`;
+  }
+
+  async function hydrateAttachments(root) {
+    if (!root || !currentConvo) return;
+    const nodes = root.querySelectorAll('[data-attach-mid]');
+    for (const el of nodes) {
+      const mid = el.getAttribute('data-attach-mid');
+      const m = currentMessages.find(x => x.id === mid);
+      if (!m || !m.attachment) continue;
+      if (attachmentUrls.has(mid)) {
+        el.innerHTML = renderAttachment(m, attachmentUrls.get(mid));
+        continue;
+      }
+      try {
+        const info = await api(`/api/dm/attachment/${encodeURIComponent(currentConvo.id)}/${encodeURIComponent(mid)}`);
+        attachmentUrls.set(mid, info);
+        el.innerHTML = renderAttachment(m, info);
+      } catch (e) {
+        el.innerHTML = `<div class="dm-attach-error">${esc(e.message || '附件加载失败')}</div>`;
+      }
+    }
+  }
+
+  function renderAttachment(m, info) {
+    const a = m.attachment;
+    const name = esc(info.name || a.name || '文件');
+    const size = fmtSize(info.size || a.size);
+    const url = esc(info.url);
+    const note = `<div class="dm-attach-note">${fileKindLabel(a.kind)} · ${size} · 7 天后过期</div>`;
+    if (a.kind === 'image') {
+      return `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="${name}" loading="lazy"></a>${note}`;
+    }
+    if (a.kind === 'video') {
+      return `<video src="${url}" controls preload="metadata"></video>${note}`;
+    }
+    if (a.kind === 'audio') {
+      return `<audio src="${url}" controls></audio>${note}`;
+    }
+    return `<div class="dm-file-card">
+        <div style="min-width:0;">
+          <div class="dm-file-name" title="${name}">${name}</div>
+          <div class="dm-file-meta">${size}</div>
+        </div>
+        <a class="dm-file-dl" href="${url}" target="_blank" rel="noopener" download>下载</a>
+      </div>${note}`;
   }
 
   function linkify(text) {
@@ -1758,6 +1912,7 @@
     const node = wrapper.firstElementChild;
     el.appendChild(node);
     bindMessageActions(node);
+    hydrateAttachments(node);
     if (scroll) el.scrollTop = el.scrollHeight;
   }
 
@@ -1783,8 +1938,10 @@
           input.placeholder = '回复 ' + (m.from === me.username ? '自己' : (currentConvo.peerName || m.from)) + '…';
           input.focus();
         } else if (act === 'copy') {
+          const copyText = m.content || (m.attachment ? m.attachment.name : '');
+          if (!copyText) { showToast('没有可复制的内容', 'error'); return; }
           try {
-            await navigator.clipboard.writeText(m.content);
+            await navigator.clipboard.writeText(copyText);
             showToast('已复制', 'success');
           } catch (e) { showToast('复制失败', 'error'); }
         } else if (act === 'recall') {
@@ -1808,25 +1965,44 @@
   //  发送消息
   // ============================================================
   async function sendCurrentMessage() {
-    if (!currentConvo) return;
+    if (!currentConvo || uploading) return;
     const input = document.getElementById('dmInput');
     const text = input.value.trim();
-    if (!text) return;
-
-    const payload = {
-      to: currentConvo.peer,
-      content: text,
-      replyTo: replyTo || undefined,
-    };
-    replyTo = null;
-    input.placeholder = '输入消息… (Enter 发送 / Shift+Enter 换行)';
-    input.value = '';
-    input.style.height = 'auto';
+    if (!text && !pendingAttachment) return;
 
     const sendBtn = document.getElementById('dmSendBtn');
+    const file = pendingAttachment;
+    uploading = true;
     sendBtn.disabled = true;
 
     try {
+      let attachmentPayload = null;
+      if (file) {
+        if (file.size > 200 * 1024 * 1024) throw new Error('文件不能超过 200MB');
+        const info = await api('/api/dm/upload-url', {
+          method: 'POST',
+          body: {
+            filename: file.name,
+            contentType: file.type || 'application/octet-stream',
+            size: file.size,
+          },
+        });
+        setAttachProgress(0);
+        await uploadToB2(info.uploadUrl, file, setAttachProgress);
+        attachmentPayload = {
+          key: info.key,
+          name: file.name,
+          size: file.size,
+          mime: file.type || 'application/octet-stream',
+        };
+      }
+
+      const payload = {
+        to: currentConvo.peer,
+        content: text,
+        replyTo: replyTo || undefined,
+        attachment: attachmentPayload || undefined,
+      };
       const res = await api('/api/social/dm/messages', { method: 'POST', body: payload });
       if (res && res.message) {
         if (!currentMessages.some(m => m.id === res.message.id)) {
@@ -1835,12 +2011,40 @@
         }
         refreshConvos();
       }
+      replyTo = null;
+      input.placeholder = '输入消息… (Enter 发送 / Shift+Enter 换行)';
+      input.value = '';
+      input.style.height = 'auto';
+      clearPendingAttachment();
     } catch (e) {
-      showToast(e.message, 'error');
-      input.value = text;
+      showToast(e.message || '发送失败', 'error');
     } finally {
+      uploading = false;
       sendBtn.disabled = false;
     }
+  }
+
+  function showAttachPreview(file) {
+    const box = document.getElementById('dmAttachPreview');
+    document.getElementById('dmAttachName').textContent = file.name;
+    document.getElementById('dmAttachSize').textContent = fmtSize(file.size) + ' · 7 天后过期';
+    document.getElementById('dmAttachBar').style.width = '0%';
+    box.style.display = 'flex';
+  }
+
+  function clearPendingAttachment() {
+    pendingAttachment = null;
+    const box = document.getElementById('dmAttachPreview');
+    if (box) box.style.display = 'none';
+    const bar = document.getElementById('dmAttachBar');
+    if (bar) bar.style.width = '0%';
+    const input = document.getElementById('dmFileInput');
+    if (input) input.value = '';
+  }
+
+  function setAttachProgress(p) {
+    const bar = document.getElementById('dmAttachBar');
+    if (bar) bar.style.width = Math.max(0, Math.min(100, p)) + '%';
   }
 
   function sendTyping() {
@@ -2059,7 +2263,20 @@
 
     const input = document.getElementById('dmInput');
     const sendBtn = document.getElementById('dmSendBtn');
+    const fileInput = document.getElementById('dmFileInput');
     sendBtn.addEventListener('click', sendCurrentMessage);
+    document.getElementById('dmAttachBtn').addEventListener('click', () => fileInput.click());
+    document.getElementById('dmAttachRemove').addEventListener('click', clearPendingAttachment);
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!file) return;
+      if (!file.size) { showToast('文件为空', 'error'); return; }
+      if (file.size > 200 * 1024 * 1024) { showToast('文件不能超过 200MB', 'error'); return; }
+      pendingAttachment = file;
+      showAttachPreview(file);
+      input.focus();
+    });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();

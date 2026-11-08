@@ -12,7 +12,7 @@ const { kvGet, kvPut, kvDelete, kvList, kvIncr } = require('./redis');
 const { registerSocialRoutes, registerSocialSocket, emitToUser } = require('./social');
 
 // ===== B2 对象存储 SDK =====
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const app = express();
@@ -54,6 +54,8 @@ app.get('/sitemap.xml', (req, res) => {
     '/forum.html',
     '/resources.html',
     '/gomoku-online.html',
+    '/function-plotter.html',
+    '/other.html',
     '/login.html',
     '/register.html'
   ];
@@ -209,6 +211,14 @@ const b2Client = new S3Client({
 });
 
 const USER_TOTAL_LIMIT = 50 * 1024 * 1024; // 普通用户总容量 50 MB
+
+// ===== 私信附件 =====
+const DM_FILE_LIMIT = 200 * 1024 * 1024;            // 单文件 200 MB
+const DM_FILE_TTL_MS = 7 * 24 * 60 * 60 * 1000;     // 7 天过期
+const DM_BLOCKED_EXT = new Set([
+  'html', 'htm', 'svg', 'js', 'mjs', 'exe', 'bat', 'cmd', 'ps1',
+  'vbs', 'scr', 'jar', 'msi', 'com', 'cpl', 'dll', 'sh'
+]);
 
 // ======== REST API ========
 app.post('/api/register', async (req, res) => {
@@ -623,6 +633,97 @@ app.get('/api/resource/list/:category', async (req, res) => {
     list.push(item);
   }
   res.json(list);
+});
+
+// ======== 私信附件：图片 / 视频 / 文件 ========
+// 前端直传 B2，单文件最大 200MB，消息里的附件 7 天后过期。
+app.post('/api/dm/upload-url', async (req, res) => {
+  try {
+    const session = await getSession(getBearerToken(req));
+    if (!session) return res.status(401).json({ error: '请先登录' });
+    const { filename, contentType, size } = req.body || {};
+    const fileSize = Number(size);
+    if (!filename || !contentType || !Number.isFinite(fileSize) || fileSize <= 0) {
+      return res.status(400).json({ error: '缺少文件信息' });
+    }
+    if (fileSize > DM_FILE_LIMIT) {
+      return res.status(413).json({ error: '文件不能超过 200MB' });
+    }
+    const ext = String(filename).split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'bin';
+    if (DM_BLOCKED_EXT.has(ext)) {
+      return res.status(400).json({ error: '出于安全考虑，不支持发送该类型的文件' });
+    }
+    const key = `dm/${session.username}/${crypto.randomUUID()}.${ext}`;
+    const cmd = new PutObjectCommand({
+      Bucket: process.env.B2_BUCKET_NAME,
+      Key: key,
+      ContentType: String(contentType).slice(0, 120),
+    });
+    const uploadUrl = await getSignedUrl(b2Client, cmd, { expiresIn: 3600 });
+    res.json({ uploadUrl, key, limit: DM_FILE_LIMIT });
+  } catch (err) {
+    console.error('私信上传签名失败:', err);
+    res.status(500).json({ error: '上传初始化失败' });
+  }
+});
+
+// 获取附件的临时访问链接（带登录与过期校验）
+app.get('/api/dm/attachment/:convId/:msgId', async (req, res) => {
+  try {
+    const session = await getSession(getBearerToken(req));
+    if (!session) return res.status(401).json({ error: '请先登录' });
+    const convId = req.params.convId;
+    if (!convId.startsWith('p_')) return res.status(400).json({ error: '会话无效' });
+    const parts = convId.slice(2).split('__');
+    if (parts.length !== 2 || !parts.includes(session.username)) {
+      return res.status(403).json({ error: '无权访问' });
+    }
+    const msgs = (await kvGet(`dm_msgs:${convId}`)) || [];
+    const msg = msgs.find(m => m.id === req.params.msgId);
+    if (!msg || !msg.attachment || !msg.attachment.key) {
+      return res.status(404).json({ error: '附件不存在' });
+    }
+    const att = msg.attachment;
+    if (att.expiresAt && Date.now() > att.expiresAt) {
+      try {
+        await b2Client.send(new DeleteObjectCommand({
+          Bucket: process.env.B2_BUCKET_NAME,
+          Key: att.key,
+        }));
+      } catch (e) { /* 删除失败不影响返回 */ }
+      return res.status(410).json({ error: '文件已过期（7 天有效）' });
+    }
+    const download = req.query.download === '1' || att.kind === 'file';
+    const rawName = String(att.name || 'file');
+    const safeName = rawName.replace(/["\\\r\n]/g, '_');
+    const disposition = `${download ? 'attachment' : 'inline'}; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(rawName)}`;
+    const cmd = new GetObjectCommand({
+      Bucket: process.env.B2_BUCKET_NAME,
+      Key: att.key,
+      ResponseContentDisposition: disposition,
+    });
+    let url;
+    try {
+      url = await getSignedUrl(b2Client, cmd, { expiresIn: 3600 });
+    } catch (e) {
+      const fallback = new GetObjectCommand({
+        Bucket: process.env.B2_BUCKET_NAME,
+        Key: att.key,
+      });
+      url = await getSignedUrl(b2Client, fallback, { expiresIn: 3600 });
+    }
+    res.json({
+      url,
+      name: att.name,
+      size: att.size,
+      mime: att.mime,
+      kind: att.kind,
+      expiresAt: att.expiresAt,
+    });
+  } catch (err) {
+    console.error('私信附件签名失败:', err);
+    res.status(500).json({ error: '附件读取失败' });
+  }
 });
 
 

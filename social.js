@@ -4,6 +4,33 @@
  */
 const { kvGet, kvPut, kvDelete } = require('./redis');
 
+// 私信附件限制
+const DM_FILE_LIMIT = 200 * 1024 * 1024;
+const DM_FILE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function normalizeAttachment(att, from) {
+  if (!att || typeof att !== 'object') return null;
+  const key = String(att.key || '');
+  if (!key.startsWith(`dm/${from}/`)) return { error: '附件无效' };
+  const size = Number(att.size);
+  if (!Number.isFinite(size) || size <= 0 || size > DM_FILE_LIMIT) {
+    return { error: '附件大小无效（最大 200MB）' };
+  }
+  const name = String(att.name || '文件').replace(/[\r\n]/g, ' ').slice(0, 120) || '文件';
+  const mime = String(att.mime || 'application/octet-stream').slice(0, 120);
+  let kind = 'file';
+  if (mime.startsWith('image/')) kind = 'image';
+  else if (mime.startsWith('video/')) kind = 'video';
+  else if (mime.startsWith('audio/')) kind = 'audio';
+  if (kind === 'file') {
+    const ext = name.split('.').pop().toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) kind = 'image';
+    else if (['mp4', 'webm', 'mov', 'mkv', 'ogv'].includes(ext)) kind = 'video';
+    else if (['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'].includes(ext)) kind = 'audio';
+  }
+  return { key, name, size, mime, kind, expiresAt: Date.now() + DM_FILE_TTL_MS };
+}
+
 // ============================================================
 //  工具函数
 // ============================================================
@@ -169,10 +196,12 @@ async function getPostsByUser(username) {
 // ============================================================
 //  投递消息（REST & WS 共用）
 // ============================================================
-async function deliverMessage(from, to, content, replyTo, io) {
+async function deliverMessage(from, to, content, replyTo, io, attachment) {
   if (!to || to === from) return { error: '参数错误', code: 400 };
+  const att = normalizeAttachment(attachment, from);
+  if (att && att.error) return { error: att.error, code: 400 };
   content = String(content || '').trim();
-  if (!content) return { error: '消息不能为空', code: 400 };
+  if (!content && !att) return { error: '消息不能为空', code: 400 };
   const users = (await kvGet('users')) || {};
   if (!users[to] && to !== 'admin') return { error: '用户不存在', code: 404 };
 
@@ -191,6 +220,7 @@ async function deliverMessage(from, to, content, replyTo, io) {
     id: 'M' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     from, to,
     content: content.slice(0, 2000),
+    attachment: att || undefined,
     time: Date.now(),
     read: false,
     recalled: false,
@@ -199,7 +229,8 @@ async function deliverMessage(from, to, content, replyTo, io) {
   msgs.push(msg);
   await saveMessages(convId, msgs);
 
-  const preview = msg.content.slice(0, 40);
+  const kindLabel = att ? (att.kind === 'image' ? '图片' : att.kind === 'video' ? '视频' : att.kind === 'audio' ? '语音' : '文件') : '';
+  const preview = att ? `[${kindLabel}] ${att.name}`.slice(0, 40) : msg.content.slice(0, 40);
   await patchConvo(from, to, { lastMsg: preview, lastTime: msg.time });
   await patchConvo(to, from, { lastMsg: preview, lastTime: msg.time });
 
@@ -532,8 +563,8 @@ function registerSocialRoutes(app, deps) {
   app.post('/api/social/dm/messages', async (req, res) => {
     const s = await auth(req);
     if (!s) return res.status(401).json({ error: '请先登录' });
-    const { to, content, replyTo } = req.body || {};
-    const result = await deliverMessage(s.username, to, content, replyTo, io);
+    const { to, content, replyTo, attachment } = req.body || {};
+    const result = await deliverMessage(s.username, to, content, replyTo, io, attachment);
     if (result.error) return res.status(result.code || 400).json({ error: result.error });
     res.json({ success: true, message: result.message });
   });
@@ -684,7 +715,7 @@ function registerSocialSocket(io, deps) {
     socket.on('dm:send', async (payload, cb) => {
       const from = socketUsers.get(socket.id);
       if (!from) return cb && cb({ error: '请先登录' });
-      const result = await deliverMessage(from, payload?.to, payload?.content, payload?.replyTo, io);
+      const result = await deliverMessage(from, payload?.to, payload?.content, payload?.replyTo, io, payload?.attachment);
       cb && cb(result);
     });
 

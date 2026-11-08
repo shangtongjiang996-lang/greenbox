@@ -82,6 +82,8 @@ main h2 { font-size: 1.3rem; font-weight: 700; margin: 2.4rem 0 0.8rem; }
   z-index: 50;
 }
 .navbar .container { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.6rem; }
+/* 个人中心始终显示，未登录时点击会提示登录 */
+#profile-nav { display: list-item !important; }
 
 .logo {
   font-size: 1.35rem;
@@ -421,6 +423,64 @@ footer { margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border);
 .not-found .code { font-size: 5rem; font-weight: 800; color: var(--primary); }
 
 .hidden { display: none !important; }
+
+/* ===== 首次访问提示 ===== */
+.gb-tour {
+  position: fixed;
+  right: 36px;
+  bottom: 92px;
+  width: 248px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow-lg);
+  z-index: 10002;
+  animation: gbTourIn .28s ease-out;
+}
+.gb-tour::after {
+  content: "";
+  position: absolute;
+  right: 20px;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+.gb-tour-title { font-weight: 800; font-size: .95rem; margin-bottom: 4px; color: var(--text); }
+.gb-tour-text { font-size: .84rem; color: var(--muted); line-height: 1.6; }
+.gb-tour-actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+.gb-tour-ok {
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: .82rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.gb-tour-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  line-height: 1;
+}
+@keyframes gbTourIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 640px) {
+  .gb-tour { right: 18px; bottom: 86px; width: 214px; }
+}
 
 /* ===== 响应式 ===== */
 /* 手机 / 平板端：导航栏随页面滚动，与首页保持一致 */

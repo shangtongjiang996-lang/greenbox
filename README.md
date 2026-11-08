@@ -12,7 +12,7 @@ GreenBox 是一个综合性的在线站点：工具箱、五子棋联机对战�
 | 工具箱 | 后台可上传单文件 HTML 工具，前台按分类展示，支持收藏与搜索 |
 | 五子棋 | 创建/加入房间、房间密码、邀请链接、悔棋与重开需对方同意、认输、房间聊天、断线重连、刷新恢复对局 |
 | 论坛 | 分类、搜索、排序、发帖（最多 3 图）、评论（最多 2 图）、点赞、收藏、转发、置顶 |
-| 私信 / 好友 | 会话列表、消息撤回、置顶、免打扰、好友申请、拉黑、隐私设置、在线状态 |
+| 私信 / 好友 | 会话列表、消息撤回、置顶、免打扰、好友申请、拉黑、隐私设置、在线状态；支持文本、图片、视频和文件（单文件最大 200MB，附件 7 天后过期） |
 | 资源中心 | B2 直传、配额管理、视频/音频/图片在线播放、外链资源、管理员上传 |
 | AI 助手 | 智谱 GLM 流式对话、深度思考、会话历史、每日次数限制、后台可调模型与提示词 |
 | 通知 | 全站广播与定向通知、未读计数 |
@@ -48,6 +48,8 @@ greenbox-realtime/
 │   ├── admin.html
 │   ├── login.html
 │   ├── register.html
+│   ├── other.html          # 其它：关于、常用入口、帮助
+│   ├── function-plotter.html
 │   ├── style.css
 │   ├── script.js
 │   ├── icons.svg
@@ -129,6 +131,7 @@ B2_APP_KEY=
 | 五子棋 | `POST /api/room/create`、`/api/room/join`、`/api/room/leave`、`/api/room/heartbeat`、`GET /api/rooms`、`GET /api/room/:roomId` |
 | 论坛 | `GET /api/forum/posts`、`GET /api/forum/posts/:id`、`POST /api/forum/posts`、`POST /api/forum/posts/:id/comments`、`POST /api/forum/posts/:id/like` |
 | 资源 | `POST /api/resource/upload-url`、`POST /api/resource/confirm`、`GET /api/resource/list/:category`、`GET /api/resource/quota`、`DELETE /api/resource/:id` |
+| 私信附件 | `POST /api/dm/upload-url`、`GET /api/dm/attachment/:convId/:msgId` |
 | AI | `GET /api/chat/config`、`GET /api/chat/quota`、`GET/POST /api/chat/sessions`、`POST /api/chat/stream` |
 | 通知 | `GET /api/notifications`、`POST /api/notifications/read`、`GET /api/notifications/unread-count` |
 | 后台 | `/api/admin/*`，均需管理员会话 |
@@ -151,6 +154,8 @@ Redis 中按前缀保存业务数据：
 - `dm_*`、`friends:*`、`friend_requests*`：私信与好友
 
 资源文件保存在 B2，Redis 只存对象 key。资源列表在每次读取时会重新生成 7 天有效的预签名链接，因此历史资源不会因为链接过期而失效。
+
+私信附件同样存放在 B2（`dm/<用户名>/...`），Redis 只保存文件名、大小、类型和过期时间。附件默认 7 天有效，过期后接口返回 410，并在读取时尽力删除对应对象。
 
 ## 迁移脚本
 
