@@ -12,7 +12,11 @@ const { kvGet, kvPut, kvDelete, kvList, kvIncr } = require('./redis');
 const { registerSocialRoutes, registerSocialSocket, emitToUser } = require('./social');
 
 // ===== B2 对象存储 SDK =====
-const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const {
+  S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand,
+  CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand, ListPartsCommand
+} = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const app = express();
@@ -211,6 +215,38 @@ const b2Client = new S3Client({
 });
 
 const USER_TOTAL_LIMIT = 50 * 1024 * 1024; // 普通用户总容量 50 MB
+
+// 资源中心分片上传（支持断点续传）
+const RES_MULTIPART_PART_SIZE = 8 * 1024 * 1024;
+const RES_MULTIPART_MAX = 2 * 1024 * 1024 * 1024;
+const RES_MULTIPART_PREFIX = 'resources/';
+
+async function usedQuota(username) {
+  const used = parseInt(await kvGet(`upload_quota:${username}`) || '0', 10);
+  return isNaN(used) ? 0 : used;
+}
+function isOwnResourceKey(key, username) {
+  return typeof key === 'string'
+    && key.startsWith(`${RES_MULTIPART_PREFIX}${username}/`)
+    && !key.includes('..');
+}
+async function listAllParts(key, uploadId) {
+  const all = [];
+  let marker;
+  do {
+    const res = await b2Client.send(new ListPartsCommand({
+      Bucket: process.env.B2_BUCKET_NAME,
+      Key: key,
+      UploadId: uploadId,
+      MaxParts: 1000,
+      PartNumberMarker: marker,
+    }));
+    (res.Parts || []).forEach(p => all.push(p));
+    if (res.IsTruncated) marker = res.NextPartNumberMarker;
+    else break;
+  } while (true);
+  return all;
+}
 
 // ===== 私信附件 =====
 const DM_FILE_LIMIT = 200 * 1024 * 1024;            // 单文件 200 MB
@@ -633,6 +669,172 @@ app.get('/api/resource/list/:category', async (req, res) => {
     list.push(item);
   }
   res.json(list);
+});
+
+// ======== 资源中心：分片上传（支持暂停与断点续传） ========
+app.post('/api/resource/multipart/create', async (req, res) => {
+  try {
+    const session = await getSession(getBearerToken(req));
+    if (!session) return res.status(401).json({ error: '请先登录' });
+    const { filename, contentType, fileSize } = req.body || {};
+    const size = Number(fileSize);
+    if (!filename || !contentType || !Number.isFinite(size) || size <= 0) {
+      return res.status(400).json({ error: '缺少文件信息' });
+    }
+    if (size > RES_MULTIPART_MAX) {
+      return res.status(413).json({ error: '文件不能超过 2GB' });
+    }
+    if (session.role !== 'admin') {
+      if (size > USER_TOTAL_LIMIT) {
+        return res.status(400).json({ error: '单个文件不能超过 50MB' });
+      }
+      const used = await usedQuota(session.username);
+      if (used + size > USER_TOTAL_LIMIT) {
+        return res.status(429).json({ error: `空间不足。已用 ${(used / 1024 / 1024).toFixed(1)} MB，总容量 50 MB` });
+      }
+    }
+    const ext = String(filename).split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'bin';
+    const key = `${RES_MULTIPART_PREFIX}${session.username}/${crypto.randomUUID()}.${ext}`;
+    const created = await b2Client.send(new CreateMultipartUploadCommand({
+      Bucket: process.env.B2_BUCKET_NAME,
+      Key: key,
+      ContentType: String(contentType).slice(0, 120),
+    }));
+    if (!created.UploadId) throw new Error('没有返回 UploadId');
+    res.json({
+      key,
+      uploadId: created.UploadId,
+      partSize: RES_MULTIPART_PART_SIZE,
+      fileSize: size,
+      maxSize: RES_MULTIPART_MAX,
+    });
+  } catch (err) {
+    console.error('分片上传初始化失败:', err);
+    res.status(500).json({ error: '上传初始化失败' });
+  }
+});
+
+app.post('/api/resource/multipart/part-url', async (req, res) => {
+  try {
+    const session = await getSession(getBearerToken(req));
+    if (!session) return res.status(401).json({ error: '请先登录' });
+    const { key, uploadId, partNumber } = req.body || {};
+    if (!isOwnResourceKey(key, session.username)) return res.status(403).json({ error: '无权访问' });
+    const n = Number(partNumber);
+    if (!Number.isInteger(n) || n < 1 || n > 10000) return res.status(400).json({ error: '分片编号无效' });
+    const cmd = new UploadPartCommand({
+      Bucket: process.env.B2_BUCKET_NAME,
+      Key: key,
+      UploadId: uploadId,
+      PartNumber: n,
+    });
+    const url = await getSignedUrl(b2Client, cmd, { expiresIn: 3600 });
+    res.json({ url });
+  } catch (err) {
+    console.error('分片签名失败:', err);
+    res.status(500).json({ error: '分片上传初始化失败' });
+  }
+});
+
+app.get('/api/resource/multipart/status', async (req, res) => {
+  try {
+    const session = await getSession(getBearerToken(req));
+    if (!session) return res.status(401).json({ error: '请先登录' });
+    const key = req.query.key;
+    const uploadId = req.query.uploadId;
+    if (!isOwnResourceKey(key, session.username)) return res.status(403).json({ error: '无权访问' });
+    const parts = await listAllParts(key, uploadId);
+    res.json({
+      parts: parts.map(p => p.PartNumber),
+      uploadedBytes: parts.reduce((s, p) => s + (Number(p.Size) || 0), 0),
+    });
+  } catch (err) {
+    console.error('分片状态查询失败:', err);
+    res.status(500).json({ error: '无法查询上传进度' });
+  }
+});
+
+app.post('/api/resource/multipart/complete', async (req, res) => {
+  try {
+    const session = await getSession(getBearerToken(req));
+    if (!session) return res.status(401).json({ error: '请先登录' });
+    const { key, uploadId, title, category } = req.body || {};
+    if (!isOwnResourceKey(key, session.username)) return res.status(403).json({ error: '无权访问' });
+    const parts = await listAllParts(key, uploadId);
+    if (!parts.length) return res.status(400).json({ error: '没有已上传的分片' });
+    const total = parts.reduce((s, p) => s + (Number(p.Size) || 0), 0);
+    if (session.role !== 'admin') {
+      const used = await usedQuota(session.username);
+      if (used + total > USER_TOTAL_LIMIT) {
+        try {
+          await b2Client.send(new AbortMultipartUploadCommand({
+            Bucket: process.env.B2_BUCKET_NAME, Key: key, UploadId: uploadId,
+          }));
+        } catch (e) {}
+        return res.status(429).json({ error: '空间不足，上传已取消' });
+      }
+    }
+    try {
+      await b2Client.send(new CompleteMultipartUploadCommand({
+        Bucket: process.env.B2_BUCKET_NAME,
+        Key: key,
+        UploadId: uploadId,
+        MultipartUpload: {
+          Parts: parts.map(p => ({ ETag: p.ETag, PartNumber: p.PartNumber })),
+        },
+      }));
+    } catch (e) {
+      if (e.name === 'NoSuchUpload' || /NoSuchUpload/i.test(e.message || '')) {
+        return res.status(409).json({ error: '上传已完成或已取消，请刷新页面' });
+      }
+      throw e;
+    }
+
+    const getCommand = new GetObjectCommand({ Bucket: process.env.B2_BUCKET_NAME, Key: key });
+    const playUrl = await getSignedUrl(b2Client, getCommand, { expiresIn: 7 * 24 * 3600 });
+    const resourceId = 'res_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+    const record = {
+      id: resourceId,
+      objectKey: key,
+      playUrl,
+      title: cleanTitle(title),
+      category: ['movie', 'music', 'software', 'other'].includes(category) ? category : 'other',
+      fileSize: total,
+      uploader: session.username,
+      type: 'file',
+      createdAt: Date.now(),
+    };
+    await kvPut(`resource:${resourceId}`, record);
+    const indexKey = `resource_index:${record.category}`;
+    const index = (await kvGet(indexKey)) || [];
+    index.unshift(resourceId);
+    await kvPut(indexKey, index.slice(0, 500));
+    if (session.role !== 'admin') {
+      const used = await usedQuota(session.username);
+      await kvPut(`upload_quota:${session.username}`, used + total);
+    }
+    res.json({ success: true, resourceId, playUrl, fileSize: total });
+  } catch (err) {
+    console.error('分片上传完成失败:', err);
+    res.status(500).json({ error: '合并文件失败，可稍后继续' });
+  }
+});
+
+app.post('/api/resource/multipart/abort', async (req, res) => {
+  try {
+    const session = await getSession(getBearerToken(req));
+    if (!session) return res.status(401).json({ error: '请先登录' });
+    const { key, uploadId } = req.body || {};
+    if (!isOwnResourceKey(key, session.username)) return res.status(403).json({ error: '无权访问' });
+    try {
+      await b2Client.send(new AbortMultipartUploadCommand({
+        Bucket: process.env.B2_BUCKET_NAME, Key: key, UploadId: uploadId,
+      }));
+    } catch (e) { /* 已经完成或已取消 */ }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '取消失败' });
+  }
 });
 
 // ======== 私信附件：图片 / 视频 / 文件 ========

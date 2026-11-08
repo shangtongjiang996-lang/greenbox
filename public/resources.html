@@ -24,6 +24,11 @@
   .btn-upload { background: var(--primary); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; border: none; font-weight: bold; transition: background 0.2s; }
   .btn-upload:hover { background: var(--primary-dark); }
   .btn-upload:disabled { background: #9ca3af; cursor: not-allowed; }
+  .upload-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .upload-actions .btn-upload { flex: 1; padding: 10px 12px; }
+  .upload-status { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 18px; line-height: 1.5; }
+  .resume-panel { margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 10px; background: var(--bg-alt); }
+  .resume-text { font-size: 13px; margin-bottom: 8px; color: var(--text); line-height: 1.6; }
   
   .progress-bar { width: 100%; height: 10px; background: var(--bg-alt); border-radius: 5px; overflow: hidden; display: none; margin-top: 10px; }
   .progress-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.2s; }
@@ -110,7 +115,19 @@
     <div id="fileName" style="font-size: 12px; color: var(--muted); margin-bottom: 10px;"></div>
     
     <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
-    <button id="startUploadBtn" class="btn-upload" style="width: 100%; margin-top: 10px; display: none;">开始上传</button>
+    <div class="upload-actions">
+      <button id="startUploadBtn" class="btn-upload" style="display:none;">开始上传</button>
+      <button id="pauseUploadBtn" class="btn-upload" style="display:none;">暂停</button>
+      <button id="cancelUploadBtn" class="btn-upload" style="display:none;background:#6b7280;">取消</button>
+    </div>
+    <div id="uploadStatus" class="upload-status"></div>
+    <div id="resumePanel" class="resume-panel" style="display:none;">
+      <div class="resume-text" id="resumeText"></div>
+      <div class="upload-actions">
+        <button id="resumeBtn" class="btn-upload" type="button">继续上传</button>
+        <button id="discardBtn" class="btn-upload" type="button" style="background:#6b7280;">放弃</button>
+      </div>
+    </div>
 
     <!-- 管理员专享：添加外链 -->
     <div id="adminLinkPanel" style="display:none; margin-top:20px; border-top: 1px dashed var(--border); padding-top:15px;">
@@ -147,6 +164,13 @@
   let selectedFile = null;
   let currentCategory = 'movie';
   let currentUser = null;
+  const MP_STORAGE = 'gb_res_multipart_v1';
+  const MP_PART_SIZE = 8 * 1024 * 1024;
+  let uploadState = null;
+  let uploading = false;
+  let paused = false;
+  let currentXhr = null;
+  let resumePick = false;
 
   function formatSize(bytes) {
     if (!bytes || bytes === 0) return '0 B';
@@ -199,6 +223,7 @@
           document.getElementById('adminLinkPanel').style.display = 'block';
         }
         loadQuota();
+        restoreUploadState();
       }
     } catch (e) {}
   }
@@ -214,65 +239,319 @@
     }
   }
 
-  document.getElementById('resFile').addEventListener('change', (e) => {
-    selectedFile = e.target.files[0];
-    if (selectedFile) {
-      document.getElementById('fileName').textContent = `已选择: ${selectedFile.name} (${formatSize(selectedFile.size)})`;
-      document.getElementById('startUploadBtn').style.display = 'block';
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function saveUploadState() {
+    try { localStorage.setItem(MP_STORAGE, JSON.stringify(uploadState)); } catch (e) {}
+  }
+  function loadStoredState() {
+    try {
+      const raw = localStorage.getItem(MP_STORAGE);
+      if (raw) uploadState = JSON.parse(raw);
+    } catch (e) { uploadState = null; }
+  }
+  function clearUploadState() {
+    uploadState = null;
+    try { localStorage.removeItem(MP_STORAGE); } catch (e) {}
+    const p = document.getElementById('resumePanel');
+    if (p) p.style.display = 'none';
+  }
+  function setUploadStatus(msg) {
+    const el = document.getElementById('uploadStatus');
+    if (el) el.textContent = msg || '';
+  }
+  function updateProgress(bytes) {
+    if (!selectedFile) return;
+    const pct = Math.max(0, Math.min(100, bytes / selectedFile.size * 100));
+    document.getElementById('progressFill').style.width = pct.toFixed(1) + '%';
+  }
+  function bytesOfParts(parts, partSize, size) {
+    let total = 0;
+    (parts || []).forEach(n => {
+      const start = (n - 1) * partSize;
+      total += Math.max(0, Math.min(partSize, size - start));
+    });
+    return total;
+  }
+  function restoreUploadState() {
+    loadStoredState();
+    if (!uploadState || !uploadState.key) return;
+    if (uploadState.username && currentUser && uploadState.username !== currentUser.username) {
+      uploadState = null;
+      try { localStorage.removeItem(MP_STORAGE); } catch (e) {}
+      return;
     }
-  });
+    const p = document.getElementById('resumePanel');
+    const t = document.getElementById('resumeText');
+    if (p && t) {
+      t.textContent = `上次上传未完成：${uploadState.name}（${formatSize(uploadState.size)}），已传 ${(uploadState.uploaded || []).length} 片`;
+      p.style.display = 'block';
+    }
+    setUploadStatus('检测到未完成的上传，重新选择原文件后可继续');
+  }
+  async function abortState() {
+    if (!uploadState) return;
+    try {
+      await api('/api/resource/multipart/abort', {
+        method: 'POST',
+        body: { key: uploadState.key, uploadId: uploadState.uploadId },
+      });
+    } catch (e) {}
+  }
+  async function discardUpload() {
+    if (!uploadState) return;
+    if (!confirm('确定放弃这个未完成的上传吗？已上传的分片会被清理。')) return;
+    await abortState();
+    clearUploadState();
+    setUploadStatus('已放弃未完成的上传');
+    document.getElementById('progressBar').style.display = 'none';
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('pauseUploadBtn').style.display = 'none';
+    document.getElementById('cancelUploadBtn').style.display = 'none';
+    if (selectedFile) document.getElementById('startUploadBtn').style.display = 'block';
+  }
 
-  document.getElementById('startUploadBtn').addEventListener('click', async () => {
-    const title = document.getElementById('resTitle').value.trim();
-    const category = document.getElementById('resCategory').value;
-    if (!title) return alert('请输入资源标题');
-    if (!selectedFile) return alert('请选择文件');
+  function uploadPart(url, partNumber, partSize, baseBytes) {
+    return new Promise((resolve, reject) => {
+      const start = (partNumber - 1) * partSize;
+      const blob = selectedFile.slice(start, Math.min(start + partSize, selectedFile.size));
+      const xhr = new XMLHttpRequest();
+      currentXhr = xhr;
+      xhr.open('PUT', url, true);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) updateProgress(baseBytes + e.loaded);
+      };
+      xhr.onload = () => {
+        currentXhr = null;
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error('HTTP ' + xhr.status));
+      };
+      xhr.onerror = () => { currentXhr = null; reject(new Error('网络中断')); };
+      xhr.onabort = () => { currentXhr = null; reject(new Error('已暂停')); };
+      xhr.send(blob);
+    });
+  }
 
-    const btn = document.getElementById('startUploadBtn');
-    const progressBar = document.getElementById('progressBar');
-    const progressFill = document.getElementById('progressFill');
-    
-    btn.disabled = true; btn.textContent = '获取上传许可...'; progressBar.style.display = 'block';
+  async function runUpload() {
+    if (uploading || !uploadState || !selectedFile) return;
+    uploading = true;
+    paused = false;
+    const pauseBtn = document.getElementById('pauseUploadBtn');
+    const startBtn = document.getElementById('startUploadBtn');
+    pauseBtn.style.display = 'block';
+    pauseBtn.textContent = '暂停';
+    document.getElementById('cancelUploadBtn').style.display = 'none';
+    startBtn.disabled = true;
+    document.getElementById('resumePanel').style.display = 'none';
+    document.getElementById('progressBar').style.display = 'block';
+
+    const partSize = uploadState.partSize || MP_PART_SIZE;
+    const totalParts = Math.max(1, Math.ceil(selectedFile.size / partSize));
 
     try {
-      const { uploadUrl, objectKey } = await api('/api/resource/upload-url', {
+      setUploadStatus('正在查询已上传的分片...');
+      const st = await api(`/api/resource/multipart/status?key=${encodeURIComponent(uploadState.key)}&uploadId=${encodeURIComponent(uploadState.uploadId)}`);
+      const done = new Set(st.parts || []);
+      uploadState.uploaded = Array.from(done);
+      saveUploadState();
+      let doneBytes = bytesOfParts(uploadState.uploaded, partSize, selectedFile.size);
+      updateProgress(doneBytes);
+
+      for (let i = 1; i <= totalParts; i++) {
+        if (paused) { setUploadStatus('已暂停，可点“继续”恢复'); return; }
+        if (done.has(i)) continue;
+
+        let ok = false;
+        let lastErr = null;
+        for (let attempt = 1; attempt <= 4; attempt++) {
+          if (paused) break;
+          try {
+            setUploadStatus(`上传第 ${i}/${totalParts} 片（第 ${attempt} 次尝试）`);
+            const { url } = await api('/api/resource/multipart/part-url', {
+              method: 'POST',
+              body: { key: uploadState.key, uploadId: uploadState.uploadId, partNumber: i },
+            });
+            await uploadPart(url, i, partSize, doneBytes);
+            ok = true;
+            break;
+          } catch (e) {
+            lastErr = e;
+            if (paused) break;
+            setUploadStatus(`第 ${i} 片失败：${e.message}，${attempt < 4 ? '正在重试...' : '已暂停'}`);
+            if (attempt < 4) await sleep(700 * attempt);
+          }
+        }
+        if (!ok) {
+          if (paused) { setUploadStatus('已暂停，可点“继续”恢复'); return; }
+          throw lastErr || new Error('分片上传失败');
+        }
+
+        done.add(i);
+        doneBytes += Math.max(0, Math.min(partSize, selectedFile.size - (i - 1) * partSize));
+        uploadState.uploaded = Array.from(done);
+        saveUploadState();
+        updateProgress(doneBytes);
+      }
+
+      if (paused) { setUploadStatus('已暂停'); return; }
+      setUploadStatus('正在合并文件...');
+      const finishedCategory = uploadState.category;
+      await api('/api/resource/multipart/complete', {
         method: 'POST',
-        body: { filename: selectedFile.name, contentType: selectedFile.type || 'application/octet-stream', fileSize: selectedFile.size }
+        body: {
+          key: uploadState.key,
+          uploadId: uploadState.uploadId,
+          title: uploadState.title,
+          category: uploadState.category,
+        },
       });
-
-      btn.textContent = '正在上传...';
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', uploadUrl, true);
-        xhr.setRequestHeader('Content-Type', selectedFile.type || 'application/octet-stream');
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) progressFill.style.width = (e.loaded / e.total) * 100 + '%';
-        };
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error('B2 上传失败'));
-        xhr.onerror = () => reject(new Error('网络错误或 CORS 拦截'));
-        xhr.send(selectedFile);
-      });
-
-      btn.textContent = '保存记录中...';
-      await api('/api/resource/confirm', {
-        method: 'POST',
-        body: { objectKey, fileSize: selectedFile.size, title, category }
-      });
-
-      alert('上传成功！');
+      setUploadStatus('上传成功');
+      updateProgress(selectedFile.size);
+      clearUploadState();
       document.getElementById('resTitle').value = '';
       document.getElementById('resFile').value = '';
       selectedFile = null;
       document.getElementById('fileName').textContent = '';
-      progressBar.style.display = 'none'; progressFill.style.width = '0%'; btn.style.display = 'none';
-      
+      document.getElementById('progressBar').style.display = 'none';
+      document.getElementById('progressFill').style.width = '0%';
+      pauseBtn.style.display = 'none';
+      document.getElementById('cancelUploadBtn').style.display = 'none';
       loadQuota();
-      if (category === currentCategory) loadResources(currentCategory);
-    } catch (err) {
-      alert('' + err.message);
-      btn.textContent = '重新上传';
-    } finally { btn.disabled = false; }
+      if (finishedCategory === currentCategory) loadResources(currentCategory);
+    } catch (e) {
+      if (paused) {
+        setUploadStatus('已暂停，可点“继续”恢复');
+      } else if (/已完成|已取消/.test(e.message)) {
+        setUploadStatus('服务器上的这次上传已结束，请刷新资源列表');
+        clearUploadState();
+        pauseBtn.style.display = 'none';
+      } else {
+        paused = true;
+        setUploadStatus('上传中断：' + e.message + '，可点“继续”重试');
+        pauseBtn.style.display = 'block';
+        pauseBtn.textContent = '继续';
+      }
+    } finally {
+      uploading = false;
+      startBtn.disabled = false;
+      if (paused) {
+        document.getElementById('cancelUploadBtn').style.display = 'block';
+      } else if (!uploadState) {
+        pauseBtn.style.display = 'none';
+        document.getElementById('cancelUploadBtn').style.display = 'none';
+      }
+    }
+  }
+
+  document.getElementById('selectFileBtn').addEventListener('click', () => { resumePick = false; });
+
+  document.getElementById('resFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (resumePick) {
+      resumePick = false;
+      if (!uploadState) return;
+      if (file.name !== uploadState.name || file.size !== uploadState.size) {
+        alert('请选择与上次相同的文件（文件名和大小需要一致）');
+        e.target.value = '';
+        return;
+      }
+      selectedFile = file;
+      document.getElementById('fileName').textContent = `继续上传: ${file.name} (${formatSize(file.size)})`;
+      document.getElementById('resTitle').value = uploadState.title || document.getElementById('resTitle').value;
+      document.getElementById('resCategory').value = uploadState.category || 'movie';
+      runUpload();
+      return;
+    }
+
+    if (uploadState) {
+      if (!confirm('有未完成的上传，是否放弃并开始新的上传？')) {
+        e.target.value = '';
+        return;
+      }
+      abortState();
+      clearUploadState();
+    }
+
+    selectedFile = file;
+    document.getElementById('fileName').textContent = `已选择: ${file.name} (${formatSize(file.size)})`;
+    document.getElementById('startUploadBtn').style.display = 'block';
+    setUploadStatus('');
   });
+
+  document.getElementById('startUploadBtn').addEventListener('click', async () => {
+    if (!selectedFile) return alert('请选择文件');
+    const title = document.getElementById('resTitle').value.trim();
+    const category = document.getElementById('resCategory').value;
+    if (!title) return alert('请输入资源标题');
+
+    if (uploadState && (uploadState.name !== selectedFile.name || uploadState.size !== selectedFile.size)) {
+      if (!confirm('检测到另一个未完成的上传，是否放弃它并开始新的上传？')) return;
+      await abortState();
+      clearUploadState();
+    }
+
+    if (!uploadState) {
+      try {
+        setUploadStatus('正在初始化上传...');
+        const meta = await api('/api/resource/multipart/create', {
+          method: 'POST',
+          body: {
+            filename: selectedFile.name,
+            contentType: selectedFile.type || 'application/octet-stream',
+            fileSize: selectedFile.size,
+          },
+        });
+        uploadState = {
+          key: meta.key,
+          uploadId: meta.uploadId,
+          partSize: meta.partSize || MP_PART_SIZE,
+          username: currentUser ? currentUser.username : '',
+          name: selectedFile.name,
+          size: selectedFile.size,
+          type: selectedFile.type || 'application/octet-stream',
+          title: title,
+          category: category,
+          uploaded: [],
+        };
+        saveUploadState();
+      } catch (e) {
+        setUploadStatus('初始化失败：' + e.message);
+        return;
+      }
+    } else {
+      uploadState.title = title;
+      uploadState.category = category;
+      saveUploadState();
+    }
+
+    document.getElementById('startUploadBtn').style.display = 'none';
+    runUpload();
+  });
+
+  document.getElementById('pauseUploadBtn').addEventListener('click', () => {
+    const btn = document.getElementById('pauseUploadBtn');
+    if (uploading) {
+      if (paused) return;
+      paused = true;
+      if (currentXhr) { try { currentXhr.abort(); } catch (e) {} }
+      btn.textContent = '继续';
+      setUploadStatus('正在暂停...');
+    } else if (paused) {
+      paused = false;
+      btn.textContent = '暂停';
+      runUpload();
+    }
+  });
+
+  document.getElementById('resumeBtn').addEventListener('click', () => {
+    if (!uploadState) return;
+    document.getElementById('resFile').click();
+    resumePick = true;
+  });
+
+  document.getElementById('discardBtn').addEventListener('click', discardUpload);
+  document.getElementById('cancelUploadBtn').addEventListener('click', discardUpload);
 
   window.addLink = async function(event) {
     const url = document.getElementById('linkUrl').value.trim();

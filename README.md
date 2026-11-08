@@ -13,7 +13,7 @@ GreenBox 是一个综合性的在线站点：工具箱、五子棋联机对战�
 | 五子棋 | 创建/加入房间、房间密码、邀请链接、悔棋与重开需对方同意、认输、房间聊天、断线重连、刷新恢复对局 |
 | 论坛 | 分类、搜索、排序、发帖（最多 3 图）、评论（最多 2 图）、点赞、收藏、转发、置顶 |
 | 私信 / 好友 | 会话列表、消息撤回、置顶、免打扰、好友申请、拉黑、隐私设置、在线状态；支持文本、图片、视频和文件（单文件最大 200MB，附件 7 天后过期） |
-| 资源中心 | B2 直传、配额管理、视频/音频/图片在线播放、外链资源、管理员上传 |
+| 资源中心 | B2 直传、分片上传、断点续传与暂停/继续、配额管理、视频/音频/图片在线播放、外链资源、管理员上传 |
 | AI 助手 | 智谱 GLM 流式对话、深度思考、会话历史、每日次数限制、后台可调模型与提示词 |
 | 通知 | 全站广播与定向通知、未读计数 |
 | 管理后台 | 工具与更新日志、用户与角色、密码重置、房间管理、AI 配置与配额、通知群发 |
@@ -131,6 +131,7 @@ B2_APP_KEY=
 | 五子棋 | `POST /api/room/create`、`/api/room/join`、`/api/room/leave`、`/api/room/heartbeat`、`GET /api/rooms`、`GET /api/room/:roomId` |
 | 论坛 | `GET /api/forum/posts`、`GET /api/forum/posts/:id`、`POST /api/forum/posts`、`POST /api/forum/posts/:id/comments`、`POST /api/forum/posts/:id/like` |
 | 资源 | `POST /api/resource/upload-url`、`POST /api/resource/confirm`、`GET /api/resource/list/:category`、`GET /api/resource/quota`、`DELETE /api/resource/:id` |
+| 资源分片 | `POST /api/resource/multipart/create`、`POST /api/resource/multipart/part-url`、`GET /api/resource/multipart/status`、`POST /api/resource/multipart/complete`、`POST /api/resource/multipart/abort` |
 | 私信附件 | `POST /api/dm/upload-url`、`GET /api/dm/attachment/:convId/:msgId` |
 | AI | `GET /api/chat/config`、`GET /api/chat/quota`、`GET/POST /api/chat/sessions`、`POST /api/chat/stream` |
 | 通知 | `GET /api/notifications`、`POST /api/notifications/read`、`GET /api/notifications/unread-count` |
@@ -156,6 +157,8 @@ Redis 中按前缀保存业务数据：
 资源文件保存在 B2，Redis 只存对象 key。资源列表在每次读取时会重新生成 7 天有效的预签名链接，因此历史资源不会因为链接过期而失效。
 
 私信附件同样存放在 B2（`dm/<用户名>/...`），Redis 只保存文件名、大小、类型和过期时间。附件默认 7 天有效，过期后接口返回 410，并在读取时尽力删除对应对象。
+
+资源中心的大文件使用 S3 分片上传：每片 8MB，单文件最大 2GB，普通用户仍受 50MB 总配额限制。上传进度保存在浏览器本地，网络中断或刷新页面后可以重新选择同一个文件继续，未完成的分片会保留在 B2，直到合并或主动放弃。
 
 ## 迁移脚本
 
