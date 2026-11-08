@@ -15,7 +15,7 @@ GreenBox 是一个综合性的在线站点：工具箱、五子棋联机对战�
 | 私信 / 好友 | 会话列表、消息撤回、置顶、免打扰、好友申请、拉黑、隐私设置、在线状态；支持文本、图片、视频和文件（单文件最大 200MB，附件 7 天后过期） |
 | 资源中心 | B2 直传、分片上传、断点续传与暂停/继续、配额管理、视频/音频/图片在线播放、外链资源、管理员上传 |
 | AI 助手 | 智谱 GLM 流式对话、深度思考、会话历史、每日次数限制、后台可调模型与提示词 |
-| 通知 | 全站广播与定向通知、未读计数 |
+| 通知 | 全站广播与定向通知、未读计数；管理员可发“重大通知”，用户上线弹窗提示，可稍后或不再显示；用户可邀请他人下五子棋（每分钟 1 条，每天最多 5 条） |
 | 管理后台 | 工具与更新日志、用户与角色、密码重置、房间管理、AI 配置与配额、通知群发 |
 
 ## 技术栈
@@ -134,7 +134,7 @@ B2_APP_KEY=
 | 资源分片 | `POST /api/resource/multipart/create`、`POST /api/resource/multipart/part-url`、`GET /api/resource/multipart/status`、`POST /api/resource/multipart/complete`、`POST /api/resource/multipart/abort` |
 | 私信附件 | `POST /api/dm/upload-url`、`GET /api/dm/attachment/:convId/:msgId` |
 | AI | `GET /api/chat/config`、`GET /api/chat/quota`、`GET/POST /api/chat/sessions`、`POST /api/chat/stream` |
-| 通知 | `GET /api/notifications`、`POST /api/notifications/read`、`GET /api/notifications/unread-count` |
+| 通知 | `GET /api/notifications`、`POST /api/notifications/read`、`GET /api/notifications/unread-count`、`GET /api/notifications/major`、`POST /api/notifications/send` |
 | 后台 | `/api/admin/*`，均需管理员会话 |
 
 Socket.IO 事件：

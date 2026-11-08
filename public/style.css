@@ -482,6 +482,66 @@ footer { margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border);
   .gb-tour { right: 18px; bottom: 86px; width: 214px; }
 }
 
+/* ===== 重大通知弹窗 ===== */
+.gb-major-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.gb-major-card {
+  width: min(430px, 100%);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+  padding: 22px 22px 18px;
+  animation: gbTourIn 0.25s ease-out;
+}
+.gb-major-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  margin-bottom: 10px;
+}
+.gb-major-badge.warning { background: #fef3c7; color: #854d0e; }
+.gb-major-badge.gomoku { background: #dcfce7; color: #166534; }
+.gb-major-card h3 { font-size: 1.1rem; margin: 0 0 8px; color: var(--text); }
+.gb-major-card p { font-size: 0.92rem; color: var(--muted); line-height: 1.8; margin: 0 0 12px; white-space: pre-wrap; word-break: break-word; }
+.gb-major-meta { font-size: 0.76rem; color: var(--muted); margin-bottom: 14px; }
+.gb-major-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.gb-major-ghost {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 0.84rem;
+}
+.gb-major-ghost:hover { border-color: var(--danger); color: var(--danger); }
+.gb-major-go {
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  padding: 7px 14px;
+  border-radius: 9px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.gb-major-go:hover { background: var(--primary-dark); }
+
 /* ===== 响应式 ===== */
 /* 手机 / 平板端：导航栏随页面滚动，与首页保持一致 */
 @media (max-width: 900px) {

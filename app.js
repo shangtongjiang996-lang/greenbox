@@ -1479,6 +1479,9 @@ async function getUserNotifications(username) {
       type: n.type || 'info',
       createdAt: n.createdAt,
       sender: n.sender || 'admin',
+      major: !!n.major,
+      kind: n.kind || '',
+      link: n.link || '',
       read: readSet.has(n.id),
     }))
     .sort((a, b) => b.createdAt - a.createdAt);
@@ -1499,6 +1502,62 @@ app.get('/api/notifications/unread-count', async (req, res) => {
   const list = await getUserNotifications(session.username);
   const unread = list.filter(n => !n.read).length;
   res.json({ count: unread });
+});
+
+// 需要弹窗展示的重大通知
+app.get('/api/notifications/major', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const list = await getUserNotifications(session.username);
+  const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+  res.json(list.filter(n => n.major && n.createdAt > cutoff).slice(0, 20));
+});
+
+// 用户给指定用户发送“一起下五子棋”通知
+app.post('/api/notifications/send', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const { to } = req.body || {};
+  if (!to || typeof to !== 'string' || to === session.username) {
+    return res.status(400).json({ error: '参数错误' });
+  }
+  const users = await kvGet('users') || {};
+  if (to !== 'admin' && !users[to]) return res.status(404).json({ error: '用户不存在' });
+
+  const friends = (await kvGet(`friends:${to}`)) || [];
+  if (friends.some(f => f.username === session.username && f.blocked)) {
+    return res.status(403).json({ error: '对方已将你拉黑' });
+  }
+
+  const minute = await kvIncr(`notif:rate:${session.username}`, 60);
+  if (minute > 1) {
+    return res.status(429).json({ error: '发送太频繁，每分钟只能发送一次' });
+  }
+  const dayKey = `notif:day:${session.username}:${todayKey()}`;
+  const dayCount = await kvIncr(dayKey, 48 * 3600);
+  if (dayCount > 5) {
+    return res.status(429).json({ error: '今天已经发送 5 条通知了，明天再来吧' });
+  }
+
+  const notif = {
+    id: genNotifId(),
+    title: `${session.username} 邀请你下五子棋`,
+    content: `${session.username} 想和你下一局五子棋，点击下方按钮进入大厅。`,
+    type: 'info',
+    target: to,
+    sender: session.username,
+    major: true,
+    kind: 'gomoku',
+    link: '/gomoku-online.html',
+    createdAt: Date.now(),
+  };
+  const list = (await kvGet('notifications')) || [];
+  list.push(notif);
+  await kvPut('notifications', list.slice(-500));
+  try { emitToUser(io, to, 'notify:major', notif); } catch (e) {}
+  res.json({ success: true, notification: notif, remaining: Math.max(0, 5 - dayCount) });
 });
 
 app.post('/api/notifications/read', async (req, res) => {
@@ -1561,7 +1620,7 @@ app.get('/api/admin/notifications', async (req, res) => {
 
 app.post('/api/admin/notifications', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
-  const { title, content, type, target } = req.body || {};
+  const { title, content, type, target, major, link } = req.body || {};
 
   if (!title || !String(title).trim()) return res.status(400).json({ error: '标题不能为空' });
   if (!content || !String(content).trim()) return res.status(400).json({ error: '内容不能为空' });
@@ -1573,6 +1632,8 @@ app.post('/api/admin/notifications', async (req, res) => {
     type: ['info', 'success', 'warning', 'error'].includes(type) ? type : 'info',
     target: target || 'all',
     sender: 'admin',
+    major: !!major,
+    link: typeof link === 'string' && link.startsWith('/') ? link.slice(0, 200) : '',
     createdAt: Date.now(),
   };
 

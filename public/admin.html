@@ -843,6 +843,10 @@
           </div>
           <div class="hint">选择「所有用户」会群发，选择「指定用户」只发给一个人</div>
         </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;font-size:0.9rem;color:#334155;">
+          <input type="checkbox" id="notif-major">
+          重大通知（用户上线时弹窗提示，可暂时关闭或不再显示）
+        </label>
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
           <button class="btn btn-primary" id="notif-send-btn" style="padding: 0.7rem 2rem;">发送通知</button>
           <button class="btn btn-outline" id="notif-clear-form-btn">清空表单</button>
@@ -1722,6 +1726,7 @@ function setupNotifyForm() {
     targetType.value = 'all';
     targetUser.style.display = 'none';
     targetUser.value = '';
+    document.getElementById('notif-major').checked = false;
   });
 
   sendBtn.addEventListener('click', async () => {
@@ -1748,7 +1753,7 @@ function setupNotifyForm() {
       const res = await fetch('/api/admin/notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ title, content, type, target })
+        body: JSON.stringify({ title, content, type, target, major: document.getElementById('notif-major').checked })
       });
       const data = await res.json();
       if (data.success) {
@@ -1807,6 +1812,7 @@ async function loadAdminNotifications() {
           <div class="notif-item-head">
             <div class="notif-item-title">
               <span class="notif-type-badge ${n.type}">${typeLabel[n.type] || '通知'}</span>
+              ${n.major ? '<span class="notif-type-badge warning">重大</span>' : ''}
               ${escapeHtmlAdmin(n.title)}
             </div>
             <div class="notif-item-meta">

@@ -716,6 +716,10 @@
         html += `<button class="ua-btn ua-btn-outline" disabled title="对方已关闭陌生人消息">对方不接受消息</button>`;
       }
 
+      if (rel !== 'blocked_by_me' && rel !== 'blocked_me') {
+        html += `<button class="ua-btn ua-btn-outline" data-action="invite" title="每分钟 1 条，每天最多 5 条">邀请下五子棋</button>`;
+      }
+
       // 好友状态
       if (rel === 'friend') {
         html += `<button class="ua-btn ua-btn-success" disabled>已是好友</button>`;
@@ -775,8 +779,15 @@
         return;
       }
 
-      if (act === 'add') {
-        const msg = prompt('附上一条验证消息（可选）：', '');
+      if (act === 'invite') {
+        const r = await api('/api/notifications/send', { method: 'POST', body: { to: p.username } });
+        const left = r && typeof r.remaining === 'number' ? `，今天还可发 ${r.remaining} 条` : '';
+        showToast('邀请已发送' + left, 'success');
+        btn.disabled = false;
+        return;
+      }
+
+      if (act === 'add') {        const msg = prompt('附上一条验证消息（可选）：', '');
         if (msg === null) { btn.disabled = false; return; }
         const r = await api('/api/social/friends/request', {
           method: 'POST',
