@@ -25,6 +25,12 @@ if (toggle) {
 
   function setupNav() {
     var pn = document.getElementById('profile-nav');
+    if (!pn) {
+      // 兼容没有 id 的旧页面：找到指向个人中心的导航项
+      var fallback = document.querySelector('.nav-links a[href="/profile.html"]')
+        || document.querySelector('.nav-links a[href="profile.html"]');
+      if (fallback) pn = fallback.parentNode;
+    }
     if (!pn) return;
     pn.style.display = 'list-item';
 
