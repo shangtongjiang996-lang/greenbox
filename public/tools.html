@@ -309,8 +309,14 @@
         const res = await fetch('/api/data');
         const data = await res.json();
         const container = document.getElementById('all-tools');
+        const builtinTool = `
+          <a href="/function-plotter.html" class="tool-card">
+            <span class="tool-icon"><svg class="ico" aria-hidden="true"><use href="/icons.svg#spark"/></svg></span>
+            <h3>函数图像工具</h3>
+            <p>输入解析式绘制函数图像，支持多函数、求导、积分、散点拟合反推解析式。</p>
+          </a>`;
         if (data.tools && data.tools.length > 0) {
-          container.innerHTML = data.tools.map(t => `
+          container.innerHTML = builtinTool + data.tools.map(t => `
             <a href="${t.url}" class="tool-card" target="_blank" rel="noopener">
               <span class="tool-icon">${t.icon || '<svg class="ico" aria-hidden="true"><use href="/icons.svg#tool"/></svg>'}</span>
               <h3>${t.name}</h3>
@@ -318,7 +324,7 @@
             </a>
           `).join('');
         } else {
-          container.innerHTML = '<p style="text-align:center;padding:3rem 0;color:#94a3b8;">暂无工具，请前往后台添加</p>';
+          container.innerHTML = builtinTool;
         }
       } catch (err) {
         console.error('加载数据失败:', err);

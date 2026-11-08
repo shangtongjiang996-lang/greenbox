@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>函数图像工具 - GreenBox</title>
+<meta name="description" content="输入函数解析式绘制图像，支持多函数、求导、积分、散点拟合反推解析式。">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f3f5f0;
+  --card: #ffffff;
+  --text: #13201a;
+  --muted: #5a6a60;
+  --border: #d9e0d6;
+  --primary: #15803d;
+  --primary-dark: #166534;
+  --primary-light: #e0f0e4;
+  --danger: #c93a3a;
+  --grid: #e3e8e1;
+  --axis: #8a978e;
+  --shadow: 0 10px 30px rgba(19, 32, 26, 0.08);
+}
+[data-theme="dark"] {
+  --bg: #0d1511;
+  --card: #131d17;
+  --text: #e8f0ea;
+  --muted: #92a498;
+  --border: #25342b;
+  --primary: #4cc785;
+  --primary-dark: #38b373;
+  --primary-light: #17301f;
+  --danger: #f08080;
+  --grid: #1e2b23;
+  --axis: #5b6d61;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; overflow-x: hidden; }
+body {
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--primary); text-decoration: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.brand { font-weight: 800; font-size: 1.1rem; color: var(--text); letter-spacing: .02em; }
+.brand span { background: var(--primary); color: #fff; padding: 0 6px; border-radius: 5px; font-size: .7rem; margin-left: 4px; vertical-align: 2px; }
+.topbar .title { font-weight: 600; color: var(--muted); }
+.topbar .spacer { flex: 1; }
+.topbar a.plain { color: var(--muted); font-size: .9rem; }
+.topbar a.plain:hover { color: var(--primary); }
+
+.layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 16px;
+  align-items: start;
+}
+.layout > * { min-width: 0; }
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 6px 16px 16px;
+  max-height: calc(100vh - 92px);
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.panel section { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.panel section:last-child { border-bottom: 0; }
+.panel h2 { font-size: .82rem; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; margin: 0 0 10px; font-weight: 700; }
+
+.fn-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.fn-row input.expr {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: .92rem;
+}
+.fn-row input.expr:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.icon-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+.icon-btn:hover { color: var(--danger); border-color: var(--danger); }
+.err { color: var(--danger); font-size: .78rem; margin: -4px 0 8px 18px; min-height: 1em; }
+
+.btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  padding: 7px 12px;
+  border-radius: 9px;
+  font-size: .88rem;
+  font-weight: 600;
+}
+.btn:hover { border-color: var(--primary); color: var(--primary); }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover { background: var(--primary-dark); color: #fff; }
+.btn.small { padding: 5px 10px; font-size: .82rem; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row.between { justify-content: space-between; }
+
+.field { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field > div, .field input, .field select { min-width: 0; }
+.row > * { min-width: 0; }
+.field label { font-size: .78rem; color: var(--muted); display: block; margin-bottom: 3px; }
+.field input, .field select, textarea, select {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+textarea { min-height: 86px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: .86rem; }
+.field input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+
+.slider { display: grid; grid-template-columns: 18px 1fr 46px; align-items: center; gap: 8px; margin-bottom: 6px; font-size: .86rem; }
+.slider input[type=range] { width: 100%; accent-color: var(--primary); }
+.slider b { font-family: ui-monospace, Consolas, monospace; font-weight: 600; text-align: right; }
+
+.check { display: flex; align-items: center; gap: 7px; font-size: .88rem; margin: 6px 0; }
+.check input { accent-color: var(--primary); width: 15px; height: 15px; }
+
+.hint { color: var(--muted); font-size: .78rem; margin-top: 6px; }
+.result { margin-top: 10px; font-size: .86rem; background: var(--bg); border: 1px dashed var(--border); border-radius: 9px; padding: 8px 10px; word-break: break-all; }
+.result code { font-family: ui-monospace, Consolas, monospace; color: var(--primary); font-size: .9rem; }
+
+.canvas-wrap {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  height: calc(100vh - 92px);
+  min-height: 480px;
+}
+#plot { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.canvas-tools {
+  position: absolute; right: 12px; top: 12px; display: flex; gap: 6px;
+}
+.canvas-tools button {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 1rem; line-height: 1;
+}
+.canvas-tools button.wide { width: auto; padding: 0 10px; font-size: .8rem; }
+.canvas-tools button:hover { border-color: var(--primary); color: var(--primary); }
+.canvas-hint {
+  position: absolute; left: 12px; bottom: 12px;
+  font-size: .76rem; color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+.tip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--shadow);
+  padding: 7px 9px;
+  font-size: .8rem;
+  min-width: 110px;
+  display: none;
+  z-index: 5;
+}
+.tip b { font-weight: 700; }
+.tip .t-row { display: flex; justify-content: space-between; gap: 12px; font-family: ui-monospace, Consolas, monospace; }
+.status { color: var(--danger); font-size: .8rem; min-height: 1.2em; margin-top: 6px; }
+
+@media (max-width: 920px) {
+  .layout { grid-template-columns: 1fr; }
+  .panel { max-height: none; }
+  .canvas-wrap { height: 58vh; min-height: 380px; order: -1; }
+}
+@media (max-width: 520px) {
+  .topbar { padding: 8px 12px; gap: 6px; flex-wrap: wrap; }
+  .topbar .title { display: none; }
+  .topbar .spacer { display: none; }
+  .topbar a.plain { margin-left: auto; font-size: .82rem; }
+  .brand { font-size: 1rem; }
+  .layout { padding: 10px; gap: 10px; }
+  .canvas-wrap { height: 52vh; min-height: 320px; }
+  .canvas-tools { top: 8px; right: 8px; }
+  .canvas-hint { display: none; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">GreenBox<span>工具</span></a>
+  <span class="title">函数图像</span>
+  <div class="spacer"></div>
+  <a class="plain" href="/tools.html">全部工具</a>
+  <button id="themeBtn" class="btn small" type="button">深色</button>
+</header>
+
+<main class="layout">
+  <aside class="panel">
+    <section>
+      <h2>函数表达式</h2>
+      <div id="fnRows"></div>
+      <div class="row" style="margin-top:6px;">
+        <button id="addFn" class="btn small" type="button">+ 添加函数</button>
+        <select id="exampleSel" style="width:auto;flex:1;" aria-label="示例">
+          <option value="">选择示例...</option>
+          <option value="x^2">二次函数 x^2</option>
+          <option value="sin(x)">正弦 sin(x)</option>
+          <option value="x^3-3x">三次函数 x^3-3x</option>
+          <option value="1/x">双曲线 1/x</option>
+          <option value="e^(-x^2)">高斯 e^(-x^2)</option>
+          <option value="tan(x)">正切 tan(x)</option>
+          <option value="x*sin(x)">x·sin(x)</option>
+        </select>
+      </div>
+      <div id="fnStatus" class="status"></div>
+      <div class="hint">支持 + - * / ^、括号、sin cos tan asin acos atan sinh cosh tanh ln log exp sqrt abs floor ceil round sign、常量 pi e，以及参数 a b c。乘法可省略，如 2x、3sin(x)。</div>
+    </section>
+
+    <section>
+      <h2>参数</h2>
+      <div class="slider"><span>a</span><input id="pa" type="range" min="-5" max="5" step="0.1" value="1"><b id="paVal">1</b></div>
+      <div class="slider"><span>b</span><input id="pb" type="range" min="-5" max="5" step="0.1" value="1"><b id="pbVal">1</b></div>
+      <div class="slider"><span>c</span><input id="pc" type="range" min="-5" max="5" step="0.1" value="0"><b id="pcVal">0</b></div>
+    </section>
+
+    <section>
+      <h2>视图</h2>
+      <div class="field">
+        <div><label for="xmin">x 最小</label><input id="xmin" type="number" step="any" value="-10"></div>
+        <div><label for="xmax">x 最大</label><input id="xmax" type="number" step="any" value="10"></div>
+        <div><label for="ymin">y 最小</label><input id="ymin" type="number" step="any" value="-10"></div>
+        <div><label for="ymax">y 最大</label><input id="ymax" type="number" step="any" value="10"></div>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button id="applyView" class="btn small" type="button">应用</button>
+        <button id="resetView" class="btn small" type="button">重置视图</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>分析</h2>
+      <label class="check"><input id="derivChk" type="checkbox"> 显示导数曲线（数值求导）</label>
+      <label class="check"><input id="shadeChk" type="checkbox"> 显示积分区域</label>
+      <div class="field" style="margin-top:6px;">
+        <div><label for="intA">积分下限 a</label><input id="intA" type="number" step="any" value="0"></div>
+        <div><label for="intB">积分上限 b</label><input id="intB" type="number" step="any" value="3.14"></div>
+      </div>
+      <div class="hint">积分值（第一个函数）：<b id="intVal">--</b></div>
+    </section>
+
+    <section>
+      <h2>反向拟合</h2>
+      <div class="hint" style="margin-top:0;">每行一个点，支持 <code>1,2</code> 或 <code>1 2</code>。也可以用“画布取点”直接点击图像添加。</div>
+      <textarea id="pointsInput" placeholder="0,0&#10;1,1&#10;2,4"></textarea>
+      <div class="row" style="margin-top:8px;">
+        <select id="degreeSel" style="width:auto;" aria-label="拟合次数">
+          <option value="1">一次</option>
+          <option value="2" selected>二次</option>
+          <option value="3">三次</option>
+          <option value="4">四次</option>
+          <option value="5">五次</option>
+          <option value="6">六次</option>
+        </select>
+        <button id="fitBtn" class="btn primary small" type="button">拟合</button>
+        <button id="pickBtn" class="btn small" type="button">画布取点</button>
+        <button id="clearPts" class="btn small" type="button">清空</button>
+      </div>
+      <div id="fitResult" class="result" style="display:none;"></div>
+    </section>
+
+    <section>
+      <h2>操作</h2>
+      <div class="row">
+        <button id="exportBtn" class="btn small" type="button">导出 PNG</button>
+        <button id="shareBtn" class="btn small" type="button">复制链接</button>
+      </div>
+      <div id="actionStatus" class="status"></div>
+    </section>
+  </aside>
+
+  <section class="canvas-wrap">
+    <canvas id="plot"></canvas>
+    <div class="canvas-tools">
+      <button data-zoom="in" type="button" aria-label="放大">+</button>
+      <button data-zoom="out" type="button" aria-label="缩小">-</button>
+      <button data-zoom="reset" class="wide" type="button">重置</button>
+    </div>
+    <div class="canvas-hint">滚轮缩放 · 拖动平移 · 双击重置</div>
+    <div id="tip" class="tip"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* PARSER_START */
+  var FUNCS = {
+    sin: Math.sin, cos: Math.cos, tan: Math.tan,
+    asin: Math.asin, acos: Math.acos, atan: Math.atan,
+    sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+    sqrt: Math.sqrt, abs: Math.abs, exp: Math.exp,
+    ln: Math.log, log: function (v) { return Math.log(v) / Math.LN10; },
+    lg: function (v) { return Math.log(v) / Math.LN10; },
+    floor: Math.floor, ceil: Math.ceil, round: Math.round, sign: Math.sign
+  };
+
+  function tokenize(src) {
+    var tokens = [];
+    var i = 0;
+    var n = src.length;
+    while (i < n) {
+      var c = src.charAt(i);
+      if (/\s/.test(c)) { i++; continue; }
+      if (/[0-9.]/.test(c)) {
+        var j = i, dot = false;
+        while (j < n && /[0-9.]/.test(src.charAt(j))) {
+          if (src.charAt(j) === '.') {
+            if (dot) break;
+            dot = true;
+          }
+          j++;
+        }
+        if (j < n && /[eE]/.test(src.charAt(j)) && /[0-9+\-]/.test(src.charAt(j + 1) || '')) {
+          j++;
+          if (/[+\-]/.test(src.charAt(j))) j++;
+          while (j < n && /[0-9]/.test(src.charAt(j))) j++;
+        }
+        var raw = src.slice(i, j);
+        var v = Number(raw);
+        if (!isFinite(v)) throw new Error('数字格式错误：' + raw);
+        tokens.push({ t: 'num', v: v });
+        i = j;
+        continue;
+      }
+      if (/[A-Za-z\u03c0]/.test(c)) {
+        var k = i + 1;
+        while (k < n && /[A-Za-z\u03c0]/.test(src.charAt(k))) k++;
+        tokens.push({ t: 'id', name: src.slice(i, k) });
+        i = k;
+        continue;
+      }
+      if ('+-*/^(),'.indexOf(c) >= 0) {
+        tokens.push({ t: c });
+        i++;
+        continue;
+      }
+      throw new Error('无法识别的字符：' + c);
+    }
+    tokens.push({ t: 'eof' });
+    return tokens;
+  }
+
+  function parseTokens(tokens) {
+    var pos = 0;
+    function peek() { return tokens[pos]; }
+    function next() { return tokens[pos++]; }
+    function expect(t) {
+      if (peek().t !== t) throw new Error('缺少 “' + t + '”');
+      return next();
+    }
+    function parseExpr() {
+      var node = parseTerm();
+      while (peek().t === '+' || peek().t === '-') {
+        var op = next().t;
+        node = { type: 'bin', op: op, l: node, r: parseTerm() };
+      }
+      return node;
+    }
+    function parseTerm() {
+      var node = parseUnary();
+      while (true) {
+        var t = peek().t;
+        if (t === '*' || t === '/') {
+          next();
+          node = { type: 'bin', op: t, l: node, r: parseUnary() };
+        } else if (t === 'num' || t === 'id' || t === '(') {
+          node = { type: 'bin', op: '*', l: node, r: parseUnary() };
+        } else {
+          break;
+        }
+      }
+      return node;
+    }
+    function parseUnary() {
+      var t = peek().t;
+      if (t === '+' || t === '-') {
+        next();
+        return { type: 'un', op: t, a: parseUnary() };
+      }
+      return parsePower();
+    }
+    function parsePower() {
+      var base = parsePrimary();
+      if (peek().t === '^') {
+        next();
+        return { type: 'bin', op: '^', l: base, r: parseUnary() };
+      }
+      return base;
+    }
+    function parsePrimary() {
+      var t = peek();
+      if (t.t === 'num') { next(); return { type: 'num', v: t.v }; }
+      if (t.t === '(') {
+        next();
+        var inner = parseExpr();
+        expect(')');
+        return inner;
+      }
+      if (t.t === 'id') {
+        next();
+        var name = t.name.toLowerCase();
+        if (name === 'x') return { type: 'var' };
+        if (name === 'pi' || name === '\u03c0') return { type: 'num', v: Math.PI };
+        if (name === 'e') return { type: 'num', v: Math.E };
+        if (name === 'a' || name === 'b' || name === 'c') return { type: 'param', name: name };
+        if (FUNCS[name]) {
+          expect('(');
+          var arg = parseExpr();
+          expect(')');
+          return { type: 'call', name: name, arg: arg };
+        }
+        throw new Error('未知符号：' + t.name);
+      }
+      throw new Error('表达式不完整');
+    }
+
+    var ast = parseExpr();
+    if (peek().t !== 'eof') throw new Error('表达式尾部有多余内容');
+    return ast;
+  }
+
+  function compile(ast) {
+    switch (ast.type) {
+      case 'num':
+        return function () { return ast.v; };
+      case 'var':
+        return function (x) { return x; };
+      case 'param':
+        return function (x, p) { return p[ast.name]; };
+      case 'un': {
+        var a = compile(ast.a);
+        if (ast.op === '-') return function (x, p) { return -a(x, p); };
+        return function (x, p) { return a(x, p); };
+      }
+      case 'bin': {
+        var l = compile(ast.l), r = compile(ast.r);
+        if (ast.op === '+') return function (x, p) { return l(x, p) + r(x, p); };
+        if (ast.op === '-') return function (x, p) { return l(x, p) - r(x, p); };
+        if (ast.op === '*') return function (x, p) { return l(x, p) * r(x, p); };
+        if (ast.op === '/') return function (x, p) { return l(x, p) / r(x, p); };
+        return function (x, p) { return Math.pow(l(x, p), r(x, p)); };
+      }
+      case 'call': {
+        var arg = compile(ast.arg);
+        var fn = FUNCS[ast.name];
+        return function (x, p) { return fn(arg(x, p)); };
+      }
+    }
+    throw new Error('无法编译表达式');
+  }
+
+  function parseExpression(src) {
+    return parseTokens(tokenize(String(src)));
+  }
+  /* PARSER_END */
+
+  /* MATH_START */
+  function niceStep(span, target) {
+    if (!isFinite(span) || span <= 0) return 1;
+    var raw = span / Math.max(1, target);
+    var mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+    var norm = raw / mag;
+    var mult = norm < 1.5 ? 1 : (norm < 3 ? 2 : (norm < 7 ? 5 : 10));
+    return mult * mag;
+  }
+
+  function solveLinear(A, b) {
+    var n = b.length;
+    for (var i = 0; i < n; i++) {
+      var p = i;
+      for (var r = i + 1; r < n; r++) {
+        if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
+      }
+      if (Math.abs(A[p][i]) < 1e-12) throw new Error('数据不足或点过于集中，无法拟合');
+      var tmp = A[i]; A[i] = A[p]; A[p] = tmp;
+      var tb = b[i]; b[i] = b[p]; b[p] = tb;
+      for (var r2 = i + 1; r2 < n; r2++) {
+        var f = A[r2][i] / A[i][i];
+        if (!f) continue;
+        for (var c = i; c < n; c++) A[r2][c] -= f * A[i][c];
+        b[r2] -= f * b[i];
+      }
+    }
+    var x = new Array(n).fill(0);
+    for (var i2 = n - 1; i2 >= 0; i2--) {
+      var s = b[i2];
+      for (var j = i2 + 1; j < n; j++) s -= A[i2][j] * x[j];
+      x[i2] = s / A[i2][i2];
+    }
+    return x;
+  }
+
+  function polyFit(points, degree) {
+    if (!points.length) throw new Error('没有可用的点');
+    if (degree < 1) degree = 1;
+    if (degree > points.length - 1) degree = points.length - 1;
+    if (degree < 1) throw new Error('至少需要 2 个点');
+
+    var mx = 0, my = 0;
+    points.forEach(function (p) { mx += p.x; my += p.y; });
+    mx /= points.length; my /= points.length;
+    var sx = 0;
+    points.forEach(function (p) { sx = Math.max(sx, Math.abs(p.x - mx)); });
+    if (sx < 1e-12) throw new Error('所有点的 x 相同，无法拟合');
+    var scale = sx;
+
+    var n = degree + 1;
+    var A = [];
+    for (var i = 0; i < n; i++) A.push(new Array(n).fill(0));
+    var b = new Array(n).fill(0);
+    points.forEach(function (p) {
+      var t = (p.x - mx) / scale;
+      var pw = [1];
+      for (var k = 1; k < 2 * n; k++) pw.push(pw[k - 1] * t);
+      for (var r = 0; r < n; r++) {
+        for (var c = 0; c < n; c++) A[r][c] += pw[r + c];
+        b[r] += pw[r] * p.y;
+      }
+    });
+    var coefT = solveLinear(A, b);
+
+    var coefX = new Array(n).fill(0);
+    for (var k = 0; k < n; k++) {
+      var ck = coefT[k] / Math.pow(scale, k);
+      for (var j = 0; j <= k; j++) {
+        var binom = 1;
+        for (var q = 0; q < j; q++) binom = binom * (k - q) / (q + 1);
+        coefX[j] += ck * binom * Math.pow(-mx, k - j);
+      }
+    }
+    return coefX;
+  }
+
+  function evalPoly(coef, x) {
+    var s = 0;
+    for (var i = coef.length - 1; i >= 0; i--) s = s * x + coef[i];
+    return s;
+  }
+
+  function formatNum(v) {
+    if (!isFinite(v)) return '0';
+    var a = Math.abs(v);
+    if (a !== 0 && (a >= 1e7 || a < 1e-6)) return v.toExponential(3).replace('e+', 'e');
+    var s = v.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+    return s === '-0' ? '0' : s;
+  }
+
+  function formatPoly(coef) {
+    var terms = [];
+    var maxAbs = 0;
+    coef.forEach(function (c) { maxAbs = Math.max(maxAbs, Math.abs(c)); });
+    var eps = Math.max(1e-10, maxAbs * 1e-9);
+    for (var k = coef.length - 1; k >= 0; k--) {
+      var c = coef[k];
+      if (Math.abs(c) < eps) continue;
+      var sign = c < 0 ? '-' : '+';
+      var abs = Math.abs(c);
+      var body;
+      if (k === 0) body = formatNum(abs);
+      else if (k === 1) body = (Math.abs(abs - 1) < 1e-9 ? '' : formatNum(abs)) + 'x';
+      else body = (Math.abs(abs - 1) < 1e-9 ? '' : formatNum(abs)) + 'x^' + k;
+      terms.push({ sign: sign, body: body });
+    }
+    if (!terms.length) return '0';
+    var out = (terms[0].sign === '-' ? '-' : '') + terms[0].body;
+    for (var i = 1; i < terms.length; i++) out += ' ' + terms[i].sign + ' ' + terms[i].body;
+    return out;
+  }
+
+  function rSquared(points, coef) {
+    var my = 0;
+    points.forEach(function (p) { my += p.y; });
+    my /= points.length;
+    var ssTot = 0, ssRes = 0;
+    points.forEach(function (p) {
+      var e = p.y - evalPoly(coef, p.x);
+      ssTot += Math.pow(p.y - my, 2);
+      ssRes += e * e;
+    });
+    if (ssTot < 1e-15) return 1;
+    return 1 - ssRes / ssTot;
+  }
+
+  function parsePoints(text) {
+    var num = '(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)';
+    var re = new RegExp('^\\s*\\(?\\s*' + num + '\\s*[,，\\s]\\s*' + num + '\\s*\\)?\\s*$');
+    var out = [];
+    String(text).split(/[\n;]+/).forEach(function (line) {
+      line = line.trim();
+      if (!line) return;
+      var m = line.match(re);
+      if (m) out.push({ x: Number(m[1]), y: Number(m[2]) });
+    });
+    return out;
+  }
+
+  function simpson(fn, a, b, n) {
+    if (!isFinite(a) || !isFinite(b)) return NaN;
+    if (n % 2) n++;
+    var h = (b - a) / n;
+    var sum = fn(a) + fn(b);
+    for (var i = 1; i < n; i++) {
+      var v = fn(a + i * h);
+      if (!isFinite(v)) return NaN;
+      sum += v * (i % 2 ? 4 : 2);
+    }
+    return sum * h / 3;
+  }
+  /* MATH_END */
+
+  var COLORS = ['#15803d', '#2563eb', '#c2410c', '#7c3aed'];
+  var state = {
+    fns: [{ expr: 'sin(x)', color: COLORS[0], fn: null, error: null }],
+    view: { xmin: -10, xmax: 10, ymin: -10, ymax: 10 },
+    params: { a: 1, b: 1, c: 0 },
+    derivative: false,
+    shade: false,
+    integral: { a: 0, b: Math.PI },
+    points: [],
+    fitCoef: null,
+    pointMode: false,
+    hover: null
+  };
+
+  var canvas = document.getElementById('plot');
+  var ctx = canvas.getContext('2d');
+  var W = 0, H = 0, DPR = 1;
+  var tip = document.getElementById('tip');
+
+  function $(id) { return document.getElementById(id); }
+  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  var sx = function (x) { return (x - state.view.xmin) / (state.view.xmax - state.view.xmin) * W; };
+  var sy = function (y) { return H - (y - state.view.ymin) / (state.view.ymax - state.view.ymin) * H; };
+  var ix = function (px) { return state.view.xmin + px / W * (state.view.xmax - state.view.xmin); };
+  var iy = function (py) { return state.view.ymin + (H - py) / H * (state.view.ymax - state.view.ymin); };
+
+  function fmtTick(v) {
+    if (Math.abs(v) < 1e-10) return '0';
+    var a = Math.abs(v);
+    if (a >= 1e5 || a < 1e-4) return v.toExponential(1).replace('e+', 'e');
+    return String(parseFloat(v.toFixed(4)));
+  }
+
+  function resize() {
+    var rect = canvas.parentElement.getBoundingClientRect();
+    W = Math.max(200, Math.round(rect.width));
+    H = Math.max(200, Math.round(rect.height));
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    render();
+  }
+
+  function drawGrid() {
+    var v = state.view;
+    var grid = cssVar('--grid') || '#e3e8e1';
+    var axis = cssVar('--axis') || '#8a978e';
+    var muted = cssVar('--muted') || '#5a6a60';
+    var stepX = niceStep(v.xmax - v.xmin, Math.max(3, Math.round(W / 90)));
+    var stepY = niceStep(v.ymax - v.ymin, Math.max(3, Math.round(H / 60)));
+
+    function linesX(step, color) {
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      var start = Math.ceil(v.xmin / step) * step;
+      var count = 0;
+      for (var x = start; x <= v.xmax + step * 1e-6 && count < 2000; x += step, count++) {
+        var px = sx(x);
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, H);
+      }
+      ctx.stroke();
+    }
+    function linesY(step, color) {
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      var start = Math.ceil(v.ymin / step) * step;
+      var count = 0;
+      for (var y = start; y <= v.ymax + step * 1e-6 && count < 2000; y += step, count++) {
+        var py = sy(y);
+        ctx.moveTo(0, py);
+        ctx.lineTo(W, py);
+      }
+      ctx.stroke();
+    }
+
+    ctx.lineWidth = 1;
+    var minorX = stepX / 5, minorY = stepY / 5;
+    if (minorX / (v.xmax - v.xmin) * W >= 7) linesX(minorX, grid);
+    if (minorY / (v.ymax - v.ymin) * H >= 7) linesY(minorY, grid);
+
+    ctx.globalAlpha = 0.9;
+    linesX(stepX, grid);
+    linesY(stepY, grid);
+    ctx.globalAlpha = 1;
+
+    var x0 = sx(0), y0 = sy(0);
+    ctx.strokeStyle = axis;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    if (x0 >= 0 && x0 <= W) { ctx.moveTo(x0, 0); ctx.lineTo(x0, H); }
+    if (y0 >= 0 && y0 <= H) { ctx.moveTo(0, y0); ctx.lineTo(W, y0); }
+    ctx.stroke();
+
+    ctx.fillStyle = muted;
+    ctx.font = '11px ui-monospace, Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    var labelY = Math.min(Math.max(y0 + 4, 2), H - 16);
+    var startX = Math.ceil(v.xmin / stepX) * stepX;
+    for (var x = startX; x <= v.xmax + stepX * 1e-6; x += stepX) {
+      if (Math.abs(x) < stepX * 1e-6) continue;
+      var lx = sx(x);
+      if (lx < 20 || lx > W - 20) continue;
+      ctx.fillText(fmtTick(x), lx, labelY);
+    }
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    var labelX = Math.min(Math.max(x0 - 6, 34), W - 4);
+    var startY = Math.ceil(v.ymin / stepY) * stepY;
+    for (var y = startY; y <= v.ymax + stepY * 1e-6; y += stepY) {
+      if (Math.abs(y) < stepY * 1e-6) continue;
+      var ly = sy(y);
+      if (ly < 14 || ly > H - 14) continue;
+      ctx.fillText(fmtTick(y), labelX, ly);
+    }
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('0', Math.min(W - 4, Math.max(14, x0 - 6)), Math.min(H - 4, Math.max(14, y0 + 14)));
+  }
+
+  function plotFunction(fn, color, dashed, width) {
+    var v = state.view;
+    ctx.beginPath();
+    var pen = false;
+    var prevPy = null;
+    var params = state.params;
+    var stepPx = W > 1400 ? 1.5 : 1;
+    for (var px = 0; px <= W + stepPx; px += stepPx) {
+      var x = ix(Math.min(px, W));
+      var y;
+      try { y = fn(x, params); } catch (e) { y = NaN; }
+      if (!isFinite(y)) { pen = false; prevPy = null; continue; }
+      var py = sy(y);
+      if (py < -H * 4 || py > H * 5) { pen = false; prevPy = null; continue; }
+      if (!pen) { ctx.moveTo(px, py); pen = true; }
+      else if (prevPy !== null && Math.abs(py - prevPy) > H * 0.85) { ctx.moveTo(px, py); }
+      else { ctx.lineTo(px, py); }
+      prevPy = py;
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width || 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.setLineDash(dashed ? [6, 4] : []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function derivativeOf(fn) {
+    return function (x, p) {
+      var h = 1e-5 * Math.max(1, Math.abs(x));
+      return (fn(x + h, p) - fn(x - h, p)) / (2 * h);
+    };
+  }
+
+  function shadeIntegral() {
+    var f = state.fns[0] && state.fns[0].fn;
+    if (!f) return;
+    var a = state.integral.a, b = state.integral.b;
+    if (!isFinite(a) || !isFinite(b)) return;
+    var lo = Math.min(a, b), hi = Math.max(a, b);
+    var steps = 240;
+    ctx.beginPath();
+    var started = false;
+    for (var i = 0; i <= steps; i++) {
+      var x = lo + (hi - lo) * i / steps;
+      var y = f(x, state.params);
+      if (!isFinite(y)) continue;
+      var px = sx(x), py = sy(y);
+      if (!started) { ctx.moveTo(px, sy(0)); ctx.lineTo(px, py); started = true; }
+      else ctx.lineTo(px, py);
+    }
+    if (!started) return;
+    ctx.lineTo(sx(hi), sy(0));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(21, 128, 61, 0.16)';
+    ctx.fill();
+  }
+
+  function drawPoints() {
+    if (!state.points.length) return;
+    state.points.forEach(function (p) {
+      var px = sx(p.x), py = sy(p.y);
+      if (px < -20 || px > W + 20 || py < -20 || py > H + 20) return;
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#c2410c';
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#fff';
+      ctx.stroke();
+    });
+  }
+
+  function drawFit() {
+    if (!state.fitCoef) return;
+    var coef = state.fitCoef;
+    plotFunction(function (x) { return evalPoly(coef, x); }, '#7c3aed', false, 2.2);
+  }
+
+  function drawHover() {
+    var h = state.hover;
+    if (!h) return;
+    var px = sx(h.x);
+    if (px < 0 || px > W) return;
+    ctx.save();
+    ctx.strokeStyle = cssVar('--muted') || '#5a6a60';
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, 0);
+    ctx.lineTo(px, H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    state.fns.forEach(function (f) {
+      if (!f.fn) return;
+      var y = f.fn(h.x, state.params);
+      if (!isFinite(y)) return;
+      var py = sy(y);
+      if (py < 0 || py > H) return;
+      ctx.beginPath();
+      ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = f.color;
+      ctx.fill();
+      ctx.strokeStyle = cssVar('--card') || '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  function render() {
+    if (!W || !H) return;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = cssVar('--card') || '#fff';
+    ctx.fillRect(0, 0, W, H);
+    drawGrid();
+    if (state.shade) shadeIntegral();
+    state.fns.forEach(function (f) {
+      if (!f.fn) return;
+      plotFunction(f.fn, f.color, false, 2);
+      if (state.derivative) plotFunction(derivativeOf(f.fn), f.color + '99', true, 1.4);
+    });
+    drawFit();
+    drawPoints();
+    drawHover();
+    updateIntegral();
+  }
+
+  function syncViewInputs() {
+    $('xmin').value = String(parseFloat(state.view.xmin.toFixed(6)));
+    $('xmax').value = String(parseFloat(state.view.xmax.toFixed(6)));
+    $('ymin').value = String(parseFloat(state.view.ymin.toFixed(6)));
+    $('ymax').value = String(parseFloat(state.view.ymax.toFixed(6)));
+  }
+
+  function applyView() {
+    var xmin = parseFloat($('xmin').value), xmax = parseFloat($('xmax').value);
+    var ymin = parseFloat($('ymin').value), ymax = parseFloat($('ymax').value);
+    if (![xmin, xmax, ymin, ymax].every(isFinite) || xmax <= xmin || ymax <= ymin) {
+      setStatus('视图范围无效：最大值必须大于最小值', 'fnStatus');
+      return;
+    }
+    state.view = { xmin: xmin, xmax: xmax, ymin: ymin, ymax: ymax };
+    render();
+  }
+
+  function resetView() {
+    state.view = { xmin: -10, xmax: 10, ymin: -10, ymax: 10 };
+    syncViewInputs();
+    render();
+  }
+
+  function setStatus(msg, id) {
+    var el = $(id || 'actionStatus');
+    if (el) el.textContent = msg || '';
+  }
+
+  function updateIntegral() {
+    var f = state.fns[0] && state.fns[0].fn;
+    var out = $('intVal');
+    if (!f || !out) return;
+    var a = parseFloat($('intA').value), b = parseFloat($('intB').value);
+    if (!isFinite(a) || !isFinite(b)) { out.textContent = '--'; return; }
+    state.integral = { a: a, b: b };
+    var v = simpson(function (x) { return f(x, state.params); }, a, b, 1000);
+    out.textContent = isFinite(v) ? v.toFixed(6) : '--';
+  }
+
+  function makeFnRow(f, index) {
+    var row = document.createElement('div');
+    row.className = 'fn-row';
+    var dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = f.color;
+    var input = document.createElement('input');
+    input.className = 'expr';
+    input.type = 'text';
+    input.value = f.expr;
+    input.spellcheck = false;
+    input.setAttribute('aria-label', '函数表达式 ' + (index + 1));
+    input.addEventListener('input', function () {
+      f.expr = input.value;
+      compileAt(index);
+      scheduleRender();
+    });
+    var del = document.createElement('button');
+    del.className = 'icon-btn';
+    del.type = 'button';
+    del.textContent = '\u00d7';
+    del.title = '删除这个函数';
+    del.addEventListener('click', function () {
+      if (state.fns.length <= 1) { f.expr = ''; input.value = ''; compileAt(0); scheduleRender(); return; }
+      state.fns.splice(index, 1);
+      buildFnRows();
+      render();
+    });
+    row.appendChild(dot);
+    row.appendChild(input);
+    row.appendChild(del);
+    return row;
+  }
+
+  function buildFnRows() {
+    var box = $('fnRows');
+    box.innerHTML = '';
+    state.fns.forEach(function (f, i) { box.appendChild(makeFnRow(f, i)); });
+    var errBox = $('fnStatus');
+    errBox.textContent = '';
+    state.fns.forEach(function (f) { if (f.error) errBox.textContent = f.error; });
+  }
+
+  function compileAt(index) {
+    var f = state.fns[index];
+    if (!f) return;
+    var src = String(f.expr || '').trim();
+    if (!src) { f.fn = null; f.error = null; return; }
+    try {
+      f.fn = compile(parseExpression(src));
+      f.error = null;
+    } catch (e) {
+      f.fn = null;
+      f.error = e.message;
+    }
+    var status = $('fnStatus');
+    var firstErr = null;
+    for (var i = 0; i < state.fns.length; i++) {
+      if (state.fns[i].error) { firstErr = state.fns[i].error; break; }
+    }
+    if (status) status.textContent = firstErr || '';
+  }
+
+  var renderTimer = null;
+  function scheduleRender() {
+    if (renderTimer) return;
+    renderTimer = setTimeout(function () {
+      renderTimer = null;
+      render();
+    }, 60);
+  }
+
+  function zoomAt(cx, cy, factor) {
+    var v = state.view;
+    var nxmin = cx + (v.xmin - cx) * factor;
+    var nxmax = cx + (v.xmax - cx) * factor;
+    var nymin = cy + (v.ymin - cy) * factor;
+    var nymax = cy + (v.ymax - cy) * factor;
+    var minSpan = 1e-6, maxSpan = 1e9;
+    if (nxmax - nxmin < minSpan || nymax - nymin < minSpan) return;
+    if (nxmax - nxmin > maxSpan || nymax - nymin > maxSpan) return;
+    state.view = { xmin: nxmin, xmax: nxmax, ymin: nymin, ymax: nymax };
+    syncViewInputs();
+    render();
+  }
+
+  function updateHover(px, py) {
+    if (px < 0 || px > W || py < 0 || py > H) { state.hover = null; tip.style.display = 'none'; return; }
+    var x = ix(px), y = iy(py);
+    state.hover = { x: x, y: y, px: px, py: py };
+    var rows = ['<div class="t-row"><b>x</b><span>' + fmtTick(x) + '</span></div>'];
+    state.fns.forEach(function (f, i) {
+      if (!f.fn || !f.expr) return;
+      var v = f.fn(x, state.params);
+      rows.push('<div class="t-row"><b style="color:' + f.color + '">f' + (i + 1) + '</b><span>' + (isFinite(v) ? fmtTick(v) : '--') + '</span></div>');
+    });
+    tip.innerHTML = rows.join('');
+    tip.style.display = 'block';
+    var tw = tip.offsetWidth, th = tip.offsetHeight;
+    var left = Math.min(W - tw - 8, Math.max(8, px + 14));
+    var top = Math.min(H - th - 8, Math.max(8, py - th - 12));
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+    render();
+  }
+
+  function addPoint(x, y) {
+    state.points.push({ x: x, y: y });
+    $('pointsInput').value = state.points.map(function (p) {
+      return parseFloat(p.x.toFixed(4)) + ',' + parseFloat(p.y.toFixed(4));
+    }).join('\n');
+    render();
+  }
+
+  function runFit() {
+    var pts = parsePoints($('pointsInput').value);
+    if (pts.length < 2) { setStatus('至少需要 2 个点，每行一个 x,y', 'actionStatus'); $('fitResult').style.display = 'none'; return; }
+    var deg = parseInt($('degreeSel').value, 10) || 1;
+    try {
+      var coef = polyFit(pts, deg);
+      var r2 = rSquared(pts, coef);
+      state.fitCoef = coef;
+      $('fitResult').style.display = 'block';
+      $('fitResult').innerHTML = '解析式：<code>y = ' + formatPoly(coef) + '</code><br>R² = ' + r2.toFixed(6) + '，使用 ' + pts.length + ' 个点';
+      setStatus('', 'actionStatus');
+      extendViewForPoints(pts);
+      render();
+    } catch (e) {
+      setStatus(e.message, 'actionStatus');
+    }
+  }
+
+  function extendViewForPoints(pts) {
+    var v = state.view;
+    var xs = pts.map(function (p) { return p.x; }), ys = pts.map(function (p) { return p.y; });
+    var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    var padX = Math.max((maxX - minX) * 0.15, 1);
+    var padY = Math.max((maxY - minY) * 0.15, 1);
+    if (minX < v.xmin || maxX > v.xmax) {
+      v.xmin = Math.min(v.xmin, minX - padX);
+      v.xmax = Math.max(v.xmax, maxX + padX);
+    }
+    if (minY < v.ymin || maxY > v.ymax) {
+      v.ymin = Math.min(v.ymin, minY - padY);
+      v.ymax = Math.max(v.ymax, maxY + padY);
+    }
+    syncViewInputs();
+  }
+
+  function exportPng() {
+    try {
+      canvas.toBlob(function (blob) {
+        if (!blob) { setStatus('导出失败', 'actionStatus'); return; }
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'function-plot.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+        setStatus('已导出 function-plot.png', 'actionStatus');
+      }, 'image/png');
+    } catch (e) {
+      setStatus('导出失败：' + e.message, 'actionStatus');
+    }
+  }
+
+  function statePayload() {
+    return {
+      f: state.fns.map(function (f) { return { e: f.expr, c: f.color }; }),
+      v: state.view,
+      p: state.params,
+      d: state.derivative,
+      s: state.shade,
+      i: state.integral,
+      pts: state.points,
+      deg: parseInt($('degreeSel').value, 10) || 2
+    };
+  }
+
+  function encodeState() {
+    var json = JSON.stringify(statePayload());
+    return btoa(unescape(encodeURIComponent(json)));
+  }
+
+  function decodeState(str) {
+    var json = decodeURIComponent(escape(atob(str)));
+    return JSON.parse(json);
+  }
+
+  function copyShare() {
+    var url = location.origin + location.pathname + '#s=' + encodeState();
+    function done() { setStatus('链接已复制', 'actionStatus'); }
+    function fail() { window.prompt('复制这个链接', url); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(fail);
+    } else {
+      fail();
+    }
+  }
+
+  function applyPayload(obj) {
+    if (!obj) return;
+    if (Array.isArray(obj.f) && obj.f.length) {
+      state.fns = obj.f.slice(0, 4).map(function (item, i) {
+        return { expr: String(item.e || ''), color: item.c || COLORS[i % COLORS.length], fn: null, error: null };
+      });
+    }
+    if (obj.v && isFinite(obj.v.xmin) && isFinite(obj.v.xmax) && isFinite(obj.v.ymin) && isFinite(obj.v.ymax) && obj.v.xmax > obj.v.xmin && obj.v.ymax > obj.v.ymin) {
+      state.view = { xmin: +obj.v.xmin, xmax: +obj.v.xmax, ymin: +obj.v.ymin, ymax: +obj.v.ymax };
+    }
+    if (obj.p) {
+      state.params = { a: Number(obj.p.a) || 0, b: Number(obj.p.b) || 0, c: Number(obj.p.c) || 0 };
+    }
+    state.derivative = !!obj.d;
+    state.shade = !!obj.s;
+    if (obj.i && isFinite(obj.i.a) && isFinite(obj.i.b)) state.integral = { a: +obj.i.a, b: +obj.i.b };
+    state.points = Array.isArray(obj.pts) ? obj.pts.filter(function (p) { return isFinite(p.x) && isFinite(p.y); }) : [];
+    if (obj.deg) $('degreeSel').value = String(obj.deg);
+  }
+
+  function syncControls() {
+    $('pa').value = String(state.params.a); $('paVal').textContent = String(state.params.a);
+    $('pb').value = String(state.params.b); $('pbVal').textContent = String(state.params.b);
+    $('pc').value = String(state.params.c); $('pcVal').textContent = String(state.params.c);
+    $('derivChk').checked = state.derivative;
+    $('shadeChk').checked = state.shade;
+    $('intA').value = String(state.integral.a);
+    $('intB').value = String(state.integral.b);
+    $('pointsInput').value = state.points.map(function (p) { return p.x + ',' + p.y; }).join('\n');
+    syncViewInputs();
+  }
+
+  function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('fp-theme', theme); } catch (e) {}
+    $('themeBtn').textContent = theme === 'dark' ? '浅色' : '深色';
+    render();
+  }
+
+  function initTheme() {
+    var saved = null;
+    try { saved = localStorage.getItem('fp-theme'); } catch (e) {}
+    if (!saved) saved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    setTheme(saved);
+  }
+
+  function buildInitialRows() {
+    state.fns.forEach(function (f, i) { compileAt(i); });
+    buildFnRows();
+  }
+
+  function bindEvents() {
+    $('addFn').addEventListener('click', function () {
+      if (state.fns.length >= 4) { setStatus('最多同时绘制 4 个函数', 'fnStatus'); return; }
+      state.fns.push({ expr: '', color: COLORS[state.fns.length % COLORS.length], fn: null, error: null });
+      buildFnRows();
+      var inputs = document.querySelectorAll('#fnRows input.expr');
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    });
+
+    $('exampleSel').addEventListener('change', function () {
+      var val = this.value;
+      if (!val) return;
+      state.fns = [{ expr: val, color: COLORS[0], fn: null, error: null }];
+      state.fitCoef = null;
+      compileAt(0);
+      buildFnRows();
+      if (val === '1/x' || val === 'tan(x)') state.view = { xmin: -10, xmax: 10, ymin: -6, ymax: 6 };
+      else state.view = { xmin: -10, xmax: 10, ymin: -10, ymax: 10 };
+      syncViewInputs();
+      render();
+      this.value = '';
+    });
+
+    ['pa', 'pb', 'pc'].forEach(function (id) {
+      var key = id.charAt(1);
+      $(id).addEventListener('input', function () {
+        state.params[key] = parseFloat(this.value);
+        $(id + 'Val').textContent = this.value;
+        render();
+      });
+    });
+
+    $('derivChk').addEventListener('change', function () { state.derivative = this.checked; render(); });
+    $('shadeChk').addEventListener('change', function () { state.shade = this.checked; render(); });
+    $('intA').addEventListener('input', updateIntegral);
+    $('intB').addEventListener('input', updateIntegral);
+    $('applyView').addEventListener('click', applyView);
+    $('resetView').addEventListener('click', resetView);
+
+    $('fitBtn').addEventListener('click', runFit);
+    $('clearPts').addEventListener('click', function () {
+      state.points = [];
+      state.fitCoef = null;
+      $('pointsInput').value = '';
+      $('fitResult').style.display = 'none';
+      render();
+    });
+    $('pickBtn').addEventListener('click', function () {
+      state.pointMode = !state.pointMode;
+      this.classList.toggle('primary', state.pointMode);
+      this.textContent = state.pointMode ? '结束取点' : '画布取点';
+      canvas.style.cursor = state.pointMode ? 'copy' : 'crosshair';
+      setStatus(state.pointMode ? '点击画布添加点，完成后再次点击“结束取点”' : '', 'actionStatus');
+    });
+    $('exportBtn').addEventListener('click', exportPng);
+    $('shareBtn').addEventListener('click', copyShare);
+    $('themeBtn').addEventListener('click', function () {
+      var cur = document.documentElement.getAttribute('data-theme');
+      setTheme(cur === 'dark' ? 'light' : 'dark');
+    });
+
+    document.querySelectorAll('[data-zoom]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var mode = this.getAttribute('data-zoom');
+        var cx = (state.view.xmin + state.view.xmax) / 2;
+        var cy = (state.view.ymin + state.view.ymax) / 2;
+        if (mode === 'reset') { resetView(); return; }
+        zoomAt(cx, cy, mode === 'in' ? 0.8 : 1.25);
+      });
+    });
+
+    var drag = null;
+    canvas.addEventListener('pointerdown', function (e) {
+      canvas.setPointerCapture(e.pointerId);
+      drag = { x: e.clientX, y: e.clientY, view: Object.assign({}, state.view), moved: false };
+    });
+    canvas.addEventListener('pointermove', function (e) {
+      var rect = canvas.getBoundingClientRect();
+      var px = e.clientX - rect.left, py = e.clientY - rect.top;
+      if (drag) {
+        var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+        if (drag.moved && !state.pointMode) {
+          var spanX = drag.view.xmax - drag.view.xmin;
+          var spanY = drag.view.ymax - drag.view.ymin;
+          var shiftX = -dx / W * spanX;
+          var shiftY = dy / H * spanY;
+          state.view = {
+            xmin: drag.view.xmin + shiftX, xmax: drag.view.xmax + shiftX,
+            ymin: drag.view.ymin + shiftY, ymax: drag.view.ymax + shiftY
+          };
+          syncViewInputs();
+          render();
+        }
+      } else {
+        updateHover(px, py);
+      }
+    });
+    canvas.addEventListener('pointerup', function (e) {
+      if (drag && state.pointMode && !drag.moved) {
+        var rect = canvas.getBoundingClientRect();
+        addPoint(ix(e.clientX - rect.left), iy(e.clientY - rect.top));
+      }
+      drag = null;
+    });
+    canvas.addEventListener('pointerleave', function () {
+      if (!drag) { state.hover = null; tip.style.display = 'none'; render(); }
+    });
+    canvas.addEventListener('dblclick', function () {
+      if (!state.pointMode) resetView();
+    });
+    canvas.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var rect = canvas.getBoundingClientRect();
+      var cx = ix(e.clientX - rect.left);
+      var cy = iy(e.clientY - rect.top);
+      var factor = Math.exp(e.deltaY * 0.0012);
+      zoomAt(cx, cy, factor);
+    }, { passive: false });
+
+    window.addEventListener('resize', resize);
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () { resize(); }).observe(canvas.parentElement);
+    }
+  }
+
+  function init() {
+    initTheme();
+    var payload = null;
+    var m = location.hash.match(/#s=(.+)$/);
+    if (m) {
+      try { payload = decodeState(m[1]); } catch (e) { payload = null; }
+    }
+    if (payload) applyPayload(payload);
+    buildInitialRows();
+    syncControls();
+    bindEvents();
+    resize();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
