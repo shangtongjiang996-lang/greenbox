@@ -177,6 +177,8 @@
     .gm-btn.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
     .gm-room-box { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.6rem 0.9rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); font-size: 0.88rem; }
     .gm-room-box code { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; letter-spacing: 0.1em; font-size: 1rem; }
+    .gm-room-name-label { font-weight: 700; margin-right: 0.4rem; }
+    .gm-room-name-label:empty { display: none; }
     .gm-room-box .acts { display: flex; gap: 0.4rem; }
 
     .gm-chat { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card-bg); overflow: hidden; }
@@ -368,7 +370,7 @@
           </div>
 
           <div class="gm-room-box">
-            <span>房间号 <code id="roomDisplay">------</code></span>
+            <span><span id="roomNameDisplay" class="gm-room-name-label"></span>房间号 <code id="roomDisplay">------</code></span>
             <span class="acts">
               <button class="gm-icon-btn" id="copyRoomBtn" type="button">复制房号</button>
               <button class="gm-icon-btn" id="copyInviteBtn" type="button" style="display:none;">复制邀请链接</button>
@@ -692,6 +694,8 @@
       var prevRoom = room;
       room = r;
       myColor = me.color;
+      var roomNameEl = $('roomNameDisplay');
+      if (roomNameEl) roomNameEl.textContent = r.name || '';
       var history = r.history || [];
 
       // 有新落子：触发动画，并作废未处理的请求
