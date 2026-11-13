@@ -673,6 +673,32 @@
         </form>
         <div id="upload-status"></div>
       </div>
+      <div class="card">
+        <h2>快捷上传接口 <span style="font-size:0.8rem;font-weight:400;color:#94a3b8;">（给 AI 或脚本使用）</span></h2>
+        <p style="color:#64748b;margin-bottom:1rem;">设置密码后可生成 6 位 Key。上传接口支持 Key 或密码，HTML 最大 2MB。</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <div class="cfg-field" style="flex:1;min-width:220px;margin:0;">
+            <label>接口密码</label>
+            <input type="password" id="quick-password" placeholder="至少 6 位" autocomplete="new-password">
+          </div>
+          <button class="btn btn-primary" id="quick-save-password" type="button">保存密码</button>
+          <button class="btn btn-outline" id="quick-refresh-key" type="button">刷新 Key</button>
+        </div>
+        <div style="margin-top:12px;font-size:14px;color:#475569;">状态：<span id="quick-status">加载中...</span></div>
+        <div id="quick-key-box" style="display:none;margin-top:12px;padding:12px;border:1px dashed #cbd5e1;border-radius:10px;background:#f8fafc;">
+          <div style="font-size:13px;color:#64748b;">当前 Key（只显示这一次，刷新后旧 Key 失效）</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
+            <code id="quick-key-value" style="font-size:22px;letter-spacing:6px;font-weight:700;color:#0f172a;"></code>
+            <button class="btn btn-outline btn-sm" id="quick-copy-key" type="button">复制</button>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:12px;line-height:1.9;">
+          POST /api/tool/quick-upload<br>
+          Header：X-Upload-Key: 123456 或 X-Upload-Password: 你的密码<br>
+          JSON：{"name":"工具名","description":"描述","icon":"","category":"other","html":"&lt;!DOCTYPE html&gt;..."}<br>
+          上传的 HTML 会以本站域名运行，请只把密码交给可信的人。
+        </div>
+      </div>
     </div>
 
     <!-- 更新日志 -->
@@ -987,6 +1013,7 @@ let allUsers = [];
     loadAdminNotifications();
     setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
     setupNotifyForm();
+    setupQuickUpload();
   } catch (e) {
     console.error(e);
     redirectToLogin();
@@ -1698,6 +1725,73 @@ window.resetChatUsage = async function(username) {
 // ============================================================
 //  通知管理
 // ============================================================
+async function loadQuickUploadStatus() {
+  try {
+    const res = await fetch('/api/admin/tool-upload/status', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('加载失败');
+    const d = await res.json();
+    const parts = [d.hasPassword ? '已设置密码' : '未设置密码'];
+    if (d.hasKey) parts.push('Key 有效期至 ' + new Date(d.keyExpiresAt).toLocaleString('zh-CN'));
+    else parts.push('未生成 Key');
+    document.getElementById('quick-status').textContent = parts.join(' · ');
+  } catch (e) {
+    document.getElementById('quick-status').textContent = '状态加载失败';
+  }
+}
+
+async function saveQuickPassword() {
+  const input = document.getElementById('quick-password');
+  const pwd = input.value;
+  if (pwd.length < 6) { showToast('密码至少 6 位', 'error'); return; }
+  try {
+    const res = await fetch('/api/admin/tool-upload/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ password: pwd })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存失败');
+    input.value = '';
+    showToast('密码已保存', 'success');
+    loadQuickUploadStatus();
+  } catch (e) {
+    showToast('保存失败：' + e.message, 'error');
+  }
+}
+
+async function refreshQuickKey() {
+  try {
+    const res = await fetch('/api/admin/tool-upload/key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '生成失败');
+    document.getElementById('quick-key-value').textContent = data.key;
+    document.getElementById('quick-key-box').style.display = 'block';
+    showToast('已生成新的 Key', 'success');
+    loadQuickUploadStatus();
+  } catch (e) {
+    showToast('生成失败：' + e.message, 'error');
+  }
+}
+
+function setupQuickUpload() {
+  document.getElementById('quick-save-password').addEventListener('click', saveQuickPassword);
+  document.getElementById('quick-refresh-key').addEventListener('click', refreshQuickKey);
+  document.getElementById('quick-copy-key').addEventListener('click', async function () {
+    const key = document.getElementById('quick-key-value').textContent;
+    if (!key) return;
+    try {
+      await navigator.clipboard.writeText(key);
+      showToast('已复制', 'success');
+    } catch (e) {
+      showToast('复制失败', 'error');
+    }
+  });
+  loadQuickUploadStatus();
+}
+
 function setupNotifyForm() {
   const targetType = document.getElementById('notif-target-type');
   const targetUser = document.getElementById('notif-target-user');

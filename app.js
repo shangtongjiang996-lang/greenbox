@@ -179,6 +179,73 @@ async function checkAdmin(req) {
   return !!(session && session.role === 'admin');
 }
 
+// ===== 快捷工具上传接口 =====
+const TOOL_UPLOAD_KEY_TTL_SECONDS = 7 * 24 * 60 * 60;
+const TOOL_UPLOAD_MAX_HTML = 2 * 1024 * 1024;
+const TOOL_UPLOAD_MAX_FAILS = 10;
+
+function sha256Hex(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex');
+}
+function timingSafeHex(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length || a.length % 2 !== 0) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
+  } catch (e) {
+    return false;
+  }
+}
+function randomSixDigit() {
+  return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+}
+async function issueToolUploadKey() {
+  const key = randomSixDigit();
+  const expiresAt = Date.now() + TOOL_UPLOAD_KEY_TTL_SECONDS * 1000;
+  await kvPut('tool_upload_key', {
+    hash: sha256Hex(key),
+    expiresAt,
+    createdAt: Date.now(),
+  }, { expirationTtl: TOOL_UPLOAD_KEY_TTL_SECONDS });
+  return { key, expiresAt };
+}
+async function setToolUploadPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const iterations = 100000;
+  const hash = await hashPasswordPBKDF2(password, salt, iterations);
+  await kvPut('tool_upload_password', {
+    hash, salt, iterations, algo: 'pbkdf2-sha256', updatedAt: Date.now(),
+  });
+}
+async function checkToolUploadPassword(password) {
+  if (!password) return false;
+  const record = await kvGet('tool_upload_password');
+  if (!record || !record.hash || !record.salt) return false;
+  const candidate = await hashPasswordPBKDF2(password, record.salt, record.iterations || 100000);
+  return timingSafeHex(record.hash, candidate);
+}
+async function checkToolUploadAuth(req) {
+  const key = String(req.headers['x-upload-key'] || '').trim();
+  if (key) {
+    const record = await kvGet('tool_upload_key');
+    if (record && record.hash && record.expiresAt > Date.now() && timingSafeHex(record.hash, sha256Hex(key))) {
+      return { ok: true, via: 'key' };
+    }
+  }
+  const password = String(req.headers['x-upload-password'] || '').trim();
+  if (password && await checkToolUploadPassword(password)) {
+    return { ok: true, via: 'password' };
+  }
+  return { ok: false };
+}
+async function toolUploadFailCount(req) {
+  const value = parseInt(await kvGet(`toolup:fail:${clientIp(req)}`) || '0', 10);
+  return isNaN(value) ? 0 : value;
+}
+async function bumpToolUploadFail(req) {
+  await kvIncr(`toolup:fail:${clientIp(req)}`, 600);
+}
+
 async function checkRateLimit(key, limit, windowSeconds) {
   const count = await kvIncr(key, windowSeconds);
   return count <= limit;
@@ -491,6 +558,61 @@ app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   currentData.tools.push({ name, icon, description, category, url: `/tool/${id}` });
   await kvPut('site_data', currentData);
   res.json({ success: true, id, url: `/tool/${id}` });
+});
+
+// ======== 快捷上传：密码换 6 位 Key，Key 或密码上传工具 ========
+app.post('/api/tool/quick-key', async (req, res) => {
+  const fails = await toolUploadFailCount(req);
+  if (fails >= TOOL_UPLOAD_MAX_FAILS) {
+    return res.status(429).json({ error: '尝试次数过多，请 10 分钟后再试' });
+  }
+  const password = String(req.headers['x-upload-password'] || '').trim();
+  if (!password || !(await checkToolUploadPassword(password))) {
+    await bumpToolUploadFail(req);
+    return res.status(401).json({ error: '密码错误' });
+  }
+  const { key, expiresAt } = await issueToolUploadKey();
+  await kvDelete(`toolup:fail:${clientIp(req)}`);
+  res.json({ success: true, key, expiresAt });
+});
+
+app.post('/api/tool/quick-upload', async (req, res) => {
+  const fails = await toolUploadFailCount(req);
+  if (fails >= TOOL_UPLOAD_MAX_FAILS) {
+    return res.status(429).json({ error: '尝试次数过多，请 10 分钟后再试' });
+  }
+  const auth = await checkToolUploadAuth(req);
+  if (!auth.ok) {
+    await bumpToolUploadFail(req);
+    return res.status(401).json({ error: 'Key 或密码无效' });
+  }
+  const { name, description, icon, category, html } = req.body || {};
+  const htmlContent = String(html || '');
+  if (!htmlContent.trim()) return res.status(400).json({ error: 'HTML 内容不能为空' });
+  if (Buffer.byteLength(htmlContent, 'utf8') > TOOL_UPLOAD_MAX_HTML) {
+    return res.status(413).json({ error: 'HTML 不能超过 2MB' });
+  }
+  const cleanName = String(name || '').replace(/[<>]/g, '').trim().slice(0, 60);
+  if (!cleanName) return res.status(400).json({ error: '缺少工具名称' });
+  const cleanDesc = String(description || '').replace(/[<>]/g, '').trim().slice(0, 200);
+  const cleanIcon = String(icon || '').replace(/[<>]/g, '').trim().slice(0, 300);
+  const cleanCategory = String(category || 'other').replace(/[<>]/g, '').trim().slice(0, 30) || 'other';
+
+  const id = Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
+  await kvPut(`tool_content:${id}`, htmlContent);
+  const currentData = (await kvGet('site_data')) || { tools: [], changelogs: [] };
+  if (!Array.isArray(currentData.tools)) currentData.tools = [];
+  currentData.tools.push({
+    name: cleanName,
+    icon: cleanIcon,
+    description: cleanDesc,
+    category: cleanCategory,
+    url: `/tool/${id}`,
+  });
+  if (currentData.tools.length > 500) currentData.tools = currentData.tools.slice(-500);
+  await kvPut('site_data', currentData);
+  await kvDelete(`toolup:fail:${clientIp(req)}`);
+  res.json({ success: true, id, url: `/tool/${id}`, via: auth.via });
 });
 
 app.get('/tool/:id', async (req, res) => {
@@ -1743,6 +1865,36 @@ app.post('/api/admin/change-password', async (req, res) => {
   if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: '新密码至少6位' });
   await kvPut('admin_password', newPassword);
   res.json({ success: true });
+});
+
+// ===== 快捷上传接口配置（管理员） =====
+app.get('/api/admin/tool-upload/status', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const password = await kvGet('tool_upload_password');
+  const key = await kvGet('tool_upload_key');
+  res.json({
+    hasPassword: !!(password && password.hash),
+    passwordUpdatedAt: password ? password.updatedAt || 0 : 0,
+    hasKey: !!(key && key.expiresAt > Date.now()),
+    keyExpiresAt: key ? key.expiresAt || 0 : 0,
+    maxHtml: TOOL_UPLOAD_MAX_HTML,
+  });
+});
+
+app.post('/api/admin/tool-upload/password', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { password } = req.body || {};
+  if (typeof password !== 'string' || password.length < 6 || password.length > 72) {
+    return res.status(400).json({ error: '密码长度需为 6-72 位' });
+  }
+  await setToolUploadPassword(password);
+  res.json({ success: true });
+});
+
+app.post('/api/admin/tool-upload/key', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const { key, expiresAt } = await issueToolUploadKey();
+  res.json({ success: true, key, expiresAt, ttlSeconds: TOOL_UPLOAD_KEY_TTL_SECONDS });
 });
 
 app.get('/api/admin/files', async (req, res) => {

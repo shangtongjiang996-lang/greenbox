@@ -136,6 +136,25 @@ B2_APP_KEY=
 | AI | `GET /api/chat/config`、`GET /api/chat/quota`、`GET/POST /api/chat/sessions`、`POST /api/chat/stream` |
 | 通知 | `GET /api/notifications`、`POST /api/notifications/read`、`GET /api/notifications/unread-count`、`GET /api/notifications/major`、`POST /api/notifications/send` |
 | 后台 | `/api/admin/*`，均需管理员会话 |
+| 快捷上传 | `POST /api/tool/quick-key`、`POST /api/tool/quick-upload`、`GET /api/admin/tool-upload/status`、`POST /api/admin/tool-upload/password`、`POST /api/admin/tool-upload/key` |
+
+### 快捷工具上传
+
+管理员在后台「工具管理 → 快捷上传接口」里设置密码，再点「刷新 Key」生成一个 6 位数字 Key。之后可以用 Key 或密码调用上传接口，工具会自动加入工具箱。
+
+```bash
+# 用密码换一个 6 位 Key（有效期 7 天，刷新后旧 Key 失效）
+curl -X POST https://greenboxhweb.com/api/tool/quick-key \
+  -H "X-Upload-Password: 你的密码"
+
+# 上传工具（HTML 最大 2MB）
+curl -X POST https://greenboxhweb.com/api/tool/quick-upload \
+  -H "X-Upload-Key: 123456" \
+  -H "Content-Type: application/json" \
+  --data '{"name":"工具名","description":"描述","category":"other","html":"<!DOCTYPE html>..."}'
+```
+
+也可以直接用 `X-Upload-Password` 调上传接口，跳过 Key。连续失败 10 次会锁定 10 分钟。
 
 Socket.IO 事件：
 
