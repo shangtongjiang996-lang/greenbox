@@ -2806,6 +2806,234 @@ function gomokuLocalMove(board, aiColor) {
   return best || { x: 7, y: 7 };
 }
 
+const GOMOKU_DIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
+
+function gomokuHasFive(board, x, y, color) {
+  for (const [dx, dy] of GOMOKU_DIRS) {
+    let n = 1;
+    for (let s = 1; s <= 4; s++) {
+      const nx = x + dx * s, ny = y + dy * s;
+      if (nx < 0 || nx > 14 || ny < 0 || ny > 14 || board[ny][nx] !== color) break;
+      n++;
+    }
+    for (let s = 1; s <= 4; s++) {
+      const nx = x - dx * s, ny = y - dy * s;
+      if (nx < 0 || nx > 14 || ny < 0 || ny > 14 || board[ny][nx] !== color) break;
+      n++;
+    }
+    if (n >= 5) return true;
+  }
+  return false;
+}
+
+function gomokuWouldWin(board, x, y, color) {
+  if (board[y][x] !== 0) return false;
+  board[y][x] = color;
+  const win = gomokuHasFive(board, x, y, color);
+  board[y][x] = 0;
+  return win;
+}
+
+function gomokuCandidateMoves(board) {
+  let hasStone = false;
+  for (let y = 0; y < 15; y++) {
+    for (let x = 0; x < 15; x++) {
+      if (board[y][x] !== 0) { hasStone = true; break; }
+    }
+    if (hasStone) break;
+  }
+  if (!hasStone) return [{ x: 7, y: 7 }];
+
+  const out = [];
+  const seen = new Set();
+  for (let y = 0; y < 15; y++) {
+    for (let x = 0; x < 15; x++) {
+      if (board[y][x] === 0) continue;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || nx > 14 || ny < 0 || ny > 14 || board[ny][nx] !== 0) continue;
+          const key = ny * 15 + nx;
+          if (!seen.has(key)) { seen.add(key); out.push({ x: nx, y: ny }); }
+        }
+      }
+    }
+  }
+  if (!out.length) {
+    for (let y = 0; y < 15; y++) {
+      for (let x = 0; x < 15; x++) if (board[y][x] === 0) out.push({ x, y });
+    }
+  }
+  return out;
+}
+
+function gomokuWinningMoves(board, color) {
+  const out = [];
+  const candidates = gomokuCandidateMoves(board);
+  for (const c of candidates) {
+    if (gomokuWouldWin(board, c.x, c.y, color)) out.push(c);
+  }
+  return out;
+}
+
+function gomokuPointScore(board, x, y, color) {
+  if (board[y][x] !== 0) return 0;
+  board[y][x] = color;
+  let score = 0;
+  for (const [dx, dy] of GOMOKU_DIRS) {
+    let line = '';
+    for (let k = -4; k <= 4; k++) {
+      const nx = x + dx * k, ny = y + dy * k;
+      if (nx < 0 || nx > 14 || ny < 0 || ny > 14) line += '#';
+      else {
+        const v = board[ny][nx];
+        line += v === 0 ? '0' : (v === color ? '1' : '2');
+      }
+    }
+    if (line.includes('11111')) score += 1e12;
+    if (line.includes('011110')) score += 5e9;
+    if (line.includes('01110')) score += 2e6;
+    if (line.includes('011010') || line.includes('010110')) score += 1e6;
+
+    for (let start = 0; start <= 4; start++) {
+      const w = line.slice(start, start + 5);
+      let own = 0, block = 0;
+      for (let i = 0; i < 5; i++) {
+        if (w[i] === '1') own++;
+        else if (w[i] === '2' || w[i] === '#') block++;
+      }
+      if (block === 0) {
+        if (own === 4) score += 8e7;
+        else if (own === 3) score += 6e4;
+        else if (own === 2) score += 300;
+      }
+    }
+
+    let l = 0, r = 0;
+    while (x + dx * (l + 1) >= 0 && x + dx * (l + 1) <= 14 && y + dy * (l + 1) >= 0 && y + dy * (l + 1) <= 14 && board[y + dy * (l + 1)][x + dx * (l + 1)] === color) l++;
+    while (x - dx * (r + 1) >= 0 && x - dx * (r + 1) <= 14 && y - dy * (r + 1) >= 0 && y - dy * (r + 1) <= 14 && board[y - dy * (r + 1)][x - dx * (r + 1)] === color) r++;
+    const run = 1 + l + r;
+    const ax = x + dx * (l + 1), ay = y + dy * (l + 1);
+    const bx = x - dx * (r + 1), by = y - dy * (r + 1);
+    const openA = ax >= 0 && ax <= 14 && ay >= 0 && ay <= 14 && board[ay][ax] === 0;
+    const openB = bx >= 0 && bx <= 14 && by >= 0 && by <= 14 && board[by][bx] === 0;
+    if (run === 4) {
+      if (openA && openB) score += 3e8;
+      else if (openA || openB) score += 3e7;
+    } else if (run === 3) {
+      if (openA && openB) score += 3e5;
+      else if (openA || openB) score += 2e4;
+    }
+  }
+  board[y][x] = 0;
+  return score;
+}
+
+function gomokuBestPoint(board, color) {
+  let best = 0;
+  const candidates = gomokuCandidateMoves(board);
+  for (const c of candidates) {
+    const s = gomokuPointScore(board, c.x, c.y, color);
+    if (s > best) best = s;
+  }
+  return best;
+}
+
+function gomokuBestMove(board, me) {
+  const opp = me === 1 ? 2 : 1;
+
+  const myWins = gomokuWinningMoves(board, me);
+  if (myWins.length) return myWins[0];
+
+  const oppWins = gomokuWinningMoves(board, opp);
+  if (oppWins.length) {
+    let best = oppWins[0], bestScore = -Infinity;
+    for (const c of oppWins) {
+      const s = gomokuPointScore(board, c.x, c.y, me) * 1.2 + gomokuPointScore(board, c.x, c.y, opp);
+      if (s > bestScore) { bestScore = s; best = c; }
+    }
+    return best;
+  }
+
+  const candidates = gomokuCandidateMoves(board);
+  if (!candidates.length) return { x: 7, y: 7 };
+
+  const scored = candidates.map(c => {
+    const attack = gomokuPointScore(board, c.x, c.y, me);
+    const defense = gomokuPointScore(board, c.x, c.y, opp);
+    const center = (14 - Math.abs(c.x - 7) - Math.abs(c.y - 7)) * 2;
+    return { x: c.x, y: c.y, score: attack * 1.25 + defense + center };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, Math.min(18, scored.length));
+
+  let best = top[0];
+  for (const c of top) {
+    board[c.y][c.x] = me;
+    const oppWinsNow = gomokuWinningMoves(board, opp);
+    let s = c.score;
+    if (oppWinsNow.length) {
+      s -= 2e12;
+    } else {
+      const oppBest = gomokuBestPoint(board, opp);
+      s -= oppBest * 0.55;
+    }
+    board[c.y][c.x] = 0;
+    if (s > best.score) best = { x: c.x, y: c.y, score: s };
+  }
+  return { x: best.x, y: best.y };
+}
+
+function gomokuWouldMakeOpenFour(board, x, y, color) {
+  if (board[y][x] !== 0) return false;
+  board[y][x] = color;
+  let openFour = false;
+  for (const [dx, dy] of GOMOKU_DIRS) {
+    let line = '';
+    for (let k = -4; k <= 4; k++) {
+      const nx = x + dx * k, ny = y + dy * k;
+      if (nx < 0 || nx > 14 || ny < 0 || ny > 14) line += '#';
+      else {
+        const v = board[ny][nx];
+        line += v === 0 ? '0' : (v === color ? '1' : '2');
+      }
+    }
+    if (line.includes('011110')) { openFour = true; break; }
+  }
+  board[y][x] = 0;
+  return openFour;
+}
+
+function gomokuDescribeMove(board, x, y, color) {
+  const opp = color === 1 ? 2 : 1;
+  if (gomokuWouldWin(board, x, y, color)) return '这一步连成五子，直接结束对局。';
+  if (gomokuWouldWin(board, x, y, opp)) return '必须堵住这里的冲四，否则下一手就输了。';
+  if (gomokuWouldMakeOpenFour(board, x, y, opp)) return '必须堵住这里的活三，否则会变成活四。';
+
+  board[y][x] = color;
+  let openFour = false, four = false, openThree = false;
+  for (const [dx, dy] of GOMOKU_DIRS) {
+    let line = '';
+    for (let k = -4; k <= 4; k++) {
+      const nx = x + dx * k, ny = y + dy * k;
+      if (nx < 0 || nx > 14 || ny < 0 || ny > 14) line += '#';
+      else {
+        const v = board[ny][nx];
+        line += v === 0 ? '0' : (v === color ? '1' : '2');
+      }
+    }
+    if (line.includes('011110')) openFour = true;
+    if (/11110|01111|11011|10111|11101/.test(line)) four = true;
+    if (line.includes('01110') || line.includes('011010') || line.includes('010110')) openThree = true;
+  }
+  board[y][x] = 0;
+
+  if (openFour) return '做出活四，下一手很难防。';
+  if (four) return '做出冲四，先手在你。';
+  if (openThree) return '形成活三，开始掌握主动。';
+  return '占住要点，稳住局面。';
+}
+
 function parseGomokuAiMove(text) {
   const raw = String(text || '');
   const match = raw.match(/\{[\s\S]*\}/);
@@ -2871,51 +3099,13 @@ app.post('/api/gomoku/ai/move', async (req, res) => {
   const board = normalizeGomokuBoard(req.body && req.body.board);
   if (!board) return res.status(400).json({ error: '棋盘数据无效' });
   const aiColor = Number(req.body.aiColor) === 1 ? 1 : 2;
-  const playerColor = aiColor === 1 ? 2 : 1;
 
-  let quota = { remaining: null, unlimited: false };
-  if (ZHIPU_API_KEY) {
-    quota = await consumeGomokuAiQuota(session.username, session.role === 'admin');
-    if (!quota) return res.status(429).json({ error: '今日 AI 对局次数已用完' });
-  }
+  const quota = await consumeGomokuAiQuota(session.username, session.role === 'admin');
+  if (!quota) return res.status(429).json({ error: '今日 AI 对局次数已用完' });
 
-  const fallback = () => gomokuLocalMove(board, aiColor);
-  let move = null, reply = '', source = 'glm';
-
-  if (ZHIPU_API_KEY) {
-    const historyText = gomokuHistoryText(req.body && req.body.history);
-    const prompt =
-      '你正在和玩家下 15x15 五子棋。坐标 x 从左到右 0-14，y 从上到下 0-14。\n' +
-      `你是${aiColor === 1 ? '黑棋(1)' : '白棋(2)'}，玩家是${playerColor === 1 ? '黑棋(1)' : '白棋(2)'}。\n` +
-      `棋盘：X=${playerColor === 1 ? '玩家黑棋' : 'AI 黑棋'}，O=${playerColor === 2 ? '玩家白棋' : 'AI 白棋'}，.=空位。\n` +
-      gomokuBoardAscii(board) + '\n' +
-      '最近落子：' + historyText + '\n' +
-      '请选择当前最有利的一个空位落子：能赢就赢，否则优先堵住玩家的活四/冲四，其次做自己的活三。\n' +
-      '只返回严格 JSON，不要 Markdown，不要代码块：\n' +
-      '{"x":0-14,"y":0-14,"reply":"一句不超过40字的中文评论"}';
-    try {
-      const text = await zhipuGomokuChat([
-        { role: 'system', content: '你是五子棋高手，棋风稳健，说话简短。' },
-        { role: 'user', content: prompt },
-      ], 260, 0.6);
-      const parsed = parseGomokuAiMove(text);
-      if (parsed && board[parsed.y][parsed.x] === 0) {
-        move = { x: parsed.x, y: parsed.y };
-        reply = parsed.reply;
-      }
-    } catch (e) {
-      console.error('gomoku AI move error:', e.message);
-    }
-  }
-
-  if (!move) {
-    move = fallback();
-    source = 'fallback';
-    if (!reply) reply = ZHIPU_API_KEY ? '这一步我换个思路。' : 'AI 服务未配置，先用本地棋力陪你下。';
-  }
-  if (!reply) reply = '轮到你了。';
-
-  res.json({ move, reply, source, remaining: quota.remaining, unlimited: !!quota.unlimited });
+  const move = gomokuBestMove(board, aiColor);
+  const reply = gomokuDescribeMove(board, move.x, move.y, aiColor);
+  res.json({ move, reply, source: 'engine', remaining: quota.remaining, unlimited: !!quota.unlimited });
 });
 
 app.post('/api/gomoku/ai/hint', async (req, res) => {
@@ -2924,50 +3114,13 @@ app.post('/api/gomoku/ai/hint', async (req, res) => {
   const board = normalizeGomokuBoard(req.body && req.body.board);
   if (!board) return res.status(400).json({ error: '棋盘数据无效' });
   const playerColor = Number(req.body && req.body.playerColor) === 2 ? 2 : 1;
-  const aiColor = playerColor === 1 ? 2 : 1;
 
-  let quota = { remaining: null, unlimited: false };
-  if (ZHIPU_API_KEY) {
-    quota = await consumeGomokuAiQuota(session.username, session.role === 'admin');
-    if (!quota) return res.status(429).json({ error: '今日 AI 对局次数已用完' });
-  }
+  const quota = await consumeGomokuAiQuota(session.username, session.role === 'admin');
+  if (!quota) return res.status(429).json({ error: '今日 AI 对局次数已用完' });
 
-  const fallback = () => gomokuLocalMove(board, playerColor);
-  let move = null, reply = '', source = 'glm';
-
-  if (ZHIPU_API_KEY) {
-    const prompt =
-      '你是玩家的五子棋军师。坐标 x 从左到右 0-14，y 从上到下 0-14。\n' +
-      `玩家执${playerColor === 1 ? '黑棋(1)' : '白棋(2)'}，AI 执${aiColor === 1 ? '黑棋(1)' : '白棋(2)'}。\n` +
-      `棋盘：X=${playerColor === 1 ? '玩家黑棋' : 'AI 黑棋'}，O=${playerColor === 2 ? '玩家白棋' : 'AI 白棋'}，.=空位。\n` +
-      gomokuBoardAscii(board) + '\n' +
-      '最近落子：' + gomokuHistoryText(req.body && req.body.history) + '\n' +
-      '请给玩家推荐当前最好的一步：能赢就赢，否则优先堵住 AI 的活四/冲四，其次做自己的活三。\n' +
-      '只返回严格 JSON，不要 Markdown，不要代码块：\n' +
-      '{"x":0-14,"y":0-14,"reply":"不超过60字的中文建议"}';
-    try {
-      const text = await zhipuGomokuChat([
-        { role: 'system', content: '你是稳健的五子棋军师，建议简短、具体。' },
-        { role: 'user', content: prompt },
-      ], 240, 0.6);
-      const parsed = parseGomokuAiMove(text);
-      if (parsed && board[parsed.y][parsed.x] === 0) {
-        move = { x: parsed.x, y: parsed.y };
-        reply = parsed.reply;
-      }
-    } catch (e) {
-      console.error('gomoku AI hint error:', e.message);
-    }
-  }
-
-  if (!move) {
-    move = fallback();
-    source = 'fallback';
-    if (!reply) reply = ZHIPU_API_KEY ? '先下在这里，稳住中路。' : 'AI 服务未配置，先用本地棋力给个建议。';
-  }
-  if (!reply) reply = '这一步比较稳。';
-
-  res.json({ move, reply, source, remaining: quota.remaining, unlimited: !!quota.unlimited });
+  const move = gomokuBestMove(board, playerColor);
+  const reply = gomokuDescribeMove(board, move.x, move.y, playerColor);
+  res.json({ move, reply, source: 'engine', remaining: quota.remaining, unlimited: !!quota.unlimited });
 });
 
 app.post('/api/gomoku/ai/chat', async (req, res) => {

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>五子棋 · AI 对局 - GreenBox</title>
-<meta name="description" content="和 glm-4-flash 驱动的 AI 下一局五子棋，落子和聊天都会结合当前棋盘局势。">
+<meta name="description" content="和 AI 下一局五子棋：落子与支招由本地战术引擎计算，聊天由 glm-4-flash 结合当前棋盘生成。">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
 <script>
@@ -177,7 +177,7 @@
     <div>
       <a class="ai-back" href="/gomoku-online.html">← 返回五子棋 · 联机对战</a>
       <h1>五子棋 · AI 对局</h1>
-      <p>对面是 glm-4-flash 驱动的“小五”。它会根据当前棋盘落子，也可以随时和它聊局势、问下一步怎么走。</p>
+      <p>小五的落子和支招由本地战术引擎计算，会优先成五、堵四、防活三；聊天由 glm-4-flash 结合当前棋盘生成。</p>
     </div>
     <span class="ai-model"><span class="dot"></span> glm-4-flash</span>
   </div>
@@ -514,6 +514,42 @@
     var player = aiColor === 1 ? 2 : 1;
     var dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
     var best = null, bestScore = -Infinity;
+    function hasFive(x, y, color) {
+      for (var d = 0; d < dirs.length; d++) {
+        var dx = dirs[d][0], dy = dirs[d][1], n = 1;
+        for (var s = 1; s <= 4; s++) {
+          var nx = x + dx * s, ny = y + dy * s;
+          if (nx < 0 || nx > 14 || ny < 0 || ny > 14 || board[ny][nx] !== color) break;
+          n++;
+        }
+        for (var t = 1; t <= 4; t++) {
+          var px = x - dx * t, py = y - dy * t;
+          if (px < 0 || px > 14 || py < 0 || py > 14 || board[py][px] !== color) break;
+          n++;
+        }
+        if (n >= 5) return true;
+      }
+      return false;
+    }
+    // 先看自己能不能直接赢，再堵对方的五连
+    for (var wy = 0; wy < 15; wy++) {
+      for (var wx = 0; wx < 15; wx++) {
+        if (board[wy][wx] !== 0) continue;
+        board[wy][wx] = aiColor;
+        var canWin = hasFive(wx, wy, aiColor);
+        board[wy][wx] = 0;
+        if (canWin) return { x: wx, y: wy };
+      }
+    }
+    for (var by = 0; by < 15; by++) {
+      for (var bx = 0; bx < 15; bx++) {
+        if (board[by][bx] !== 0) continue;
+        board[by][bx] = player;
+        var mustBlock = hasFive(bx, by, player);
+        board[by][bx] = 0;
+        if (mustBlock) return { x: bx, y: by };
+      }
+    }
     function countDir(x, y, dx, dy, color) {
       var n = 0;
       for (var s = 1; s <= 4; s++) {
