@@ -129,7 +129,7 @@ B2_APP_KEY=
 | 用户 | `GET /api/user/me`、`PUT /api/user/profile`、`POST /api/user/avatar`、`GET /api/user/avatar/:username` |
 | 工具 | `GET /api/data`、`POST /api/tool/upload`、`GET /tool/:id` |
 | 五子棋 | `POST /api/room/create`、`/api/room/join`、`/api/room/leave`、`/api/room/heartbeat`、`GET /api/rooms`、`GET /api/room/:roomId` |
-| 五子棋 AI | `POST /api/gomoku/ai/move`、`POST /api/gomoku/ai/hint`、`POST /api/gomoku/ai/chat`（glm-4-flash，每日 60 次，管理员不限） |
+| 五子棋 AI | `POST /api/gomoku/ai/move`、`POST /api/gomoku/ai/hint`、`POST /api/gomoku/ai/chat`（落子/支招为本地战术引擎，聊天为 glm-4-flash；每日 60 次，管理员不限） |
 | 论坛 | `GET /api/forum/posts`、`GET /api/forum/posts/:id`、`POST /api/forum/posts`、`POST /api/forum/posts/:id/comments`、`POST /api/forum/posts/:id/like` |
 | 资源 | `POST /api/resource/upload-url`、`POST /api/resource/confirm`、`GET /api/resource/list/:category`、`GET /api/resource/quota`、`DELETE /api/resource/:id` |
 | 资源分片 | `POST /api/resource/multipart/create`、`POST /api/resource/multipart/part-url`、`GET /api/resource/multipart/status`、`POST /api/resource/multipart/complete`、`POST /api/resource/multipart/abort` |
