@@ -1884,8 +1884,8 @@ app.get('/api/admin/tool-upload/status', async (req, res) => {
 app.post('/api/admin/tool-upload/password', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { password } = req.body || {};
-  if (typeof password !== 'string' || password.length < 6 || password.length > 72) {
-    return res.status(400).json({ error: '密码长度需为 6-72 位' });
+  if (typeof password !== 'string' || !/^[\x21-\x7E]{6,72}$/.test(password)) {
+    return res.status(400).json({ error: '密码需为 6-72 位英文、数字或符号' });
   }
   await setToolUploadPassword(password);
   res.json({ success: true });
