@@ -2712,7 +2712,7 @@ app.get('/api/rooms', async (req, res) => {
 });
 
 // ======== 五子棋 AI 对局（glm-4-flash） ========
-const GOMOKU_AI_DAILY_LIMIT = 200;
+const GOMOKU_AI_DAILY_LIMIT = 60;
 
 function normalizeGomokuBoard(board) {
   if (!Array.isArray(board) || board.length !== 15) return null;
@@ -2914,6 +2914,58 @@ app.post('/api/gomoku/ai/move', async (req, res) => {
     if (!reply) reply = ZHIPU_API_KEY ? '这一步我换个思路。' : 'AI 服务未配置，先用本地棋力陪你下。';
   }
   if (!reply) reply = '轮到你了。';
+
+  res.json({ move, reply, source, remaining: quota.remaining, unlimited: !!quota.unlimited });
+});
+
+app.post('/api/gomoku/ai/hint', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const board = normalizeGomokuBoard(req.body && req.body.board);
+  if (!board) return res.status(400).json({ error: '棋盘数据无效' });
+  const playerColor = Number(req.body && req.body.playerColor) === 2 ? 2 : 1;
+  const aiColor = playerColor === 1 ? 2 : 1;
+
+  let quota = { remaining: null, unlimited: false };
+  if (ZHIPU_API_KEY) {
+    quota = await consumeGomokuAiQuota(session.username, session.role === 'admin');
+    if (!quota) return res.status(429).json({ error: '今日 AI 对局次数已用完' });
+  }
+
+  const fallback = () => gomokuLocalMove(board, playerColor);
+  let move = null, reply = '', source = 'glm';
+
+  if (ZHIPU_API_KEY) {
+    const prompt =
+      '你是玩家的五子棋军师。坐标 x 从左到右 0-14，y 从上到下 0-14。\n' +
+      `玩家执${playerColor === 1 ? '黑棋(1)' : '白棋(2)'}，AI 执${aiColor === 1 ? '黑棋(1)' : '白棋(2)'}。\n` +
+      `棋盘：X=${playerColor === 1 ? '玩家黑棋' : 'AI 黑棋'}，O=${playerColor === 2 ? '玩家白棋' : 'AI 白棋'}，.=空位。\n` +
+      gomokuBoardAscii(board) + '\n' +
+      '最近落子：' + gomokuHistoryText(req.body && req.body.history) + '\n' +
+      '请给玩家推荐当前最好的一步：能赢就赢，否则优先堵住 AI 的活四/冲四，其次做自己的活三。\n' +
+      '只返回严格 JSON，不要 Markdown，不要代码块：\n' +
+      '{"x":0-14,"y":0-14,"reply":"不超过60字的中文建议"}';
+    try {
+      const text = await zhipuGomokuChat([
+        { role: 'system', content: '你是稳健的五子棋军师，建议简短、具体。' },
+        { role: 'user', content: prompt },
+      ], 240, 0.6);
+      const parsed = parseGomokuAiMove(text);
+      if (parsed && board[parsed.y][parsed.x] === 0) {
+        move = { x: parsed.x, y: parsed.y };
+        reply = parsed.reply;
+      }
+    } catch (e) {
+      console.error('gomoku AI hint error:', e.message);
+    }
+  }
+
+  if (!move) {
+    move = fallback();
+    source = 'fallback';
+    if (!reply) reply = ZHIPU_API_KEY ? '先下在这里，稳住中路。' : 'AI 服务未配置，先用本地棋力给个建议。';
+  }
+  if (!reply) reply = '这一步比较稳。';
 
   res.json({ move, reply, source, remaining: quota.remaining, unlimited: !!quota.unlimited });
 });

@@ -62,6 +62,36 @@
     pointer-events: none; white-space: nowrap;
   }
   .thinking-pill.hidden { display: none; }
+  .hint-marker {
+    position: absolute;
+    width: 9.6%;
+    height: 9.6%;
+    transform: translate(-50%, -50%);
+    border: 2px dashed #ffd54a;
+    border-radius: 50%;
+    box-shadow: 0 0 14px rgba(255, 213, 74, 0.55);
+    pointer-events: none;
+    z-index: 4;
+    animation: hintPulse 1.3s ease-in-out infinite;
+  }
+  .hint-marker.hidden { display: none; }
+  .hint-marker span {
+    position: absolute;
+    left: 50%;
+    top: -21px;
+    transform: translateX(-50%);
+    background: rgba(30, 24, 6, 0.9);
+    color: #ffd54a;
+    border: 1px solid rgba(255, 213, 74, 0.45);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  @keyframes hintPulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.75; }
+    50% { transform: translate(-50%, -50%) scale(1.06); opacity: 1; }
+  }
   .thinking-pill .spinner {
     width: 11px; height: 11px; border-radius: 50%;
     border: 2px solid rgba(125,255,178,0.25); border-top-color: #7dffb2;
@@ -160,6 +190,7 @@
       </div>
       <div class="board-shell">
         <canvas id="board" width="640" height="640" aria-label="五子棋棋盘"></canvas>
+        <div id="hintMarker" class="hint-marker hidden"><span>AI 建议</span></div>
         <div class="thinking-pill hidden" id="thinkingPill"><span class="spinner"></span>小五正在思考...</div>
         <div class="board-gate hidden" id="loginGate">
           <p>登录后才能和 AI 对局</p>
@@ -169,6 +200,8 @@
       <div class="board-actions">
         <button class="ai-btn primary" id="newGameBtn" type="button">新对局</button>
         <button class="ai-btn" id="aiFirstBtn" type="button">让 AI 先手</button>
+        <button class="ai-btn" id="undoBtn" type="button" disabled>悔棋 <span id="undoCount">3</span></button>
+        <button class="ai-btn" id="hintBtn" type="button">AI 支招</button>
       </div>
     </section>
 
@@ -217,6 +250,10 @@
   var quotaBadge = document.getElementById('quotaBadge');
   var newGameBtn = document.getElementById('newGameBtn');
   var aiFirstBtn = document.getElementById('aiFirstBtn');
+  var undoBtn = document.getElementById('undoBtn');
+  var undoCount = document.getElementById('undoCount');
+  var hintBtn = document.getElementById('hintBtn');
+  var hintMarker = document.getElementById('hintMarker');
 
   var state = {
     board: emptyBoard(),
@@ -230,7 +267,12 @@
     winLine: null,
     hover: null,
     overText: '',
-    gameId: 0
+    gameId: 0,
+    turnId: 0,
+    undosLeft: 3,
+    hint: null,
+    anims: [],
+    animRAF: 0
   };
   var chatHistory = [];
   var chatBusy = false;
@@ -306,8 +348,82 @@
     }
   }
 
+  function updateUndoBtn() {
+    var hasPlayerMove = state.history.some(function (m) { return m.color === state.playerColor; });
+    undoBtn.disabled = !token || state.over || state.undosLeft <= 0 || !hasPlayerMove;
+    undoCount.textContent = String(state.undosLeft);
+  }
+
+  function clearHint() {
+    state.hint = null;
+    hintMarker.classList.add('hidden');
+  }
+
+  function showHintMarker(move) {
+    if (!move || move.x < 0 || move.x > 14 || move.y < 0 || move.y > 14 || state.board[move.y][move.x] !== 0) {
+      clearHint();
+      return;
+    }
+    state.hint = { x: move.x, y: move.y };
+    hintMarker.style.left = ((PAD + move.x * CELL) / SIZE * 100) + '%';
+    hintMarker.style.top = ((PAD + move.y * CELL) / SIZE * 100) + '%';
+    hintMarker.classList.remove('hidden');
+  }
+
+  function stopStoneAnims() {
+    if (state.animRAF) cancelAnimationFrame(state.animRAF);
+    state.animRAF = 0;
+    state.anims = [];
+  }
+
+  function stepStoneAnims(now) {
+    state.anims = state.anims.filter(function (a) { return now - a.start < 280; });
+    draw();
+    if (state.anims.length) state.animRAF = requestAnimationFrame(stepStoneAnims);
+    else state.animRAF = 0;
+  }
+
+  function startStoneAnims() {
+    if (state.animRAF) return;
+    state.animRAF = requestAnimationFrame(stepStoneAnims);
+  }
+
+  function undoMove() {
+    if (!token) { loginGate.classList.remove('hidden'); return; }
+    if (state.over) { addChat('sys', '对局已经结束，点“新对局”再来一局。'); return; }
+    if (state.undosLeft <= 0) { addChat('sys', '本局悔棋次数已经用完了。'); return; }
+    var idx = -1;
+    for (var i = state.history.length - 1; i >= 0; i--) {
+      if (state.history[i].color === state.playerColor) { idx = i; break; }
+    }
+    if (idx < 0) { addChat('sys', '还没有可以悔的棋。'); return; }
+
+    state.turnId++;
+    state.history = state.history.slice(0, idx);
+    state.board = emptyBoard();
+    for (var j = 0; j < state.history.length; j++) {
+      var m = state.history[j];
+      state.board[m.y][m.x] = m.color;
+    }
+    state.last = state.history.length ? state.history[state.history.length - 1] : null;
+    state.winLine = null;
+    state.over = false;
+    state.overText = '';
+    state.thinking = false;
+    state.current = state.playerColor;
+    state.undosLeft--;
+    clearHint();
+    stopStoneAnims();
+    setThinking(false);
+    updateUndoBtn();
+    draw();
+    updateStatus();
+    addChat('sys', '你悔棋了，重新落子。');
+  }
+
   function startGame(aiFirst) {
     state.gameId++;
+    state.turnId++;
     state.playerColor = aiFirst ? 2 : 1;
     state.aiColor = aiFirst ? 1 : 2;
     state.board = emptyBoard();
@@ -318,8 +434,14 @@
     state.last = null;
     state.winLine = null;
     state.hover = null;
+    state.undosLeft = 3;
+    state.hint = null;
+    clearHint();
+    stopStoneAnims();
     setThinking(false);
     clearChat(aiFirst);
+    updateUndoBtn();
+    hintBtn.disabled = !token;
     draw();
     updateStatus();
     if (aiFirst && token) {
@@ -366,18 +488,25 @@
       addChat('ai', '棋盘满了，平局。再来一局？');
     }
     updateStatus();
+    updateUndoBtn();
+    hintBtn.disabled = true;
     draw();
   }
 
   function place(x, y, color) {
     if (x < 0 || x > 14 || y < 0 || y > 14 || state.board[y][x] !== 0) return false;
+    if (color === state.playerColor) state.turnId++;
+    clearHint();
     state.board[y][x] = color;
     state.history.push({ x: x, y: y, color: color });
     state.last = { x: x, y: y, color: color };
     state.winLine = checkWin(x, y, color);
+    state.anims.push({ x: x, y: y, color: color, start: performance.now() });
+    startStoneAnims();
     draw();
     if (state.winLine) finish(color);
     else if (state.history.length >= 225) finish(0);
+    updateUndoBtn();
     return true;
   }
 
@@ -449,6 +578,7 @@
   async function requestAiMove() {
     if (!token || state.over || state.thinking) return;
     var gameId = state.gameId;
+    var turnId = state.turnId;
     setThinking(true);
     try {
       var data = await aiApi('/api/gomoku/ai/move', {
@@ -457,7 +587,7 @@
         playerColor: state.playerColor,
         history: state.history.slice(-20)
       });
-      if (gameId !== state.gameId) return;
+      if (gameId !== state.gameId || turnId !== state.turnId) return;
       var mv = data.move;
       if (!mv || !Number.isInteger(mv.x) || !Number.isInteger(mv.y) || state.board[mv.y] === undefined || state.board[mv.y][mv.x] !== 0) {
         mv = localMove(state.board, state.aiColor);
@@ -470,7 +600,7 @@
         updateStatus();
       }
     } catch (e) {
-      if (gameId !== state.gameId) return;
+      if (gameId !== state.gameId || turnId !== state.turnId) return;
       if (e.status === 401) {
         token = '';
         loginGate.classList.remove('hidden');
@@ -485,11 +615,71 @@
         updateStatus();
       }
     } finally {
-      if (gameId === state.gameId) {
+      if (gameId === state.gameId && turnId === state.turnId) {
         setThinking(false);
         updateStatus();
       }
     }
+  }
+
+  function isHintQuestion(text) {
+    return /怎么走|下一步|走哪|支招|建议|该下|如何下|怎么下|下在哪|落在哪/.test(String(text || ''));
+  }
+
+  function requestHint(question) {
+    if (!token) { loginGate.classList.remove('hidden'); return; }
+    if (chatBusy) return;
+    if (state.over) { addChat('sys', '对局已经结束，开一局新的再问吧。'); return; }
+    if (state.thinking || state.current !== state.playerColor) {
+      addChat('sys', '等轮到你落子时，我再给你支招。');
+      return;
+    }
+    var gameId = state.gameId;
+    var turnId = state.turnId;
+    addChat('user', question || '我下一步该怎么走？');
+    chatInput.value = '';
+    chatBusy = true;
+    chatSendBtn.disabled = true;
+    hintBtn.disabled = true;
+
+    aiApi('/api/gomoku/ai/hint', {
+      board: state.board,
+      playerColor: state.playerColor,
+      aiColor: state.aiColor,
+      history: state.history.slice(-20)
+    }).then(function (data) {
+      if (gameId !== state.gameId || turnId !== state.turnId) return;
+      var mv = data.move;
+      if (!mv || !Number.isInteger(mv.x) || !Number.isInteger(mv.y) || state.board[mv.y] === undefined || state.board[mv.y][mv.x] !== 0) {
+        mv = localMove(state.board, state.playerColor);
+      }
+      var marked = false;
+      if (mv && state.board[mv.y] && state.board[mv.y][mv.x] === 0) {
+        showHintMarker(mv);
+        marked = true;
+      }
+      var advice = data.reply || ('建议下在 ' + (mv.x + 1) + '-' + (mv.y + 1) + '。');
+      addChat('ai', advice + (marked ? '（已在棋盘上标注）' : ''));
+      updateQuota(data.remaining, data.unlimited);
+    }).catch(function (e) {
+      if (gameId !== state.gameId || turnId !== state.turnId) return;
+      if (e.status === 401) {
+        token = '';
+        loginGate.classList.remove('hidden');
+      }
+      var mv = localMove(state.board, state.playerColor);
+      if (mv && state.board[mv.y] && state.board[mv.y][mv.x] === 0) {
+        showHintMarker(mv);
+        addChat('ai', (e.status === 429 ? '今天的 AI 次数用完了，' : '网络不太稳，') +
+          '我先按本地棋力建议你下在 ' + (mv.x + 1) + '-' + (mv.y + 1) + '（已在棋盘标注）。');
+      } else {
+        addChat('sys', e.message || '暂时没有找到合适的建议。');
+      }
+    }).finally(function () {
+      chatBusy = false;
+      chatSendBtn.disabled = false;
+      hintBtn.disabled = !token || state.over;
+    });
   }
 
   function sendChat(text) {
@@ -497,6 +687,10 @@
     if (!text) return;
     if (!token) { loginGate.classList.remove('hidden'); return; }
     if (chatBusy) return;
+    if (isHintQuestion(text)) {
+      requestHint(text);
+      return;
+    }
     var gameId = state.gameId;
     var historyForApi = chatHistory.slice(-8);
     addChat('user', text);
@@ -531,11 +725,14 @@
   function px(x) { return PAD + x * CELL; }
   function py(y) { return PAD + y * CELL; }
 
-  function drawStone(x, y, color, alpha) {
+  function drawStone(x, y, color, alpha, scale, offsetY) {
     var cx = px(x), cy = py(y);
     var r = CELL * 0.43;
     ctx.save();
     ctx.globalAlpha = alpha == null ? 1 : alpha;
+    ctx.translate(cx, cy + (offsetY || 0));
+    ctx.scale(scale == null ? 1 : scale, scale == null ? 1 : scale);
+    ctx.translate(-cx, -cy);
     ctx.beginPath();
     ctx.arc(cx + 1.5, cy + 2.5, r, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(40, 24, 8, 0.28)';
@@ -602,9 +799,24 @@
     }
     ctx.textAlign = 'start';
 
+    var now = performance.now();
+    var animMap = {};
+    state.anims.forEach(function (a) {
+      animMap[a.x + ',' + a.y] = a;
+    });
     for (var y = 0; y < 15; y++) {
       for (var x = 0; x < 15; x++) {
-        if (state.board[y][x]) drawStone(x, y, state.board[y][x], 1);
+        if (!state.board[y][x]) continue;
+        var a = animMap[x + ',' + y];
+        if (a) {
+          var p = Math.min(1, (now - a.start) / 260);
+          if (p < 1) {
+            var e = 1 - Math.pow(1 - p, 3);
+            drawStone(x, y, state.board[y][x], Math.min(1, p * 2.2), 0.55 + 0.45 * e, -(1 - e) * CELL * 1.2);
+            continue;
+          }
+        }
+        drawStone(x, y, state.board[y][x], 1, 1, 0);
       }
     }
 
@@ -633,7 +845,7 @@
     }
 
     if (state.hover && !state.over && !state.thinking && state.current === state.playerColor && state.board[state.hover.y][state.hover.x] === 0) {
-      drawStone(state.hover.x, state.hover.y, state.playerColor, 0.36);
+      drawStone(state.hover.x, state.hover.y, state.playerColor, 0.36, 1, 0);
     }
   }
 
@@ -685,6 +897,10 @@
     if (!token) { loginGate.classList.remove('hidden'); return; }
     startGame(true);
   });
+  undoBtn.addEventListener('click', undoMove);
+  hintBtn.addEventListener('click', function () {
+    requestHint('请结合当前局势，告诉我下一步下在哪里？');
+  });
 
   chatForm.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -700,6 +916,8 @@
     loginGate.classList.remove('hidden');
     newGameBtn.disabled = true;
     aiFirstBtn.disabled = true;
+    undoBtn.disabled = true;
+    hintBtn.disabled = true;
     chatInput.disabled = true;
     chatSendBtn.disabled = true;
     addChat('sys', '登录后可以和小五对局、聊天。');
