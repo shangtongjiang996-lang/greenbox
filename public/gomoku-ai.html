@@ -498,6 +498,7 @@
     if (!token) { loginGate.classList.remove('hidden'); return; }
     if (chatBusy) return;
     var gameId = state.gameId;
+    var historyForApi = chatHistory.slice(-8);
     addChat('user', text);
     chatInput.value = '';
     chatBusy = true;
@@ -507,7 +508,7 @@
       board: state.board,
       aiColor: state.aiColor,
       playerColor: state.playerColor,
-      history: chatHistory.slice(-8),
+      history: historyForApi,
       moveHistory: state.history.slice(-20)
     }).then(function (data) {
       if (gameId !== state.gameId) return;

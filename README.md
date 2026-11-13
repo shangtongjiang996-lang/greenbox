@@ -10,7 +10,7 @@ GreenBox 是一个综合性的在线站点：工具箱、五子棋联机对战�
 |---|---|
 | 账号 | 注册、登录、会话保持、改密、注销、头像、个人资料 |
 | 工具箱 | 后台可上传单文件 HTML 工具，前台按分类展示，支持收藏与搜索 |
-| 五子棋 | 创建/加入房间、房间密码、邀请链接、悔棋与重开需对方同意、认输、房间聊天、断线重连、刷新恢复对局 |
+| 五子棋 | 创建/加入房间、自定义房间名、房间密码、邀请链接、悔棋与重开需对方同意、认输、房间聊天、断线重连、刷新恢复对局；另有 glm-4-flash 驱动的 AI 对局与局势聊天 |
 | 论坛 | 分类、搜索、排序、发帖（最多 3 图）、评论（最多 2 图）、点赞、收藏、转发、置顶 |
 | 私信 / 好友 | 会话列表、消息撤回、置顶、免打扰、好友申请、拉黑、隐私设置、在线状态；支持文本、图片、视频和文件（单文件最大 200MB，附件 7 天后过期） |
 | 资源中心 | B2 直传、分片上传、断点续传与暂停/继续、配额管理、视频/音频/图片在线播放、外链资源、管理员上传 |
@@ -129,6 +129,7 @@ B2_APP_KEY=
 | 用户 | `GET /api/user/me`、`PUT /api/user/profile`、`POST /api/user/avatar`、`GET /api/user/avatar/:username` |
 | 工具 | `GET /api/data`、`POST /api/tool/upload`、`GET /tool/:id` |
 | 五子棋 | `POST /api/room/create`、`/api/room/join`、`/api/room/leave`、`/api/room/heartbeat`、`GET /api/rooms`、`GET /api/room/:roomId` |
+| 五子棋 AI | `POST /api/gomoku/ai/move`、`POST /api/gomoku/ai/chat`（glm-4-flash，每日 200 次，管理员不限） |
 | 论坛 | `GET /api/forum/posts`、`GET /api/forum/posts/:id`、`POST /api/forum/posts`、`POST /api/forum/posts/:id/comments`、`POST /api/forum/posts/:id/like` |
 | 资源 | `POST /api/resource/upload-url`、`POST /api/resource/confirm`、`GET /api/resource/list/:category`、`GET /api/resource/quota`、`DELETE /api/resource/:id` |
 | 资源分片 | `POST /api/resource/multipart/create`、`POST /api/resource/multipart/part-url`、`GET /api/resource/multipart/status`、`POST /api/resource/multipart/complete`、`POST /api/resource/multipart/abort` |
@@ -140,7 +141,7 @@ B2_APP_KEY=
 
 ### 快捷工具上传
 
-管理员在后台「工具管理 → 快捷上传接口」里设置密码，再点「刷新 Key」生成一个 6 位数字 Key。之后可以用 Key 或密码调用上传接口，工具会自动加入工具箱。
+管理员在后台「工具管理 → 快捷上传接口」里设置密码（6-72 位英文、数字或符号），再点「刷新 Key」生成一个 6 位数字 Key。之后可以用 Key 或密码调用上传接口，工具会自动加入工具箱。
 
 ```bash
 # 用密码换一个 6 位 Key（有效期 7 天，刷新后旧 Key 失效）
