@@ -598,6 +598,29 @@ app.post('/api/tool/quick-upload', async (req, res) => {
   const cleanIcon = String(icon || '').replace(/[<>]/g, '').trim().slice(0, 300);
   const cleanCategory = String(category || 'other').replace(/[<>]/g, '').trim().slice(0, 30) || 'other';
 
+  // 传入 id 时更新已有工具，否则新建
+  const updateId = req.body && typeof req.body.id === 'string' ? req.body.id.trim() : '';
+  if (updateId) {
+    if (!/^[a-zA-Z0-9]{4,40}$/.test(updateId)) {
+      return res.status(400).json({ error: '工具 ID 格式错误' });
+    }
+    const data = (await kvGet('site_data')) || { tools: [], changelogs: [] };
+    if (!Array.isArray(data.tools)) data.tools = [];
+    const idx = data.tools.findIndex(t => t && t.url === `/tool/${updateId}`);
+    if (idx < 0) return res.status(404).json({ error: '工具不存在' });
+    await kvPut(`tool_content:${updateId}`, htmlContent);
+    data.tools[idx] = {
+      name: cleanName,
+      icon: cleanIcon,
+      description: cleanDesc,
+      category: cleanCategory,
+      url: `/tool/${updateId}`,
+    };
+    await kvPut('site_data', data);
+    await kvDelete(`toolup:fail:${clientIp(req)}`);
+    return res.json({ success: true, id: updateId, url: `/tool/${updateId}`, updated: true, via: auth.via });
+  }
+
   const id = Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
   await kvPut(`tool_content:${id}`, htmlContent);
   const currentData = (await kvGet('site_data')) || { tools: [], changelogs: [] };
