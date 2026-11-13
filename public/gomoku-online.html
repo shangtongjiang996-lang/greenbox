@@ -17,6 +17,15 @@
     .gm-wrap { padding-top: 1.6rem; padding-bottom: 3rem; }
     .gm-hero h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: 0.02em; }
     .gm-hero p { color: var(--muted); margin-top: 0.3rem; }
+    .gm-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .gm-ai-entry {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.55rem 1.15rem; border-radius: 999px;
+      background: var(--primary-light); color: var(--primary-dark);
+      border: 1px solid var(--primary); font-weight: 700; font-size: 0.92rem;
+      text-decoration: none; white-space: nowrap; transition: background 0.18s, transform 0.18s;
+    }
+    .gm-ai-entry:hover { background: var(--primary); color: #fff; transform: translateY(-1px); }
 
     .gm-card {
       background: var(--card-bg); border: 1px solid var(--border);
@@ -73,6 +82,7 @@
     }
     .gm-room-main { min-width: 0; }
     .gm-room-title { font-weight: 700; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .gm-room-name { font-size: 0.95rem; }
     .gm-room-title code { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0.08em; }
     .gm-room-meta { font-size: 0.82rem; color: var(--muted); margin-top: 0.15rem; }
     .gm-badge { font-size: 0.72rem; padding: 0.08rem 0.5rem; border-radius: 99px; background: var(--bg-alt); color: var(--muted); font-weight: 600; }
@@ -231,8 +241,11 @@
     <!-- ================= 大厅 ================= -->
     <section id="lobby">
       <div class="gm-hero">
-        <h1>五子棋 · 联机对战</h1>
-        <p>创建房间发给朋友，或从右侧列表直接加入。棋局实时同步，支持悔棋、认输和房间聊天。</p>
+        <div class="gm-hero-top">
+          <h1>五子棋 · 联机对战</h1>
+          <a class="gm-ai-entry" href="/gomoku-ai.html">AI 对局</a>
+        </div>
+        <p>创建房间发给朋友，或从右侧列表直接加入。棋局实时同步，支持悔棋、认输和房间聊天；也可以直接和 AI 下一局。</p>
       </div>
 
       <div class="gm-auth-notice" id="authNotice" style="display:none;">
@@ -255,6 +268,10 @@
                 <label><input type="radio" name="createColor" value="2"> 白子 · 后手</label>
                 <label><input type="radio" name="createColor" value="0"> 随机</label>
               </div>
+            </div>
+            <div class="gm-field">
+              <label for="createRoomName">房间名（可选）</label>
+              <input type="text" id="createRoomName" placeholder="例如 周末棋局" maxlength="24" autocomplete="off">
             </div>
             <div class="gm-field">
               <label for="createPassword">房间密码（可选）</label>
@@ -996,11 +1013,12 @@
       var pick = document.querySelector('input[name="createColor"]:checked').value;
       var color = pick === '0' ? (Math.random() < 0.5 ? 1 : 2) : parseInt(pick, 10);
       var password = $('createPassword').value.trim() || undefined;
+      var roomName = $('createRoomName').value.trim() || undefined;
       var invite = $('createInvite').checked;
       var btn = $('createRoomBtn');
       setBusy(btn, true, '创建中…');
       try {
-        var data = await api('/api/room/create', { color: color, password: password, invite: invite });
+        var data = await api('/api/room/create', { color: color, password: password, invite: invite, name: roomName });
         if (data.success) {
           var link = data.inviteToken ? location.origin + '/gomoku-online.html?room=' + data.roomId + '&invite=' + data.inviteToken : '';
           setBusy(btn, false);
@@ -1039,6 +1057,7 @@
       $(id).addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) $('joinRoomBtn').click(); });
     });
     $('createPassword').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) $('createRoomBtn').click(); });
+    $('createRoomName').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) $('createRoomBtn').click(); });
 
     var lastRoomsJson = null;
     async function loadRooms(showSkeleton) {
@@ -1072,6 +1091,10 @@
         var row = document.createElement('div'); row.className = 'gm-room';
         var main = document.createElement('div'); main.className = 'gm-room-main';
         var title = document.createElement('div'); title.className = 'gm-room-title';
+        if (r.name) {
+          var nm = document.createElement('span'); nm.className = 'gm-room-name'; nm.textContent = r.name;
+          title.appendChild(nm);
+        }
         var code = document.createElement('code'); code.textContent = r.roomId;
         title.appendChild(code);
         var st = document.createElement('span');
