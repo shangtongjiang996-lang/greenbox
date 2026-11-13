@@ -607,7 +607,23 @@ app.post('/api/tool/quick-upload', async (req, res) => {
     const data = (await kvGet('site_data')) || { tools: [], changelogs: [] };
     if (!Array.isArray(data.tools)) data.tools = [];
     const idx = data.tools.findIndex(t => t && t.url === `/tool/${updateId}`);
-    if (idx < 0) return res.status(404).json({ error: '工具不存在' });
+    if (idx < 0) {
+      // 内容还在、但工具列表条目被删掉时，允许按 id 恢复入口
+      const existing = await kvGet(`tool_content:${updateId}`);
+      if (!existing) return res.status(404).json({ error: '工具不存在' });
+      await kvPut(`tool_content:${updateId}`, htmlContent);
+      data.tools.push({
+        name: cleanName,
+        icon: cleanIcon,
+        description: cleanDesc,
+        category: cleanCategory,
+        url: `/tool/${updateId}`,
+      });
+      if (data.tools.length > 500) data.tools = data.tools.slice(-500);
+      await kvPut('site_data', data);
+      await kvDelete(`toolup:fail:${clientIp(req)}`);
+      return res.json({ success: true, id: updateId, url: `/tool/${updateId}`, restored: true, via: auth.via });
+    }
     await kvPut(`tool_content:${updateId}`, htmlContent);
     data.tools[idx] = {
       name: cleanName,
