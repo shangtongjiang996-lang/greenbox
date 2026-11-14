@@ -1988,8 +1988,14 @@ app.post('/api/notifications/send', async (req, res) => {
     content = `${session.username} 在${roomName}等你，点击进入房间。` +
       (room.password ? ' 房间有密码，请向邀请人询问。' : '');
     link = `/gomoku-online.html?room=${encodeURIComponent(roomId)}`;
-    if (room.inviteToken && inviteToken && String(inviteToken) === String(room.inviteToken)) {
-      link += `&invite=${encodeURIComponent(room.inviteToken)}`;
+    let roomInvite = room.inviteToken;
+    if (!roomInvite && room.password) {
+      roomInvite = crypto.randomUUID();
+      room.inviteToken = roomInvite;
+      await saveRoom(roomId, room);
+    }
+    if (roomInvite) {
+      link += `&invite=${encodeURIComponent(roomInvite)}`;
     }
   }
 

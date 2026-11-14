@@ -105,7 +105,7 @@
   }
 
   function label(status) {
-    return { pending: '待处理', ignored: '已记录', completed: '已解决', not_completed: '暂未完成' }[status] || status;
+    return { pending: '待处理', ignored: '已忽略', completed: '已解决', not_completed: '暂未完成' }[status] || status;
   }
 
   async function loadMine() {
