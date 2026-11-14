@@ -624,6 +624,8 @@
       <button class="tab-btn" data-tab="rooms">房间管理</button>
       <button class="tab-btn" data-tab="chat">AI 助手</button>
       <button class="tab-btn" data-tab="notify">通知管理</button>
+      <button class="tab-btn" data-tab="feedback">反馈</button>
+      <button class="tab-btn" data-tab="review">审核</button>
       <button class="tab-btn" data-tab="settings">设置</button>
     </div>
 
@@ -887,6 +889,23 @@
     </div>
 
     <!-- 设置 -->
+    <div id="tab-feedback" class="tab-content">
+      <div class="card">
+        <h2>用户反馈 <span id="feedback-count" style="font-size:0.8rem;font-weight:400;color:#94a3b8;"></span></h2>
+        <div id="admin-feedback-list"><p style="color:#94a3b8;">加载中...</p></div>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadAdminFeedback()">刷新反馈</button>
+      </div>
+    </div>
+
+    <div id="tab-review" class="tab-content">
+      <div class="card">
+        <h2>工具投稿审核 <span id="review-count" style="font-size:0.8rem;font-weight:400;color:#94a3b8;"></span></h2>
+        <p style="color:#64748b;font-size:0.88rem;margin-bottom:1rem;">AI 已完成初审，这里处理等待人工审核的投稿。通过后工具会上线到工具箱。</p>
+        <div id="admin-review-list"><p style="color:#94a3b8;">加载中...</p></div>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadToolReviews()">刷新审核</button>
+      </div>
+    </div>
+
     <div id="tab-settings" class="tab-content">
       <div class="card">
         <h2>修改管理员密码</h2>
@@ -1011,6 +1030,8 @@ let allUsers = [];
     loadUsers(); loadFiles(); loadAdminRooms(); updateRoomCount();
     loadChatLimits(); loadChatConfig();
     loadAdminNotifications();
+    loadAdminFeedback();
+    loadToolReviews();
     setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
     setupNotifyForm();
     setupQuickUpload();
@@ -1790,6 +1811,121 @@ function setupQuickUpload() {
     }
   });
   loadQuickUploadStatus();
+}
+
+async function loadAdminFeedback() {
+  const box = document.getElementById('admin-feedback-list');
+  const count = document.getElementById('feedback-count');
+  try {
+    const res = await fetch('/api/admin/feedback', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('加载失败');
+    const list = await res.json();
+    count.textContent = `（${list.filter(f => f.status === 'pending').length} 条待处理 / 共 ${list.length} 条）`;
+    if (!list.length) { box.innerHTML = '<p style="color:#94a3b8;">暂无反馈</p>'; return; }
+    const labels = { pending: '待处理', ignored: '已忽略', completed: '已完成', not_completed: '未完成' };
+    box.innerHTML = list.map(f => {
+      const cls = f.status === 'completed' ? 'success' : (f.status === 'not_completed' ? 'warning' : (f.status === 'ignored' ? '' : 'info'));
+      const time = new Date(f.createdAt).toLocaleString('zh-CN');
+      const reply = f.reply ? `<div class="notif-item-content">管理员回复：${escapeHtmlAdmin(f.reply)}</div>` : '';
+      return `<div class="notif-item ${cls}" style="margin-bottom:0.7rem;">
+        <div class="notif-item-head">
+          <div class="notif-item-title"><span class="notif-type-badge ${cls || 'info'}">${labels[f.status] || f.status}</span>${escapeHtmlAdmin(f.username)}</div>
+          <div class="notif-item-meta"><span>${time}</span></div>
+        </div>
+        <div class="notif-item-content">${escapeHtmlAdmin(f.content)}</div>
+        ${reply}
+        <textarea id="fb-reply-${f.id}" placeholder="回复用户（可选）" maxlength="500" style="width:100%;min-height:54px;margin-top:0.5rem;padding:0.5rem;border:1px solid #cbd5e1;border-radius:7px;font-family:inherit;"></textarea>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+          <button class="btn btn-outline btn-sm" onclick="reviewFeedback('${f.id}','ignored')">忽略</button>
+          <button class="btn btn-primary btn-sm" onclick="reviewFeedback('${f.id}','completed')">已完成并通知</button>
+          <button class="btn btn-outline btn-sm" onclick="reviewFeedback('${f.id}','not_completed')">未完成并通知</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<p style="color:#ef4444;">加载失败</p>';
+  }
+}
+
+async function reviewFeedback(id, status) {
+  const input = document.getElementById('fb-reply-' + id);
+  const reply = input ? input.value.trim() : '';
+  if (status !== 'ignored' && !reply) {
+    showToast('写一句处理说明再通知用户吧', 'error');
+    return;
+  }
+  if (!confirm(status === 'ignored' ? '确定忽略这条反馈？' : '确定标记并通知用户？')) return;
+  try {
+    const res = await fetch('/api/admin/feedback/' + encodeURIComponent(id), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ status, reply })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '操作失败');
+    showToast('已处理', 'success');
+    loadAdminFeedback();
+  } catch (e) {
+    showToast('操作失败：' + e.message, 'error');
+  }
+}
+
+async function loadToolReviews() {
+  const box = document.getElementById('admin-review-list');
+  const count = document.getElementById('review-count');
+  try {
+    const res = await fetch('/api/admin/tool-submissions', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('加载失败');
+    const list = await res.json();
+    const pending = list.filter(x => x.status === 'pending_admin');
+    count.textContent = `（${pending.length} 条待审核 / 共 ${list.length} 条）`;
+    if (!list.length) { box.innerHTML = '<p style="color:#94a3b8;">暂无投稿</p>'; return; }
+    const labels = { pending_admin: '待人工审核', rejected: 'AI 未通过', approved: '已上线', admin_rejected: '管理员未通过' };
+    box.innerHTML = list.map(x => {
+      const cls = x.status === 'pending_admin' ? 'info' : (x.status === 'approved' ? 'success' : 'warning');
+      const time = new Date(x.createdAt).toLocaleString('zh-CN');
+      const ai = x.ai ? `AI 初审：${x.ai.pass === true ? '通过' : (x.ai.pass === false ? '未通过' : '未给出结论')} · ${escapeHtmlAdmin(x.ai.reason || '')}` : '';
+      const actions = x.status === 'pending_admin'
+        ? `<textarea id="review-reply-${x.id}" placeholder="审核备注（可选）" maxlength="500" style="width:100%;min-height:48px;margin-top:0.5rem;padding:0.5rem;border:1px solid #cbd5e1;border-radius:7px;font-family:inherit;"></textarea>
+           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+             <button class="btn btn-primary btn-sm" onclick="reviewToolSubmission('${x.id}','approve')">通过并上线</button>
+             <button class="btn btn-outline btn-sm" onclick="reviewToolSubmission('${x.id}','reject')">退回</button>
+           </div>`
+        : (x.toolUrl ? `<div class="notif-item-actions"><a class="btn btn-outline btn-sm" href="${x.toolUrl}" target="_blank" rel="noopener">查看工具</a></div>` : '');
+      return `<div class="notif-item ${cls}" style="margin-bottom:0.7rem;">
+        <div class="notif-item-head">
+          <div class="notif-item-title"><span class="notif-type-badge ${cls}">${labels[x.status] || x.status}</span>${escapeHtmlAdmin(x.name)}</div>
+          <div class="notif-item-meta"><span>@${escapeHtmlAdmin(x.username)} · ${time}</span></div>
+        </div>
+        <div class="notif-item-content">${escapeHtmlAdmin(x.description || '无描述')}</div>
+        <div class="notif-item-content">${ai}</div>
+        <div class="notif-item-meta"><a href="/usertool-raw/${x.id}" target="_blank" rel="noopener">预览 HTML（沙箱）</a></div>
+        ${x.adminReply ? `<div class="notif-item-content">审核备注：${escapeHtmlAdmin(x.adminReply)}</div>` : ''}
+        ${actions}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<p style="color:#ef4444;">加载失败</p>';
+  }
+}
+
+async function reviewToolSubmission(id, action) {
+  const input = document.getElementById('review-reply-' + id);
+  const reply = input ? input.value.trim() : '';
+  if (!confirm(action === 'approve' ? '通过审核并上线？' : '退回这条投稿？')) return;
+  try {
+    const res = await fetch('/api/admin/tool-submissions/' + encodeURIComponent(id) + '/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ action, reply })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '操作失败');
+    showToast(action === 'approve' ? '已通过并上线' : '已退回', 'success');
+    loadToolReviews();
+  } catch (e) {
+    showToast('操作失败：' + e.message, 'error');
+  }
 }
 
 function setupNotifyForm() {

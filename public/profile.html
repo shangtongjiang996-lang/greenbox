@@ -521,7 +521,7 @@
       <label class="file-pick-btn" for="avatarFileInput">选择图片文件</label>
       <input type="file" id="avatarFileInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;">
       <div class="avatar-modal-tips">
-        支持 JPG / PNG / GIF / WEBP，大小不超过 500KB
+        支持 JPG / PNG / GIF / WEBP，最大 5MB；超过 200KB 会自动压缩
       </div>
       <div class="avatar-modal-actions">
         <button class="pbtn pbtn-outline" id="avatarRemoveBtn" style="display:none;">移除头像</button>
@@ -789,26 +789,62 @@
       avatarModal.classList.remove('show');
     });
 
-    avatarFileInput.addEventListener('change', (e) => {
+    function compressAvatarFile(file) {
+      return new Promise((resolve) => {
+        if (file.size <= 200 * 1024) { resolve(file); return; }
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const max = 512;
+            let w = img.naturalWidth || img.width;
+            let h = img.naturalHeight || img.height;
+            if (w > max || h > max) {
+              const scale = Math.min(max / w, max / h);
+              w = Math.round(w * scale);
+              h = Math.round(h * scale);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            canvas.toBlob((blob) => {
+              URL.revokeObjectURL(url);
+              if (!blob || blob.size >= file.size) { resolve(file); return; }
+              resolve(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', 0.85);
+          } catch (err) {
+            URL.revokeObjectURL(url);
+            resolve(file);
+          }
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+        img.src = url;
+      });
+    }
+
+    avatarFileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
       if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.type)) {
         showToast('仅支持 JPG/PNG/GIF/WEBP 格式', 'error');
         return;
       }
-      if (file.size > 500 * 1024) {
-        showToast('图片不能超过 500KB', 'error');
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('图片不能超过 5MB', 'error');
         return;
       }
 
-      selectedAvatarFile = file;
+      const processed = await compressAvatarFile(file);
+      selectedAvatarFile = processed;
       const reader = new FileReader();
       reader.onload = (ev) => {
         avatarPreviewBox.innerHTML = `<img src="${ev.target.result}" alt="">`;
         avatarPreviewBox.classList.add('has-image');
         avatarUploadBtn.disabled = false;
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(processed);
     });
 
     avatarUploadBtn.addEventListener('click', async () => {

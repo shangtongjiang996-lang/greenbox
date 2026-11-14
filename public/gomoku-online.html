@@ -18,6 +18,14 @@
     .gm-hero h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: 0.02em; }
     .gm-hero p { color: var(--muted); margin-top: 0.3rem; }
     .gm-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .gm-hero-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .gm-invite-entry {
+      font-family: inherit; cursor: pointer;
+      background: var(--card-bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 999px;
+      padding: 0.55rem 1.05rem; font-weight: 700; font-size: 0.92rem;
+    }
+    .gm-invite-entry:hover { border-color: var(--primary); color: var(--primary); }
     .gm-ai-entry {
       display: inline-flex; align-items: center; gap: 0.4rem;
       padding: 0.55rem 1.15rem; border-radius: 999px;
@@ -179,6 +187,43 @@
     .gm-room-box code { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; letter-spacing: 0.1em; font-size: 1rem; }
     .gm-room-name-label { font-weight: 700; margin-right: 0.4rem; }
     .gm-room-name-label:empty { display: none; }
+    .gm-invite-overlay {
+      position: fixed; inset: 0; z-index: 1200;
+      background: rgba(8, 14, 10, 0.55);
+      display: none; align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    .gm-invite-overlay.show { display: flex; }
+    .gm-invite-modal {
+      width: min(430px, 100%); max-height: 80vh; overflow: auto;
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow-lg);
+      padding: 1.2rem;
+    }
+    .gm-invite-modal h3 { font-size: 1.05rem; margin: 0 0 0.2rem; }
+    .gm-invite-modal .sub { color: var(--muted); font-size: 0.82rem; margin-bottom: 0.8rem; line-height: 1.6; }
+    .gm-invite-list { display: flex; flex-direction: column; gap: 0.45rem; max-height: 330px; overflow-y: auto; }
+    .gm-invite-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+      border: 1px solid var(--border); border-radius: 9px; padding: 0.55rem 0.65rem;
+      background: var(--bg-alt);
+    }
+    .gm-invite-who { min-width: 0; }
+    .gm-invite-who b { font-size: 0.9rem; }
+    .gm-invite-who span { display: block; font-size: 0.75rem; color: var(--muted); }
+    .gm-invite-who .on { color: var(--primary); }
+    .gm-invite-send {
+      border: none; border-radius: 7px; padding: 0.35rem 0.8rem;
+      background: var(--primary); color: #fff; font-family: inherit; font-size: 0.8rem;
+      font-weight: 700; cursor: pointer; flex-shrink: 0;
+    }
+    .gm-invite-send:disabled { opacity: 0.55; cursor: not-allowed; }
+    .gm-invite-close-row { display: flex; justify-content: flex-end; margin-top: 0.9rem; }
+    .gm-invite-close-row button {
+      border: 1px solid var(--border); background: transparent; color: var(--muted);
+      border-radius: 7px; padding: 0.4rem 0.9rem; font-family: inherit; cursor: pointer;
+    }
+    .gm-invite-empty { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 1.4rem 0; }
     .gm-room-box .acts { display: flex; gap: 0.4rem; }
 
     .gm-chat { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card-bg); overflow: hidden; }
@@ -245,7 +290,10 @@
       <div class="gm-hero">
         <div class="gm-hero-top">
           <h1>五子棋 · 联机对战</h1>
-          <a class="gm-ai-entry" href="/gomoku-ai.html">AI 对局</a>
+          <div class="gm-hero-actions">
+            <button class="gm-invite-entry" id="inviteFriendsBtn" type="button">邀请好友</button>
+            <a class="gm-ai-entry" href="/gomoku-ai.html">AI 对局</a>
+          </div>
         </div>
         <p>创建房间发给朋友，或从右侧列表直接加入。棋局实时同步，支持悔棋、认输和房间聊天；也可以直接和 AI 下一局。</p>
       </div>
@@ -372,6 +420,7 @@
           <div class="gm-room-box">
             <span><span id="roomNameDisplay" class="gm-room-name-label"></span>房间号 <code id="roomDisplay">------</code></span>
             <span class="acts">
+              <button class="gm-icon-btn" id="inviteRoomBtn" type="button">邀请好友</button>
               <button class="gm-icon-btn" id="copyRoomBtn" type="button">复制房号</button>
               <button class="gm-icon-btn" id="copyInviteBtn" type="button" style="display:none;">复制邀请链接</button>
             </span>
@@ -396,6 +445,15 @@
       </div>
     </section>
   </main>
+
+<div class="gm-invite-overlay" id="inviteModal">
+  <div class="gm-invite-modal">
+    <h3>邀请好友</h3>
+    <p class="sub" id="inviteSub">选择一位好友，发送五子棋邀请。</p>
+    <div class="gm-invite-list" id="inviteFriendList"></div>
+    <div class="gm-invite-close-row"><button type="button" id="inviteCloseBtn">关闭</button></div>
+  </div>
+</div>
 
   <button class="gm-chat-jump" id="chatJump" type="button"><svg class="ico" aria-hidden="true"><use href="/icons.svg#chat"/></svg><span id="chatJumpText">新消息</span></button>
   <div class="gm-toasts" id="toasts" aria-live="polite"></div>
@@ -1190,6 +1248,96 @@
       }
       loadRooms(false);
     }
+
+    // ===== 邀请好友 =====
+    var inviteContextRoom = '';
+    var inviteContextToken = '';
+
+    function closeInviteModal() {
+      $('inviteModal').classList.remove('show');
+    }
+
+    async function loadInviteFriends() {
+      var box = $('inviteFriendList');
+      box.innerHTML = '<div class="gm-invite-empty">加载好友中…</div>';
+      try {
+        var res = await fetch('/api/social/friends', { headers: authHeaders() });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var friends = await res.json();
+        var visible = (Array.isArray(friends) ? friends : []).filter(function (f) { return !f.blocked; });
+        box.innerHTML = '';
+        if (!visible.length) {
+          box.innerHTML = '<div class="gm-invite-empty">还没有好友，先去消息中心添加好友吧</div>';
+          return;
+        }
+        visible.forEach(function (f) {
+          var row = document.createElement('div');
+          row.className = 'gm-invite-row';
+          var who = document.createElement('div');
+          who.className = 'gm-invite-who';
+          var name = document.createElement('b');
+          name.textContent = f.displayName || f.username;
+          var sub = document.createElement('span');
+          sub.textContent = '@' + f.username + ' · ' + (f.online ? '在线' : '离线');
+          if (f.online) sub.className = 'on';
+          who.appendChild(name);
+          who.appendChild(sub);
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'gm-invite-send';
+          btn.textContent = '邀请';
+          btn.addEventListener('click', function () { sendFriendInvite(f.username, btn); });
+          row.appendChild(who);
+          row.appendChild(btn);
+          box.appendChild(row);
+        });
+      } catch (e) {
+        box.innerHTML = '<div class="gm-invite-empty">好友列表加载失败，请稍后重试</div>';
+      }
+    }
+
+    async function sendFriendInvite(to, btn) {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = '发送中…';
+      try {
+        var data = await api('/api/notifications/send', {
+          to: to,
+          roomId: inviteContextRoom || undefined,
+          inviteToken: inviteContextToken || undefined
+        });
+        if (data.success) {
+          btn.textContent = '已邀请';
+          toast('邀请已发送', 'success');
+        } else {
+          btn.disabled = false;
+          btn.textContent = '邀请';
+          toast(data.error || '发送失败', 'error');
+        }
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = '邀请';
+        toast('网络错误，请重试', 'error');
+      }
+    }
+
+    function openInviteModal() {
+      if (!token) { toast('请先登录', 'error'); return; }
+      inviteContextRoom = roomId || '';
+      inviteContextToken = inviteToken || '';
+      $('inviteSub').textContent = inviteContextRoom
+        ? '邀请好友加入当前房间：' + ($('roomNameDisplay').textContent || inviteContextRoom)
+        : '选择好友，邀请对方进入五子棋大厅。';
+      $('inviteModal').classList.add('show');
+      loadInviteFriends();
+    }
+
+    $('inviteFriendsBtn').addEventListener('click', openInviteModal);
+    $('inviteRoomBtn').addEventListener('click', openInviteModal);
+    $('inviteCloseBtn').addEventListener('click', closeInviteModal);
+    $('inviteModal').addEventListener('click', function (e) {
+      if (e.target === this) closeInviteModal();
+    });
 
     drawBoard();
     init();

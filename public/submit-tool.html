@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>上传工具 - GreenBox</title>
+<meta name="description" content="向 GreenBox 提交自己制作的 HTML 工具，AI 初审后由管理员审核上线。">
+<link rel="stylesheet" href="/style.css">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  .st-wrap { max-width: 900px; margin: 0 auto; padding: 1.6rem 1.25rem 3rem; }
+  .st-head h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .st-head p { color: var(--muted); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.2rem; }
+  .st-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.2rem; margin-bottom: 1.2rem; }
+  .st-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+  .st-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.8rem; }
+  .st-field label { font-size: 0.82rem; color: var(--muted); }
+  .st-field input, .st-field select { border: 1px solid var(--border); border-radius: 8px; padding: 0.55rem 0.65rem; background: var(--bg); color: var(--text); font-family: inherit; font-size: 0.88rem; }
+  .st-field input:focus, .st-field select:focus { outline: none; border-color: var(--primary); }
+  .st-file { border: 1px dashed var(--border); border-radius: 9px; padding: 0.8rem; display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+  .st-file input { max-width: 100%; }
+  .st-note { color: var(--muted); font-size: 0.78rem; line-height: 1.7; }
+  .st-submit { border: none; border-radius: 8px; background: var(--primary); color: #fff; padding: 0.6rem 1.5rem; font-family: inherit; font-weight: 700; cursor: pointer; }
+  .st-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+  .st-item { border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 0.9rem; margin-bottom: 0.65rem; }
+  .st-item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+  .st-status { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .st-status.pending_admin { background: #dbeafe; color: #1e40af; }
+  .st-status.rejected { background: #fee2e2; color: #b91c1c; }
+  .st-status.approved { background: #dcfce7; color: #166534; }
+  .st-status.admin_rejected { background: #fef3c7; color: #854d0e; }
+  .st-item p { font-size: 0.84rem; color: var(--muted); line-height: 1.65; margin-top: 0.3rem; }
+  .st-item a { color: var(--primary); }
+  .st-empty { color: var(--muted); text-align: center; padding: 1.5rem 0; font-size: 0.87rem; }
+  .st-gate { display: none; text-align: center; padding: 2rem 1rem; }
+  .st-gate.show { display: block; }
+  .st-gate a { display: inline-block; margin-top: 0.7rem; background: var(--primary); color: #fff; padding: 0.5rem 1.2rem; border-radius: 8px; text-decoration: none; font-weight: 700; }
+  @media (max-width: 640px) { .st-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<main class="st-wrap">
+  <div class="st-head">
+    <h1>上传工具</h1>
+    <p>上传你自己写的 HTML 工具。提交后会先由 AI 初审，通过后进入管理员审核；审核结果会通过站内通知告诉你。</p>
+  </div>
+
+  <div class="st-gate" id="stGate">
+    <p style="color:var(--muted);">登录后才能上传工具。</p>
+    <a href="/login.html?redirect=%2Fsubmit-tool.html">去登录</a>
+  </div>
+
+  <div id="stMain">
+    <div class="st-card">
+      <form id="stForm">
+        <div class="st-grid">
+          <div class="st-field"><label>工具名称 *</label><input id="stName" maxlength="60" placeholder="例如 我的计算器" required></div>
+          <div class="st-field"><label>分类</label><select id="stCategory"><option value="other">其他</option><option value="game">游戏</option><option value="tool">工具</option></select></div>
+        </div>
+        <div class="st-field"><label>简短描述</label><input id="stDesc" maxlength="200" placeholder="一句话介绍这个工具"></div>
+        <div class="st-field"><label>图标（可选）</label><input id="stIcon" maxlength="200" placeholder="可以填 emoji 或图片地址"></div>
+        <div class="st-field"><label>HTML 文件 *</label>
+          <div class="st-file">
+            <input type="file" id="stFile" accept=".html" required>
+            <span class="st-note">仅支持单个 .html，最大 2MB；工具会在沙箱中运行。</span>
+          </div>
+        </div>
+        <button class="st-submit" id="stSubmit" type="submit">提交审核</button>
+        <div class="st-note" id="stStatus" style="margin-top:0.6rem;"></div>
+      </form>
+    </div>
+
+    <div class="st-card">
+      <h2 style="font-size:1.05rem;margin:0 0 0.8rem;">我的投稿</h2>
+      <div id="stList"><div class="st-empty">加载中...</div></div>
+    </div>
+  </div>
+</main>
+
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var token = '';
+  try { token = localStorage.getItem('greenbox_token') || ''; } catch (e) {}
+  var gate = document.getElementById('stGate');
+  var main = document.getElementById('stMain');
+  var form = document.getElementById('stForm');
+  var listBox = document.getElementById('stList');
+  var statusEl = document.getElementById('stStatus');
+  var submitBtn = document.getElementById('stSubmit');
+
+  if (!token) {
+    gate.classList.add('show');
+    main.style.display = 'none';
+    return;
+  }
+
+  function label(s) {
+    return { pending_admin: 'AI 初审通过 / 等待人工审核', rejected: 'AI 初审未通过', approved: '已上线', admin_rejected: '管理员退回' }[s] || s;
+  }
+
+  async function loadMine() {
+    try {
+      var res = await fetch('/api/tools/mine', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) throw new Error('加载失败');
+      var list = await res.json();
+      listBox.innerHTML = '';
+      if (!list.length) { listBox.innerHTML = '<div class="st-empty">还没有投稿</div>'; return; }
+      list.forEach(function (item) {
+        var box = document.createElement('div');
+        box.className = 'st-item';
+        var head = document.createElement('div');
+        head.className = 'st-item-head';
+        var name = document.createElement('b');
+        name.textContent = item.name;
+        var st = document.createElement('span');
+        st.className = 'st-status ' + item.status;
+        st.textContent = label(item.status);
+        head.appendChild(name);
+        head.appendChild(st);
+        box.appendChild(head);
+        if (item.ai && item.ai.reason) {
+          var ai = document.createElement('p');
+          ai.textContent = 'AI 初审：' + item.ai.reason;
+          box.appendChild(ai);
+        }
+        if (item.adminReply) {
+          var ar = document.createElement('p');
+          ar.textContent = '管理员备注：' + item.adminReply;
+          box.appendChild(ar);
+        }
+        if (item.status === 'approved' && item.toolUrl) {
+          var link = document.createElement('p');
+          var a = document.createElement('a');
+          a.href = item.toolUrl;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = '打开已上线的工具';
+          link.appendChild(a);
+          box.appendChild(link);
+        }
+        if (item.status === 'rejected' || item.status === 'admin_rejected') {
+          var retry = document.createElement('button');
+          retry.type = 'button';
+          retry.className = 'st-submit';
+          retry.style.padding = '0.35rem 0.8rem';
+          retry.style.fontSize = '0.8rem';
+          retry.style.marginTop = '0.4rem';
+          retry.textContent = '返回修改并重新提交';
+          retry.addEventListener('click', function () {
+            document.getElementById('stName').value = item.name || '';
+            document.getElementById('stDesc').value = item.description || '';
+            document.getElementById('stIcon').value = item.icon || '';
+            document.getElementById('stCategory').value = item.category || 'other';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            document.getElementById('stFile').focus();
+          });
+          box.appendChild(retry);
+        }
+        listBox.appendChild(box);
+      });
+    } catch (e) {
+      listBox.innerHTML = '<div class="st-empty">加载失败，请稍后刷新</div>';
+    }
+  }
+
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var file = document.getElementById('stFile').files[0];
+    var name = document.getElementById('stName').value.trim();
+    if (!file) { alert('请选择 HTML 文件'); return; }
+    if (!name) { alert('请填写工具名称'); return; }
+    if (file.size > 2 * 1024 * 1024) { alert('HTML 文件不能超过 2MB'); return; }
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('name', name);
+    fd.append('description', document.getElementById('stDesc').value.trim());
+    fd.append('icon', document.getElementById('stIcon').value.trim());
+    fd.append('category', document.getElementById('stCategory').value);
+    submitBtn.disabled = true;
+    statusEl.textContent = 'AI 初审中，通常需要几秒到二十秒，请稍候...';
+    try {
+      var res = await fetch('/api/tools/submit', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || '提交失败');
+      var item = data.submission;
+      statusEl.textContent = item.status === 'rejected'
+        ? 'AI 初审未通过：' + ((item.ai && item.ai.reason) || '内容不符合要求')
+        : '已提交，AI 初审通过，等待管理员审核。';
+      form.reset();
+      loadMine();
+    } catch (err) {
+      statusEl.textContent = '提交失败：' + (err.message || '请稍后重试');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  loadMine();
+})();
+</script>
+</body>
+</html>

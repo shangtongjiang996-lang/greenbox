@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>意见反馈 - GreenBox</title>
+<meta name="description" content="向 GreenBox 提交意见、问题反馈或功能建议，并查看处理进度。">
+<link rel="stylesheet" href="/style.css">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  .fb-wrap { max-width: 780px; margin: 0 auto; padding: 1.6rem 1.25rem 3rem; }
+  .fb-head h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .fb-head p { color: var(--muted); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.2rem; }
+  .fb-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.2rem; margin-bottom: 1.2rem; }
+  .fb-card textarea { width: 100%; min-height: 130px; resize: vertical; padding: 0.7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-family: inherit; font-size: 0.9rem; line-height: 1.7; }
+  .fb-card textarea:focus { outline: none; border-color: var(--primary); }
+  .fb-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; margin-top: 0.7rem; flex-wrap: wrap; }
+  .fb-count { color: var(--muted); font-size: 0.78rem; }
+  .fb-submit { border: none; border-radius: 8px; background: var(--primary); color: #fff; padding: 0.55rem 1.3rem; font-family: inherit; font-weight: 700; cursor: pointer; }
+  .fb-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+  .fb-item { border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 0.9rem; margin-bottom: 0.7rem; background: var(--card-bg); }
+  .fb-item-head { display: flex; justify-content: space-between; gap: 0.6rem; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; }
+  .fb-status { font-size: 0.72rem; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
+  .fb-status.pending { background: var(--primary-light); color: var(--primary-dark); }
+  .fb-status.ignored { background: var(--bg-alt); color: var(--muted); }
+  .fb-status.completed { background: #dcfce7; color: #166534; }
+  .fb-status.not_completed { background: #fef3c7; color: #854d0e; }
+  .fb-item-text { font-size: 0.88rem; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .fb-item-reply { margin-top: 0.5rem; border-left: 3px solid var(--primary); padding: 0.35rem 0.6rem; background: var(--bg-alt); border-radius: 0 6px 6px 0; font-size: 0.84rem; color: var(--muted); white-space: pre-wrap; }
+  .fb-time { color: var(--muted); font-size: 0.73rem; }
+  .fb-empty { color: var(--muted); text-align: center; padding: 1.5rem 0; font-size: 0.88rem; }
+  .fb-gate { display: none; text-align: center; padding: 2rem 1rem; }
+  .fb-gate.show { display: block; }
+  .fb-gate a { display: inline-block; margin-top: 0.7rem; background: var(--primary); color: #fff; padding: 0.5rem 1.2rem; border-radius: 8px; text-decoration: none; font-weight: 700; }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<main class="fb-wrap">
+  <div class="fb-head">
+    <h1>意见反馈</h1>
+    <p>遇到问题、发现 Bug，或者有功能建议，都可以写在这里。管理员处理后会通过站内通知告诉你结果。</p>
+  </div>
+
+  <div class="fb-gate" id="fbGate">
+    <p style="color:var(--muted);">登录后才能提交反馈和查看处理进度。</p>
+    <a href="/login.html?redirect=%2Ffeedback.html">去登录</a>
+  </div>
+
+  <div id="fbMain">
+    <div class="fb-card">
+      <textarea id="fbContent" maxlength="2000" placeholder="请尽量写清楚：在哪个页面、做了什么、出现了什么问题，或者你希望增加什么功能。"></textarea>
+      <div class="fb-actions">
+        <span class="fb-count"><span id="fbCount">0</span> / 2000</span>
+        <button class="fb-submit" id="fbSubmit" type="button">提交反馈</button>
+      </div>
+    </div>
+
+    <div class="fb-card">
+      <h2 style="font-size:1.05rem;margin:0 0 0.8rem;">我的反馈</h2>
+      <div id="fbList"><div class="fb-empty">加载中...</div></div>
+    </div>
+  </div>
+</main>
+
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var token = '';
+  try { token = localStorage.getItem('greenbox_token') || ''; } catch (e) {}
+  var gate = document.getElementById('fbGate');
+  var main = document.getElementById('fbMain');
+  var content = document.getElementById('fbContent');
+  var count = document.getElementById('fbCount');
+  var submit = document.getElementById('fbSubmit');
+  var listBox = document.getElementById('fbList');
+
+  if (!token) {
+    gate.classList.add('show');
+    main.style.display = 'none';
+    return;
+  }
+
+  function label(status) {
+    return { pending: '待处理', ignored: '已记录', completed: '已解决', not_completed: '暂未完成' }[status] || status;
+  }
+
+  async function loadMine() {
+    try {
+      var res = await fetch('/api/feedback/mine', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) throw new Error('加载失败');
+      var list = await res.json();
+      listBox.innerHTML = '';
+      if (!list.length) {
+        listBox.innerHTML = '<div class="fb-empty">还没有提交过反馈</div>';
+        return;
+      }
+      list.forEach(function (item) {
+        var box = document.createElement('div');
+        box.className = 'fb-item';
+        var head = document.createElement('div');
+        head.className = 'fb-item-head';
+        var st = document.createElement('span');
+        st.className = 'fb-status ' + item.status;
+        st.textContent = label(item.status);
+        var time = document.createElement('span');
+        time.className = 'fb-time';
+        time.textContent = new Date(item.createdAt).toLocaleString('zh-CN');
+        head.appendChild(st);
+        head.appendChild(time);
+        var text = document.createElement('div');
+        text.className = 'fb-item-text';
+        text.textContent = item.content;
+        box.appendChild(head);
+        box.appendChild(text);
+        if (item.reply) {
+          var reply = document.createElement('div');
+          reply.className = 'fb-item-reply';
+          reply.textContent = '管理员回复：' + item.reply;
+          box.appendChild(reply);
+        }
+        listBox.appendChild(box);
+      });
+    } catch (e) {
+      listBox.innerHTML = '<div class="fb-empty">加载失败，请稍后刷新</div>';
+    }
+  }
+
+  content.addEventListener('input', function () {
+    count.textContent = String(content.value.length);
+  });
+
+  submit.addEventListener('click', async function () {
+    var text = content.value.trim();
+    if (text.length < 5) { alert('反馈内容至少 5 个字'); return; }
+    submit.disabled = true;
+    submit.textContent = '提交中...';
+    try {
+      var res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ content: text })
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || '提交失败');
+      content.value = '';
+      count.textContent = '0';
+      loadMine();
+      alert('反馈已提交，处理结果会通过站内通知告诉你。');
+    } catch (e) {
+      alert(e.message || '提交失败');
+    } finally {
+      submit.disabled = false;
+      submit.textContent = '提交反馈';
+    }
+  });
+
+  loadMine();
+})();
+</script>
+</body>
+</html>
