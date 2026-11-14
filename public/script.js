@@ -277,6 +277,9 @@ if (toggle) {
           if (!data || !Array.isArray(data.ids)) return;
           data.ids.forEach(function (id) { dismissNotice(id); });
         });
+        socket.on('notify:major', function () {
+          checkMajorNotices();
+        });
       } catch (e) {}
     }
 
