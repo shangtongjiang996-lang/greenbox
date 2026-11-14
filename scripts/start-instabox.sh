@@ -10,4 +10,5 @@ if [ -f .env ]; then
   set +a
 fi
 
+node scripts/check-env.js
 exec npm start
