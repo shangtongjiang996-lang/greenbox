@@ -656,8 +656,13 @@ app.post('/api/tool/quick-upload', async (req, res) => {
 });
 
 app.get('/tool/:id', async (req, res) => {
-  const html = await kvGet(`tool_content:${req.params.id}`);
+  let html = await kvGet(`tool_content:${req.params.id}`);
   if (!html) return res.status(404).send('工具不存在');
+  if (!html.includes('/presence.js')) {
+    const tag = '<script src="/presence.js"></script>';
+    const idx = html.toLowerCase().lastIndexOf('</body>');
+    html = idx >= 0 ? html.slice(0, idx) + tag + html.slice(idx) : html + tag;
+  }
   res.set('Content-Type', 'text/html; charset=utf-8').send(html);
 });
 
