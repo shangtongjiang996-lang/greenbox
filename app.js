@@ -811,7 +811,8 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
 app.get('/usertool/:id', async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[a-zA-Z0-9_]+$/.test(id)) return res.status(404).send('工具不存在');
-  const html = await kvGet(`tool_content:${id}`);
+  let html = await kvGet(`tool_content:${id}`);
+  if (!html) html = await kvGet(`tool_sub_content:${id}`);
   if (!html) return res.status(404).send('工具不存在');
   const wrap = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>用户工具 - GreenBox</title>' +
@@ -926,7 +927,10 @@ app.post('/api/tool/quick-upload', async (req, res) => {
 });
 
 app.get('/tool/:id', async (req, res) => {
-  let html = await kvGet(`tool_content:${req.params.id}`);
+  const id = String(req.params.id || '');
+  // 用户投稿工具必须走沙箱入口，不能通过 /tool 直接以同源页面运行
+  if (id.startsWith('ts_')) return res.redirect(`/usertool/${encodeURIComponent(id)}`);
+  let html = await kvGet(`tool_content:${id}`);
   if (!html) return res.status(404).send('工具不存在');
   if (!html.includes('/presence.js')) {
     const tag = '<script src="/presence.js"></script>';
