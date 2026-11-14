@@ -87,7 +87,7 @@ app.get('/sitemap.xml', (req, res) => {
 app.get(/^([^.]+)$/, (req, res, next) => {
   const path = req.path;
   // 如果是 API、Socket、或者工具路径，直接放行，不要拦截
-  if (path.startsWith('/api') || path.startsWith('/tool') || path.startsWith('/socket.io') || path === '/ping') {
+  if (path.startsWith('/api') || path.startsWith('/tool') || path.startsWith('/usertool') || path.startsWith('/socket.io') || path === '/ping') {
     return next();
   }
   // 如果只是根目录 '/'，交给后续处理
