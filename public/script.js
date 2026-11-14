@@ -97,6 +97,7 @@ if (toggle) {
   // ===== 重大通知 / 五子棋邀请弹窗 =====
   var MAJOR_HIDDEN = 'gb_major_hidden';
   var MAJOR_SHOWN = 'gb_major_shown';
+  var activeInvite = null;
 
   function readIdList(storage, key) {
     try {
@@ -121,11 +122,70 @@ if (toggle) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ ids: [id] }),
+      keepalive: true,
     }).catch(function () {});
   }
 
+  // 五子棋邀请：顶部小窗，60 秒倒计时，可手动关闭；关闭后服务端标记已读，其他设备同步消失
+  function showGomokuInvite(n) {
+    if (!n || document.querySelector('.gb-invite-banner') || document.querySelector('.gb-major-overlay')) return;
+    var link = (typeof n.link === 'string' && n.link.charAt(0) === '/') ? n.link : '/gomoku-online.html';
+    var banner = document.createElement('div');
+    banner.className = 'gb-invite-banner';
+    banner.setAttribute('role', 'dialog');
+    banner.innerHTML =
+      '<button type="button" class="gb-invite-x" aria-label="关闭">\u00d7</button>' +
+      '<div class="gb-invite-head"><span class="gb-invite-badge">五子棋邀请</span><span class="gb-invite-time">60s</span></div>' +
+      '<div class="gb-invite-title">' + escHtml(n.title) + '</div>' +
+      '<div class="gb-invite-text">' + escHtml(n.content) + '</div>' +
+      '<div class="gb-invite-progress"><i></i></div>' +
+      '<div class="gb-invite-actions"><button type="button" class="gb-invite-dismiss">关闭</button><a class="gb-invite-go" href="' + escHtml(link) + '">去下棋</a></div>';
+    document.body.appendChild(banner);
+
+    var timeEl = banner.querySelector('.gb-invite-time');
+    var fill = banner.querySelector('.gb-invite-progress i');
+    var total = 60000;
+    var endAt = Date.now() + total;
+    var timer = null;
+    var done = false;
+
+    function finish(markRead, remote) {
+      if (done) return;
+      done = true;
+      if (timer) clearInterval(timer);
+      banner.remove();
+      if (activeInvite && activeInvite.id === n.id) activeInvite = null;
+      addId(localStorage, MAJOR_HIDDEN, n.id);
+      if (markRead) markNoticeRead(n.id);
+      setTimeout(checkMajorNotices, 350);
+    }
+
+    activeInvite = { id: n.id, close: finish };
+
+    function tick() {
+      var left = Math.max(0, endAt - Date.now());
+      timeEl.textContent = Math.ceil(left / 1000) + 's';
+      fill.style.width = (left / total * 100) + '%';
+      if (left <= 0) finish(true, false);
+    }
+    tick();
+    timer = setInterval(tick, 200);
+
+    banner.querySelector('.gb-invite-x').addEventListener('click', function () { finish(true, false); });
+    banner.querySelector('.gb-invite-dismiss').addEventListener('click', function () { finish(true, false); });
+    banner.querySelector('.gb-invite-go').addEventListener('click', function (e) {
+      e.preventDefault();
+      finish(true, false);
+      setTimeout(function () { location.href = link; }, 30);
+    });
+  }
+
+  function dismissNotice(id) {
+    if (activeInvite && activeInvite.id === id) activeInvite.close(false, true);
+  }
+
   function showMajorNotice(n) {
-    if (!n || document.querySelector('.gb-major-overlay')) return;
+    if (!n || document.querySelector('.gb-major-overlay') || document.querySelector('.gb-invite-banner')) return;
     var overlay = document.createElement('div');
     overlay.className = 'gb-major-overlay';
     overlay.setAttribute('role', 'dialog');
@@ -164,7 +224,7 @@ if (toggle) {
   function checkMajorNotices() {
     var token = getToken();
     if (!token) return;
-    if (document.querySelector('.gb-major-overlay')) return;
+    if (activeInvite || document.querySelector('.gb-invite-banner') || document.querySelector('.gb-major-overlay')) return;
     var modal = document.getElementById('aiUpdateModal');
     if (modal && getComputedStyle(modal).display !== 'none') {
       setTimeout(checkMajorNotices, 1800);
@@ -176,11 +236,17 @@ if (toggle) {
         if (!Array.isArray(list) || !list.length) return;
         var hidden = readIdList(localStorage, MAJOR_HIDDEN);
         var shown = readIdList(sessionStorage, MAJOR_SHOWN);
-        var next = null;
+        var invite = null, major = null;
         for (var i = 0; i < list.length; i++) {
-          if (hidden.indexOf(list[i].id) < 0 && shown.indexOf(list[i].id) < 0) { next = list[i]; break; }
+          if (hidden.indexOf(list[i].id) >= 0 || shown.indexOf(list[i].id) >= 0) continue;
+          if (list[i].kind === 'gomoku') {
+            if (!invite) invite = list[i];
+          } else if (!major) {
+            major = list[i];
+          }
         }
-        if (next) showMajorNotice(next);
+        if (invite) showGomokuInvite(invite);
+        else if (major) showMajorNotice(major);
       })
       .catch(function () {});
   }
@@ -194,10 +260,40 @@ if (toggle) {
     });
   }
 
+  // ===== 全站在线状态 + 跨设备通知同步 =====
+  function setupPresence() {
+    if (!getToken() || window.__gbPresenceSocket) return;
+
+    function connect() {
+      if (!window.io || window.__gbPresenceSocket) return;
+      try {
+        var socket = io({ transports: ['websocket', 'polling'] });
+        window.__gbPresenceSocket = socket;
+        socket.on('connect', function () {
+          var token = getToken();
+          if (token) socket.emit('dm:auth', { token: token });
+        });
+        socket.on('notification:read', function (data) {
+          if (!data || !Array.isArray(data.ids)) return;
+          data.ids.forEach(function (id) { dismissNotice(id); });
+        });
+      } catch (e) {}
+    }
+
+    if (window.io) { connect(); return; }
+    var script = document.createElement('script');
+    script.src = '/socket.io/socket.io.js';
+    script.async = true;
+    script.onload = connect;
+    script.onerror = function () {};
+    document.head.appendChild(script);
+  }
+
   function boot() {
     setupNav();
     setupTour();
     setupMajorNotices();
+    setupPresence();
   }
 
   if (document.readyState === 'loading') {

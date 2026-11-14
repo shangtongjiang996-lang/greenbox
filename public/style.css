@@ -542,6 +542,109 @@ footer { margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border);
 }
 .gb-major-go:hover { background: var(--primary-dark); }
 
+/* ===== 五子棋邀请顶部小窗 ===== */
+.gb-invite-banner {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(440px, calc(100vw - 24px));
+  z-index: 10030;
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 12px 14px 11px;
+}
+.gb-invite-x {
+  position: absolute;
+  right: 7px;
+  top: 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 3px 6px;
+}
+.gb-invite-x:hover { color: var(--text); }
+.gb-invite-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-right: 22px;
+}
+.gb-invite-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--primary-dark);
+  background: var(--primary-light);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.gb-invite-time {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 700;
+}
+.gb-invite-title { font-size: 14px; font-weight: 700; margin-top: 6px; }
+.gb-invite-text {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin-top: 2px;
+  word-break: break-word;
+}
+.gb-invite-progress {
+  height: 3px;
+  margin: 8px 0 9px;
+  background: var(--bg-alt);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.gb-invite-progress i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+  transition: width 0.2s linear;
+}
+.gb-invite-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.gb-invite-dismiss {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 5px 11px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.gb-invite-dismiss:hover { color: var(--text); border-color: var(--text); }
+.gb-invite-go {
+  background: var(--primary);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.gb-invite-go:hover { background: var(--primary-dark); }
+@media (max-width: 640px) {
+  .gb-invite-banner { top: 10px; padding: 10px 12px; }
+  .gb-invite-title { font-size: 13px; }
+  .gb-invite-text { font-size: 11.5px; }
+}
+
 /* ===== 响应式 ===== */
 /* 手机 / 平板端：导航栏随页面滚动，与首页保持一致 */
 @media (max-width: 900px) {

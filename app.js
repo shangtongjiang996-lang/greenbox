@@ -1673,7 +1673,7 @@ app.get('/api/notifications/major', async (req, res) => {
   if (!session) return res.status(401).json({ error: '请先登录' });
   const list = await getUserNotifications(session.username);
   const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
-  res.json(list.filter(n => n.major && n.createdAt > cutoff).slice(0, 20));
+  res.json(list.filter(n => n.major && !(n.kind === 'gomoku' && n.read) && n.createdAt > cutoff).slice(0, 20));
 });
 
 // 用户给指定用户发送“一起下五子棋”通知
@@ -1735,6 +1735,7 @@ app.post('/api/notifications/read', async (req, res) => {
     set.add(ids);
   }
   await kvPut(`notif_read:${session.username}`, Array.from(set).slice(-500));
+  try { emitToUser(io, session.username, 'notification:read', { ids: Array.from(set).slice(-500) }); } catch (e) {}
   res.json({ success: true });
 });
 
@@ -1747,6 +1748,7 @@ app.post('/api/notifications/read-all', async (req, res) => {
   const set = new Set(readList);
   list.forEach(n => set.add(n.id));
   await kvPut(`notif_read:${session.username}`, Array.from(set).slice(-500));
+  try { emitToUser(io, session.username, 'notification:read', { ids: Array.from(set).slice(-500) }); } catch (e) {}
   res.json({ success: true });
 });
 
@@ -1777,7 +1779,8 @@ app.delete('/api/notifications', async (req, res) => {
 app.get('/api/admin/notifications', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const list = (await kvGet('notifications')) || [];
-  res.json(list.slice().sort((a, b) => b.createdAt - a.createdAt));
+  // 用户之间的五子棋邀请只在收件人界面显示，不进入后台通知列表
+  res.json(list.filter(n => n.kind !== 'gomoku').slice().sort((a, b) => b.createdAt - a.createdAt));
 });
 
 app.post('/api/admin/notifications', async (req, res) => {
