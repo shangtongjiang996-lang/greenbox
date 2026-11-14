@@ -3445,7 +3445,7 @@ function parseGomokuAiMove(text) {
 async function zhipuGomokuChat(messages, maxTokens, temperature) {
   if (!ZHIPU_API_KEY) throw new Error('ZHIPU_API_KEY missing');
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
+  const timer = setTimeout(() => controller.abort(), 18000);
   try {
     const res = await fetch(ZHIPU_API_URL, {
       method: 'POST',
