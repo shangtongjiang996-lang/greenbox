@@ -545,7 +545,7 @@ footer { margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border);
 /* ===== 五子棋邀请顶部小窗 ===== */
 .gb-invite-banner {
   position: fixed;
-  top: 18px;
+  top: 78px;
   left: 50%;
   transform: translateX(-50%);
   width: min(440px, calc(100vw - 24px));
@@ -640,7 +640,7 @@ footer { margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border);
 }
 .gb-invite-go:hover { background: var(--primary-dark); }
 @media (max-width: 640px) {
-  .gb-invite-banner { top: 10px; padding: 10px 12px; }
+  .gb-invite-banner { top: 64px; padding: 10px 12px; }
   .gb-invite-title { font-size: 13px; }
   .gb-invite-text { font-size: 11.5px; }
 }
