@@ -803,7 +803,7 @@ app.get('/usertool/:id', async (req, res) => {
   const wrap = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>用户工具 - GreenBox</title>' +
     '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b12}iframe{display:block;width:100%;height:100%;border:0}</style>' +
-    '</head><body><iframe sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock allow-downloads" allow="fullscreen; gamepad" referrerpolicy="no-referrer" src="/usertool-raw/' + id + '"></iframe></body></html>';
+    '</head><body><iframe sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock allow-downloads" allow="fullscreen; gamepad" referrerpolicy="no-referrer" src="/usertool-raw/' + id + '"></iframe><script src="/presence.js"></script></body></html>';
   res.set('Content-Type', 'text/html; charset=utf-8').send(wrap);
 });
 

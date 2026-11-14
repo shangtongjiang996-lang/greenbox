@@ -119,8 +119,13 @@
     return;
   }
 
-  function label(s) {
-    return { pending_admin: 'AI 初审通过 / 等待人工审核', rejected: 'AI 初审未通过', approved: '已上线', admin_rejected: '管理员退回' }[s] || s;
+  function label(item) {
+    if (item.status === 'pending_admin') {
+      if (item.ai && item.ai.pass === true) return 'AI 初审通过 / 等待人工审核';
+      if (item.ai && item.ai.pass === null) return 'AI 初审不可用 / 等待人工审核';
+      return '等待人工审核';
+    }
+    return { rejected: 'AI 初审未通过', approved: '已上线', admin_rejected: '管理员退回' }[item.status] || item.status;
   }
 
   async function loadMine() {
@@ -139,7 +144,7 @@
         name.textContent = item.name;
         var st = document.createElement('span');
         st.className = 'st-status ' + item.status;
-        st.textContent = label(item.status);
+        st.textContent = label(item);
         head.appendChild(name);
         head.appendChild(st);
         box.appendChild(head);
@@ -214,7 +219,9 @@
       var item = data.submission;
       statusEl.textContent = item.status === 'rejected'
         ? 'AI 初审未通过：' + ((item.ai && item.ai.reason) || '内容不符合要求')
-        : '已提交，AI 初审通过，等待管理员审核。';
+        : (item.ai && item.ai.pass === true
+          ? '已提交，AI 初审通过，等待管理员审核。'
+          : '已提交，AI 初审暂不可用，已转人工审核。');
       form.reset();
       loadMine();
     } catch (err) {
