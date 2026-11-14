@@ -645,6 +645,36 @@ footer { margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border);
   .gb-invite-text { font-size: 11.5px; }
 }
 
+/* ===== 系统通知轻提示 ===== */
+.gb-system-toasts {
+  position: fixed;
+  right: 16px;
+  top: 78px;
+  z-index: 10025;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(330px, calc(100vw - 24px));
+}
+.gb-system-toast {
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: 9px;
+  box-shadow: var(--shadow-lg);
+  padding: 9px 11px;
+  cursor: pointer;
+  animation: gbToastIn 0.22s ease-out;
+}
+.gb-system-toast b { display: block; font-size: 0.82rem; margin-bottom: 2px; }
+.gb-system-toast span { display: block; font-size: 0.76rem; color: var(--muted); line-height: 1.5; word-break: break-word; }
+.gb-system-toast:hover { border-color: var(--primary); }
+@keyframes gbToastIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 640px) {
+  .gb-system-toasts { top: 64px; right: 10px; }
+}
+
 /* ===== 响应式 ===== */
 /* 手机 / 平板端：导航栏随页面滚动，与首页保持一致 */
 @media (max-width: 900px) {

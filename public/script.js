@@ -184,6 +184,31 @@ if (toggle) {
     if (activeInvite && activeInvite.id === id) activeInvite.close(false, true);
   }
 
+  function showSystemToast(n) {
+    if (!n || !n.title) return;
+    var host = document.getElementById('gb-system-toasts');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'gb-system-toasts';
+      host.className = 'gb-system-toasts';
+      document.body.appendChild(host);
+    }
+    var box = document.createElement('div');
+    box.className = 'gb-system-toast';
+    var title = document.createElement('b');
+    title.textContent = n.title;
+    var text = document.createElement('span');
+    text.textContent = String(n.content || '').slice(0, 90);
+    box.appendChild(title);
+    box.appendChild(text);
+    box.addEventListener('click', function () {
+      if (typeof n.link === 'string' && n.link.charAt(0) === '/') location.href = n.link;
+      else location.href = '/messages.html';
+    });
+    host.appendChild(box);
+    setTimeout(function () { box.remove(); if (host && !host.children.length) host.remove(); }, 6000);
+  }
+
   function showMajorNotice(n) {
     if (!n || document.querySelector('.gb-major-overlay') || document.querySelector('.gb-invite-banner')) return;
     var overlay = document.createElement('div');
@@ -279,6 +304,9 @@ if (toggle) {
         });
         socket.on('notify:major', function () {
           checkMajorNotices();
+        });
+        socket.on('notify:update', function (n) {
+          showSystemToast(n);
         });
       } catch (e) {}
     }
