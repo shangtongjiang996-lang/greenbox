@@ -591,6 +591,29 @@
       }
     }
 
+    async function autoCompressExistingAvatar(username) {
+      try {
+        const res = await fetch('/api/user/avatar/' + encodeURIComponent(username) + '?t=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        if (blob.size <= 200 * 1024) return;
+        const file = new File([blob], 'avatar.' + (blob.type.split('/')[1] || 'png'), { type: blob.type });
+        const compressed = await compressAvatarFile(file);
+        if (!compressed || compressed.size >= blob.size) return;
+        const fd = new FormData();
+        fd.append('avatar', compressed);
+        const up = await fetch('/api/user/avatar', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: fd
+        });
+        if (up.ok) {
+          currentUser.hasAvatar = true;
+          renderAvatar(username, true);
+        }
+      } catch (e) {}
+    }
+
     function renderProfile(data) {
       document.getElementById('displayNameEl').textContent = data.displayName || data.username;
       document.getElementById('usernameEl').textContent = '@' + data.username;
@@ -604,6 +627,7 @@
       }
 
       renderAvatar(data.username, data.hasAvatar);
+      if (data.hasAvatar) autoCompressExistingAvatar(data.username);
 
       document.getElementById('inputDisplayName').value = data.displayName || '';
       document.getElementById('inputBio').value = data.bio || '';

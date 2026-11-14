@@ -1984,16 +1984,16 @@ app.post('/api/notifications/send', async (req, res) => {
     const isPlayer = Object.values(room.players || {}).some(p => p && p.username === session.username);
     if (!isPlayer) return res.status(403).json({ error: '你不在这个房间里' });
     const roomName = room.name ? `「${room.name}」` : `房间 ${roomId}`;
-    title = `${session.username} 邀请你加入五子棋${roomName}`;
-    content = `${session.username} 在${roomName}等你，点击进入房间。` +
-      (room.password ? ' 房间有密码，请向邀请人询问。' : '');
-    link = `/gomoku-online.html?room=${encodeURIComponent(roomId)}`;
     let roomInvite = room.inviteToken;
     if (!roomInvite && room.password) {
       roomInvite = crypto.randomUUID();
       room.inviteToken = roomInvite;
       await saveRoom(roomId, room);
     }
+    title = `${session.username} 邀请你加入五子棋${roomName}`;
+    content = `${session.username} 在${roomName}等你，点击进入房间。` +
+      (room.password && !roomInvite ? ' 房间有密码，请向邀请人询问。' : '');
+    link = `/gomoku-online.html?room=${encodeURIComponent(roomId)}`;
     if (roomInvite) {
       link += `&invite=${encodeURIComponent(roomInvite)}`;
     }
