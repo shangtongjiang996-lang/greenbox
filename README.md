@@ -8,15 +8,16 @@ GreenBox 是一个综合性的在线站点：工具箱、五子棋联机对战�
 
 | 模块 | 说明 |
 |---|---|
-| 账号 | 注册、登录、会话保持、改密、注销、头像、个人资料 |
-| 工具箱 | 后台可上传单文件 HTML 工具，前台按分类展示，支持收藏与搜索 |
-| 五子棋 | 创建/加入房间、自定义房间名、房间密码、邀请链接、悔棋与重开需对方同意、认输、房间聊天、断线重连、刷新恢复对局；另有 AI 对局：本地战术引擎负责落子与支招，glm-4-flash 负责局势聊天，支持悔棋、棋盘标注和落子动画 |
+| 账号 | 注册、登录、会话保持、改密、注销、头像（大图自动压缩，含历史头像迁移）、个人资料 |
+| 工具箱 | 后台可上传单文件 HTML 工具；用户也可投稿，AI 初审 + 管理员审核，通过后在沙箱中运行；前台按分类展示，支持收藏与搜索 |
+| 五子棋 | 创建/加入房间、自定义房间名、房间密码、邀请链接、从大厅或房间邀请好友、悔棋与重开需对方同意、认输、房间聊天、断线重连、刷新恢复对局；另有 AI 对局：本地战术引擎负责落子与支招，glm-4-flash 负责局势聊天，支持悔棋、棋盘标注和落子动画 |
 | 论坛 | 分类、搜索、排序、发帖（最多 3 图）、评论（最多 2 图）、点赞、收藏、转发、置顶 |
-| 私信 / 好友 | 会话列表、消息撤回、置顶、免打扰、好友申请、拉黑、隐私设置、在线状态；支持文本、图片、视频和文件（单文件最大 200MB，附件 7 天后过期） |
+| 私信 / 好友 | 会话列表、消息撤回、置顶、免打扰、好友申请、拉黑、隐私设置、全站在线状态；支持文本、图片、视频和文件（单文件最大 200MB，附件 7 天后过期） |
 | 资源中心 | B2 直传、分片上传、断点续传与暂停/继续、配额管理、视频/音频/图片在线播放、外链资源、管理员上传 |
 | AI 助手 | 智谱 GLM 流式对话、深度思考、会话历史、每日次数限制、后台可调模型与提示词 |
-| 通知 | 全站广播与定向通知、未读计数；管理员可发“重大通知”，用户上线弹窗提示，可稍后或不再显示；用户可邀请他人下五子棋（每分钟 1 条，每天最多 5 条） |
-| 管理后台 | 工具与更新日志、用户与角色、密码重置、房间管理、AI 配置与配额、通知群发 |
+| 通知 | 全站广播与定向通知、未读计数；管理员可发“重大通知”；五子棋邀请使用顶部倒计时小窗，关闭后跨设备同步且不进后台通知列表 |
+| 反馈 | 用户提交意见与查看进度；后台可忽略、标记完成或未完成，并通知用户处理结果 |
+| 管理后台 | 工具与更新日志、用户与角色、密码重置、房间管理、AI 配置与配额、通知群发、反馈处理、工具投稿审核 |
 
 ## 技术栈
 
@@ -127,7 +128,7 @@ B2_APP_KEY=
 |---|---|
 | 账号 | `POST /api/register`、`POST /api/login`、`GET /api/verify`、`POST /api/logout`、`POST /api/change-my-password` |
 | 用户 | `GET /api/user/me`、`PUT /api/user/profile`、`POST /api/user/avatar`、`GET /api/user/avatar/:username` |
-| 工具 | `GET /api/data`、`POST /api/tool/upload`、`GET /tool/:id` |
+| 工具 | `GET /api/data`、`POST /api/tool/upload`、`GET /tool/:id`、`POST /api/tools/submit`、`GET /api/tools/mine`、`GET /usertool/:id`、`GET /usertool-raw/:id` |
 | 五子棋 | `POST /api/room/create`、`/api/room/join`、`/api/room/leave`、`/api/room/heartbeat`、`GET /api/rooms`、`GET /api/room/:roomId` |
 | 五子棋 AI | `POST /api/gomoku/ai/move`、`POST /api/gomoku/ai/hint`、`POST /api/gomoku/ai/chat`（落子/支招为本地战术引擎，聊天为 glm-4-flash；每日 60 次，管理员不限） |
 | 论坛 | `GET /api/forum/posts`、`GET /api/forum/posts/:id`、`POST /api/forum/posts`、`POST /api/forum/posts/:id/comments`、`POST /api/forum/posts/:id/like` |
@@ -136,7 +137,8 @@ B2_APP_KEY=
 | 私信附件 | `POST /api/dm/upload-url`、`GET /api/dm/attachment/:convId/:msgId` |
 | AI | `GET /api/chat/config`、`GET /api/chat/quota`、`GET/POST /api/chat/sessions`、`POST /api/chat/stream` |
 | 通知 | `GET /api/notifications`、`POST /api/notifications/read`、`GET /api/notifications/unread-count`、`GET /api/notifications/major`、`POST /api/notifications/send` |
-| 后台 | `/api/admin/*`，均需管理员会话 |
+| 反馈 | `POST /api/feedback`、`GET /api/feedback/mine`、`GET /api/admin/feedback`、`POST /api/admin/feedback/:id` |
+| 后台 | `/api/admin/*`，均需管理员会话；工具审核为 `GET /api/admin/tool-submissions`、`GET /api/admin/tool-submissions/:id/content`、`POST /api/admin/tool-submissions/:id/review` |
 | 快捷上传 | `POST /api/tool/quick-key`、`POST /api/tool/quick-upload`、`GET /api/admin/tool-upload/status`、`POST /api/admin/tool-upload/password`、`POST /api/admin/tool-upload/key` |
 
 ### 快捷工具上传

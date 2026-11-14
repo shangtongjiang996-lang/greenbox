@@ -502,7 +502,8 @@ async function compressAvatarBuffer(buffer, mime) {
     const needCompress = buffer.length > AVATAR_COMPRESS_BYTES ||
       (meta.width && meta.width > 512) || (meta.height && meta.height > 512);
     if (!needCompress) return null;
-    const out = await image
+    const out = await sharpAvatar(buffer, { animated: false })
+      .rotate()
       .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 82 })
       .toBuffer();
