@@ -734,6 +734,18 @@ app.get('/api/tools/mine', async (req, res) => {
   res.json(list.filter(x => x.username === session.username).sort((a, b) => b.createdAt - a.createdAt));
 });
 
+app.delete('/api/tools/mine/:id', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const list = (await kvGet('tool_submissions')) || [];
+  const item = list.find(x => x.id === req.params.id);
+  if (!item || item.username !== session.username) return res.status(404).json({ error: '投稿不存在' });
+  if (item.status === 'approved') return res.status(400).json({ error: '已上线的工具不能自行撤回' });
+  await kvDelete(`tool_sub_content:${item.id}`);
+  await kvPut('tool_submissions', list.filter(x => x.id !== item.id));
+  res.json({ success: true });
+});
+
 app.get('/api/admin/tool-submissions', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const list = (await kvGet('tool_submissions')) || [];
@@ -2058,6 +2070,16 @@ app.get('/api/feedback/mine', async (req, res) => {
   if (!session) return res.status(401).json({ error: '请先登录' });
   const list = (await kvGet('feedback')) || [];
   res.json(list.filter(f => f.username === session.username).sort((a, b) => b.createdAt - a.createdAt));
+});
+
+app.delete('/api/feedback/:id', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const list = (await kvGet('feedback')) || [];
+  const item = list.find(f => f.id === req.params.id);
+  if (!item || item.username !== session.username) return res.status(404).json({ error: '反馈不存在' });
+  await kvPut('feedback', list.filter(f => f.id !== item.id));
+  res.json({ success: true });
 });
 
 app.get('/api/admin/feedback', async (req, res) => {
