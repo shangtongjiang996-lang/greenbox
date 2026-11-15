@@ -56,6 +56,8 @@
   .quota-bar span { display: block; height: 100%; width: 0; background: var(--primary); border-radius: 999px; transition: width 0.25s; }
   .drop-zone { border: 1.5px dashed var(--border); border-radius: 10px; padding: 12px; text-align: center; color: var(--muted); font-size: 12.5px; margin-bottom: 10px; transition: all 0.2s; }
   .drop-zone.dragover { border-color: var(--primary); background: var(--bg-alt); color: var(--primary); }
+  .res-toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); background: #0f172a; color: #fff; border-radius: 999px; padding: 8px 18px; font-size: 13px; z-index: 9999; box-shadow: 0 8px 25px rgba(0,0,0,.25); opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .res-toast.show { opacity: 1; }
 
   .res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
   .res-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; position: relative; }
@@ -821,12 +823,26 @@
       </div>`;
   }
 
+  function showResToast(message) {
+    let el = document.getElementById('resToast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'resToast';
+      el.className = 'res-toast';
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(showResToast.timer);
+    showResToast.timer = setTimeout(function () { el.classList.remove('show'); }, 1800);
+  }
+
   function copyResourceLink(id) {
     const item = resItemMap.get(id);
     if (!item || !item.playUrl) return;
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(item.playUrl).then(function () {
-        setUploadStatus('链接已复制，7 天内有效');
+        showResToast('链接已复制，7 天内有效');
       }).catch(function () {
         prompt('复制链接', item.playUrl);
       });
