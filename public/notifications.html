@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>通知中心 - GreenBox</title>
+<meta name="description" content="GreenBox 通知中心：分类查看消息、设置通知偏好、开启浏览器推送。">
+<link rel="stylesheet" href="/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#22c55e">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  .nt-wrap { max-width: 860px; margin: 0 auto; padding: 1.6rem 1.25rem 3rem; }
+  .nt-head h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .nt-head p { color: var(--muted); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.2rem; }
+  .nt-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.1rem; margin-bottom: 1rem; }
+  .nt-card h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
+  .nt-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+  .nt-tab { border: 1px solid var(--border); background: transparent; color: var(--muted); border-radius: 999px; padding: 0.32rem 0.75rem; font-family: inherit; font-size: 0.78rem; cursor: pointer; }
+  .nt-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .nt-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+  .nt-summary { color: var(--muted); font-size: 0.78rem; }
+  .nt-toolbar button { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 7px; padding: 0.32rem 0.7rem; font-family: inherit; font-size: 0.78rem; cursor: pointer; }
+  .nt-toolbar button:hover { border-color: var(--primary); color: var(--primary); }
+  .nt-list { display: flex; flex-direction: column; gap: 0.45rem; }
+  .nt-item { position: relative; border: 1px solid var(--border); border-radius: 9px; padding: 0.7rem 0.8rem; background: var(--bg-alt); }
+  .nt-item.unread { border-left: 3px solid var(--primary); background: var(--card-bg); }
+  .nt-item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.25rem; }
+  .nt-item-title { font-size: 0.88rem; font-weight: 700; line-height: 1.5; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  .nt-item-time { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+  .nt-item-body { color: var(--muted); font-size: 0.82rem; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  .nt-cat { font-size: 0.68rem; font-weight: 700; border-radius: 999px; padding: 2px 7px; white-space: nowrap; }
+  .nt-cat.system { background: #e0e7ff; color: #3730a3; }
+  .nt-cat.social { background: #cffafe; color: #155e75; }
+  .nt-cat.game { background: #dcfce7; color: #166534; }
+  .nt-cat.review { background: #fef3c7; color: #854d0e; }
+  .nt-cat.feedback { background: #fce7f3; color: #9d174d; }
+  .nt-item-actions { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.45rem; flex-wrap: wrap; }
+  .nt-item-actions a, .nt-item-actions button { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 6px; padding: 0.22rem 0.55rem; font-family: inherit; font-size: 0.74rem; text-decoration: none; cursor: pointer; }
+  .nt-item-actions a:hover, .nt-item-actions button:hover { border-color: var(--primary); color: var(--primary); }
+  .nt-empty { text-align: center; color: var(--muted); font-size: 0.86rem; padding: 1.5rem 0; }
+  .nt-note { color: var(--muted); font-size: 0.78rem; line-height: 1.7; }
+  .nt-pref-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.7rem; }
+  .nt-pref { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; border: 1px solid var(--border); border-radius: 8px; padding: 0.55rem 0.65rem; font-size: 0.82rem; }
+  .nt-pref small { color: var(--muted); display: block; font-size: 0.72rem; margin-top: 2px; }
+  .nt-switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; }
+  .nt-switch input { opacity: 0; width: 0; height: 0; }
+  .nt-switch span { position: absolute; inset: 0; background: var(--border); border-radius: 999px; cursor: pointer; transition: 0.2s; }
+  .nt-switch span::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
+  .nt-switch input:checked + span { background: var(--primary); }
+  .nt-switch input:checked + span::before { transform: translateX(16px); }
+  .nt-push-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.7rem; }
+  .nt-push-actions button { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 7px; padding: 0.4rem 0.8rem; font-family: inherit; font-size: 0.8rem; cursor: pointer; }
+  .nt-push-actions button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .nt-push-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .nt-push-status { margin-top: 0.5rem; border-radius: 7px; padding: 0.5rem 0.65rem; background: var(--bg-alt); color: var(--muted); font-size: 0.8rem; line-height: 1.6; }
+  .nt-status { color: var(--primary); font-size: 0.78rem; min-height: 18px; margin-top: 0.35rem; }
+  .nt-gate { display: none; text-align: center; padding: 2rem 1rem; }
+  .nt-gate.show { display: block; }
+  .nt-gate a { display: inline-block; margin-top: 0.7rem; background: var(--primary); color: #fff; padding: 0.5rem 1.2rem; border-radius: 8px; text-decoration: none; font-weight: 700; }
+  @media (max-width: 640px) { .nt-pref-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<main class="nt-wrap">
+  <div class="nt-head">
+    <h1>通知中心</h1>
+    <p>按类型查看消息，设置哪些通知弹窗或推送到浏览器。静音只影响提醒，消息仍会保留在通知中心。</p>
+  </div>
+
+  <div class="nt-gate" id="ntGate">
+    <p style="color:var(--muted);">登录后才能查看通知和设置推送。</p>
+    <a href="/login.html?redirect=%2Fnotifications.html">去登录</a>
+  </div>
+
+  <div id="ntMain">
+    <div class="nt-card">
+      <div class="nt-tabs" id="ntTabs">
+        <button class="nt-tab active" data-cat="all" type="button">全部</button>
+        <button class="nt-tab" data-cat="system" type="button">系统</button>
+        <button class="nt-tab" data-cat="social" type="button">好友与私信</button>
+        <button class="nt-tab" data-cat="game" type="button">五子棋</button>
+        <button class="nt-tab" data-cat="review" type="button">工具审核</button>
+        <button class="nt-tab" data-cat="feedback" type="button">反馈</button>
+      </div>
+      <div class="nt-toolbar">
+        <span class="nt-summary" id="ntSummary">加载中...</span>
+        <button id="ntReadAll" type="button">全部已读</button>
+      </div>
+      <div class="nt-list" id="ntList"><div class="nt-empty">加载中...</div></div>
+      <div class="nt-status" id="ntStatus"></div>
+    </div>
+
+    <div class="nt-card">
+      <h2>通知偏好</h2>
+      <p class="nt-note">关闭某一类后，该类不再弹窗或推送，但消息仍可在上方查看。</p>
+      <div class="nt-pref-grid" id="ntPrefs"></div>
+      <div class="nt-status" id="ntPrefsStatus"></div>
+    </div>
+
+    <div class="nt-card">
+      <h2>浏览器推送</h2>
+      <p class="nt-note">开启后，即使没有打开 GreenBox，也能收到工具审核、五子棋邀请和反馈结果。需要浏览器允许通知。</p>
+      <div class="nt-push-status" id="ntPushStatus">正在检测...</div>
+      <div class="nt-push-actions">
+        <button class="primary" id="ntPushEnable" type="button">开启推送</button>
+        <button id="ntPushDisable" type="button">关闭推送</button>
+        <button id="ntPushTest" type="button">发送测试</button>
+      </div>
+      <div class="nt-status" id="ntPushResult"></div>
+    </div>
+  </div>
+</main>
+
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var token = '';
+  try { token = localStorage.getItem('greenbox_token') || ''; } catch (e) {}
+
+  var gate = document.getElementById('ntGate');
+  var main = document.getElementById('ntMain');
+  var listEl = document.getElementById('ntList');
+  var summaryEl = document.getElementById('ntSummary');
+  var statusEl = document.getElementById('ntStatus');
+  var prefsEl = document.getElementById('ntPrefs');
+  var prefsStatusEl = document.getElementById('ntPrefsStatus');
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.nt-tab'));
+  var currentCategory = 'all';
+  var prefs = { system: true, social: true, game: true, review: true, feedback: true, push: true };
+  var categoryLabels = { system: '系统', social: '好友与私信', game: '五子棋', review: '工具审核', feedback: '反馈' };
+
+  if (!token) {
+    gate.classList.add('show');
+    main.style.display = 'none';
+    return;
+  }
+
+  function api(path, options) {
+    var opts = options || {};
+    var headers = Object.assign({ 'Authorization': 'Bearer ' + token }, opts.headers || {});
+    return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
+      return res.text().then(function (text) {
+        var data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (e) {}
+        if (!res.ok) throw new Error(data.error || ('请求失败 ' + res.status));
+        return data;
+      });
+    });
+  }
+
+  function timeAgo(ts) {
+    var d = Date.now() - ts;
+    if (d < 60000) return '刚刚';
+    if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前';
+    if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前';
+    if (d < 604800000) return Math.floor(d / 86400000) + ' 天前';
+    var date = new Date(ts);
+    return (date.getMonth() + 1) + '/' + date.getDate() + ' ' + date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');
+  }
+
+  function setStatus(text) {
+    statusEl.textContent = text || '';
+  }
+
+  function renderPrefs() {
+    prefsEl.innerHTML = '';
+    ['system', 'social', 'game', 'review', 'feedback'].forEach(function (key) {
+      var row = document.createElement('label');
+      row.className = 'nt-pref';
+      var info = document.createElement('span');
+      var title = document.createElement('span');
+      title.textContent = categoryLabels[key];
+      var small = document.createElement('small');
+      small.textContent = key === 'social' ? '好友申请、私信提醒' : (key === 'game' ? '邀请与棋局' : (key === 'review' ? '工具审核结果' : (key === 'feedback' ? '反馈处理结果' : '管理员公告')));
+      info.appendChild(title);
+      info.appendChild(small);
+      var sw = document.createElement('span');
+      sw.className = 'nt-switch';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = prefs[key] !== false;
+      input.addEventListener('change', function () {
+        prefs[key] = input.checked;
+        savePrefs();
+      });
+      var slider = document.createElement('span');
+      sw.appendChild(input);
+      sw.appendChild(slider);
+      row.appendChild(info);
+      row.appendChild(sw);
+      prefsEl.appendChild(row);
+    });
+  }
+
+  async function loadPrefs() {
+    try {
+      var data = await api('/api/notifications/preferences');
+      prefs = Object.assign(prefs, data.preferences || {});
+      renderPrefs();
+    } catch (e) {
+      prefsStatusEl.textContent = '偏好加载失败：' + e.message;
+    }
+  }
+
+  var saveTimer = null;
+  function savePrefs() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(async function () {
+      try {
+        await api('/api/notifications/preferences', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ preferences: prefs })
+        });
+        prefsStatusEl.textContent = '偏好已保存';
+      } catch (e) {
+        prefsStatusEl.textContent = '保存失败：' + e.message;
+      }
+    }, 250);
+  }
+
+  function renderList(list) {
+    listEl.innerHTML = '';
+    var unread = list.filter(function (n) { return !n.read; }).length;
+    summaryEl.textContent = '共 ' + list.length + ' 条，未读 ' + unread + ' 条';
+    if (!list.length) {
+      listEl.innerHTML = '<div class="nt-empty">这个分类还没有消息</div>';
+      return;
+    }
+
+    list.forEach(function (n) {
+      var item = document.createElement('div');
+      item.className = 'nt-item' + (n.read ? '' : ' unread');
+      var head = document.createElement('div');
+      head.className = 'nt-item-head';
+      var title = document.createElement('div');
+      title.className = 'nt-item-title';
+      var cat = document.createElement('span');
+      cat.className = 'nt-cat ' + (n.category || 'system');
+      cat.textContent = categoryLabels[n.category] || '系统';
+      var titleText = document.createElement('span');
+      titleText.textContent = n.title;
+      title.appendChild(cat);
+      title.appendChild(titleText);
+      var time = document.createElement('span');
+      time.className = 'nt-item-time';
+      time.textContent = timeAgo(n.createdAt);
+      head.appendChild(title);
+      head.appendChild(time);
+
+      var body = document.createElement('div');
+      body.className = 'nt-item-body';
+      body.textContent = n.content;
+
+      var actions = document.createElement('div');
+      actions.className = 'nt-item-actions';
+      if (n.link && n.link.charAt(0) === '/') {
+        var link = document.createElement('a');
+        link.href = n.link;
+        link.textContent = '查看';
+        actions.appendChild(link);
+      }
+      if (!n.read) {
+        var mark = document.createElement('button');
+        mark.type = 'button';
+        mark.textContent = '标记已读';
+        mark.addEventListener('click', async function (e) {
+          e.stopPropagation();
+          try {
+            await api('/api/notifications/read', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids: [n.id] })
+            });
+            setStatus('已标记为已读');
+            loadList();
+          } catch (err) { setStatus(err.message); }
+        });
+        actions.appendChild(mark);
+      }
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = '删除';
+      del.addEventListener('click', async function (e) {
+        e.stopPropagation();
+        try {
+          await api('/api/notifications/' + encodeURIComponent(n.id), { method: 'DELETE' });
+          setStatus('已删除');
+          loadList();
+        } catch (err) { setStatus(err.message); }
+      });
+      actions.appendChild(del);
+
+      item.appendChild(head);
+      item.appendChild(body);
+      item.appendChild(actions);
+      listEl.appendChild(item);
+    });
+  }
+
+  async function loadList() {
+    setStatus('');
+    listEl.innerHTML = '<div class="nt-empty">加载中...</div>';
+    try {
+      var query = currentCategory === 'all' ? '' : ('?category=' + encodeURIComponent(currentCategory));
+      var list = await api('/api/notifications' + query);
+      renderList(list);
+    } catch (e) {
+      listEl.innerHTML = '<div class="nt-empty">加载失败：' + e.message + '</div>';
+    }
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) { t.classList.toggle('active', t === tab); });
+      currentCategory = tab.dataset.cat;
+      loadList();
+    });
+  });
+
+  document.getElementById('ntReadAll').addEventListener('click', async function () {
+    try {
+      await api('/api/notifications/read-all', { method: 'POST' });
+      setStatus('全部标记为已读');
+      loadList();
+    } catch (e) { setStatus(e.message); }
+  });
+
+  // ===== 浏览器推送 =====
+  var pushSupported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+  var pushStatusEl = document.getElementById('ntPushStatus');
+  var pushResultEl = document.getElementById('ntPushResult');
+  var pushEnableBtn = document.getElementById('ntPushEnable');
+  var pushDisableBtn = document.getElementById('ntPushDisable');
+  var pushTestBtn = document.getElementById('ntPushTest');
+
+  function setPushStatus(text) { pushStatusEl.textContent = text; }
+  function setPushResult(text) { pushResultEl.textContent = text || ''; }
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+  }
+
+  async function getRegistration() {
+    await navigator.serviceWorker.register('/sw.js');
+    return Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error('Service Worker 启动超时')); }, 8000);
+      })
+    ]);
+  }
+
+  async function refreshPushState() {
+    if (!pushSupported) {
+      setPushStatus('当前浏览器不支持 Web Push。可以继续使用站内通知和在线提示。');
+      pushEnableBtn.disabled = true;
+      pushDisableBtn.disabled = true;
+      pushTestBtn.disabled = true;
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      setPushStatus('浏览器已禁止通知，请到浏览器设置里允许 GreenBox 的通知。');
+      pushEnableBtn.disabled = true;
+    }
+    try {
+      var reg = await getRegistration();
+      var sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        setPushStatus('推送已开启，当前浏览器会接收通知。');
+        pushEnableBtn.disabled = true;
+        pushDisableBtn.disabled = false;
+        pushTestBtn.disabled = false;
+      } else {
+        setPushStatus(Notification.permission === 'denied' ? '浏览器通知权限被拒绝。' : '推送未开启。');
+        pushEnableBtn.disabled = false;
+        pushDisableBtn.disabled = true;
+        pushTestBtn.disabled = true;
+      }
+    } catch (e) {
+      setPushStatus('推送状态检测失败：' + e.message);
+    }
+  }
+
+  pushEnableBtn.addEventListener('click', async function () {
+    setPushResult('');
+    try {
+      var permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPushStatus('没有获得通知权限，无法开启推送。');
+        return;
+      }
+      var keyData = await api('/api/push/public-key');
+      var reg = await getRegistration();
+      var sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
+      });
+      await api('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: sub.toJSON ? sub.toJSON() : sub })
+      });
+      setPushResult('推送已开启');
+      await refreshPushState();
+    } catch (e) {
+      setPushResult('开启失败：' + e.message);
+    }
+  });
+
+  pushDisableBtn.addEventListener('click', async function () {
+    setPushResult('');
+    try {
+      var reg = await getRegistration();
+      var sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        var endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        await api('/api/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: endpoint })
+        });
+      }
+      setPushResult('推送已关闭');
+      await refreshPushState();
+    } catch (e) {
+      setPushResult('关闭失败：' + e.message);
+    }
+  });
+
+  pushTestBtn.addEventListener('click', async function () {
+    setPushResult('');
+    try {
+      var data = await api('/api/push/test', { method: 'POST' });
+      setPushResult(data.sent > 0 ? '测试通知已发送，请查看浏览器通知。' : '没有可用的推送订阅，请先开启推送。');
+    } catch (e) {
+      setPushResult('发送失败：' + e.message);
+    }
+  });
+
+  loadPrefs();
+  loadList();
+  refreshPushState();
+})();
+</script>
+</body>
+</html>

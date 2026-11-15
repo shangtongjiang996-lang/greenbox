@@ -63,6 +63,7 @@ app.get('/sitemap.xml', (req, res) => {
     '/other.html',
     '/feedback.html',
     '/submit-tool.html',
+    '/notifications.html',
     '/login.html',
     '/register.html'
   ];
@@ -433,6 +434,8 @@ app.post('/api/delete-account', async (req, res) => {
   await kvDelete(`user_avatar:${session.username}`);
   await kvDelete(`notif_read:${session.username}`);
   await kvDelete(`notif_deleted:${session.username}`);
+  await kvDelete(`notif_prefs:${session.username}`);
+  await kvDelete(`push_subs:${session.username}`);
   await kvDelete(`chat_sessions:${session.username}`);
   await kvDelete(`chat_limit:${session.username}`);
   
@@ -2231,6 +2234,51 @@ function genNotifId() {
   return 'N' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+const NOTIF_CATEGORY_KEYS = ['system', 'social', 'game', 'review', 'feedback'];
+const DEFAULT_NOTIF_PREFS = {
+  system: true,
+  social: true,
+  game: true,
+  review: true,
+  feedback: true,
+  push: true,
+};
+
+function notifCategory(n) {
+  if (n && NOTIF_CATEGORY_KEYS.includes(n.category)) return n.category;
+  if (!n) return 'system';
+  if (n.kind === 'gomoku') return 'game';
+  if (n.kind === 'tool') return 'review';
+  if (n.kind === 'feedback') return 'feedback';
+  if (n.kind === 'social') return 'social';
+  return 'system';
+}
+
+function normalizeNotifPrefs(raw) {
+  const out = Object.assign({}, DEFAULT_NOTIF_PREFS);
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const key of NOTIF_CATEGORY_KEYS) {
+      if (typeof raw[key] === 'boolean') out[key] = raw[key];
+    }
+    if (typeof raw.push === 'boolean') out.push = raw.push;
+  }
+  return out;
+}
+
+async function getNotifPrefs(username) {
+  return normalizeNotifPrefs(await kvGet(`notif_prefs:${username}`));
+}
+
+async function saveNotifPrefs(username, prefs) {
+  const normalized = normalizeNotifPrefs(prefs);
+  await kvPut(`notif_prefs:${username}`, normalized);
+  return normalized;
+}
+
+function notifCategoryEnabled(prefs, category) {
+  return prefs[category] !== false;
+}
+
 async function getUserNotifications(username) {
   const all = (await kvGet('notifications')) || [];
   const readList = (await kvGet(`notif_read:${username}`)) || [];
@@ -2253,17 +2301,115 @@ async function getUserNotifications(username) {
       sender: n.sender || 'admin',
       major: !!n.major,
       kind: n.kind || '',
+      category: notifCategory(n),
       link: n.link || '',
       read: readSet.has(n.id),
     }))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+let webPushLib = null;
+let vapidCache = null;
+
+function getWebPush() {
+  if (webPushLib) return webPushLib;
+  try {
+    webPushLib = require('web-push');
+  } catch (e) {
+    console.warn('web-push 未安装，浏览器推送不可用');
+    webPushLib = null;
+  }
+  return webPushLib;
+}
+
+async function getVapidKeys() {
+  const wp = getWebPush();
+  if (!wp) return null;
+  if (vapidCache) return vapidCache;
+
+  const envPublic = String(process.env.VAPID_PUBLIC_KEY || '').trim();
+  const envPrivate = String(process.env.VAPID_PRIVATE_KEY || '').trim();
+  let keys = null;
+  if (envPublic && envPrivate) {
+    keys = { publicKey: envPublic, privateKey: envPrivate };
+  } else {
+    keys = await kvGet('push_vapid');
+    if (!keys || !keys.publicKey || !keys.privateKey) {
+      keys = wp.generateVAPIDKeys();
+      await kvPut('push_vapid', keys);
+    }
+  }
+
+  const subject = String(process.env.VAPID_SUBJECT || 'mailto:admin@greenboxhweb.com').trim();
+  wp.setVapidDetails(subject, keys.publicKey, keys.privateKey);
+  vapidCache = keys;
+  return keys;
+}
+
+async function getPushSubs(username) {
+  const list = await kvGet(`push_subs:${username}`);
+  return Array.isArray(list) ? list : [];
+}
+
+async function savePushSubs(username, list) {
+  await kvPut(`push_subs:${username}`, list.slice(-8));
+}
+
+async function sendPushToUser(username, notif, options) {
+  const force = !!(options && options.force);
+  const wp = getWebPush();
+  if (!wp) return 0;
+  const category = notifCategory(notif);
+  if (!force) {
+    const prefs = await getNotifPrefs(username);
+    if (prefs.push === false || !notifCategoryEnabled(prefs, category)) return 0;
+  }
+  const keys = await getVapidKeys();
+  if (!keys) return 0;
+  const subs = await getPushSubs(username);
+  if (!subs.length) return 0;
+
+  const payload = JSON.stringify({
+    title: String(notif.title || 'GreenBox 通知').slice(0, 100),
+    body: String(notif.content || '').slice(0, 240),
+    url: typeof notif.link === 'string' && notif.link.startsWith('/') ? notif.link : '/notifications.html',
+    id: notif.id || '',
+    category,
+  });
+
+  let sent = 0;
+  let changed = false;
+  const kept = [];
+  for (const sub of subs) {
+    try {
+      await wp.sendNotification(sub, payload, { TTL: 86400, urgency: 'normal' });
+      sent += 1;
+      kept.push(sub);
+    } catch (e) {
+      if (e && (e.statusCode === 404 || e.statusCode === 410)) changed = true;
+      else kept.push(sub);
+    }
+  }
+  if (changed) await savePushSubs(username, kept);
+  return sent;
+}
+
+async function sendPushToAll(notif) {
+  const users = (await kvGet('users')) || {};
+  const names = Object.keys(users).slice(0, 2000);
+  await Promise.allSettled(names.map(name => sendPushToUser(name, notif)));
+}
+
 app.get('/api/notifications', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
-  const list = await getUserNotifications(session.username);
+  const category = String(req.query.category || '');
+  if (category && !NOTIF_CATEGORY_KEYS.includes(category)) {
+    return res.status(400).json({ error: '通知分类无效' });
+  }
+  let list = await getUserNotifications(session.username);
+  if (category) list = list.filter(n => n.category === category);
   res.json(list);
 });
 
@@ -2271,7 +2417,12 @@ app.get('/api/notifications/unread-count', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
-  const list = await getUserNotifications(session.username);
+  const category = String(req.query.category || '');
+  if (category && !NOTIF_CATEGORY_KEYS.includes(category)) {
+    return res.status(400).json({ error: '通知分类无效' });
+  }
+  let list = await getUserNotifications(session.username);
+  if (category) list = list.filter(n => n.category === category);
   const unread = list.filter(n => !n.read).length;
   res.json({ count: unread });
 });
@@ -2281,9 +2432,94 @@ app.get('/api/notifications/major', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
+  const prefs = await getNotifPrefs(session.username);
   const list = await getUserNotifications(session.username);
   const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
-  res.json(list.filter(n => n.major && !(n.kind === 'gomoku' && n.read) && n.createdAt > cutoff).slice(0, 20));
+  res.json(list.filter(n =>
+    n.major &&
+    !(n.kind === 'gomoku' && n.read) &&
+    n.createdAt > cutoff &&
+    notifCategoryEnabled(prefs, n.category)
+  ).slice(0, 20));
+});
+
+app.get('/api/notifications/preferences', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  res.json({ preferences: await getNotifPrefs(session.username) });
+});
+
+app.put('/api/notifications/preferences', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const body = req.body || {};
+  const raw = body.preferences && typeof body.preferences === 'object' ? body.preferences : body;
+  const prefs = await saveNotifPrefs(session.username, raw);
+  res.json({ success: true, preferences: prefs });
+});
+
+function validPushSubscription(sub) {
+  return !!(
+    sub &&
+    typeof sub.endpoint === 'string' &&
+    /^https:\/\//.test(sub.endpoint) &&
+    sub.endpoint.length <= 3000 &&
+    sub.keys &&
+    typeof sub.keys.p256dh === 'string' &&
+    typeof sub.keys.auth === 'string' &&
+    sub.keys.p256dh.length <= 500 &&
+    sub.keys.auth.length <= 200
+  );
+}
+
+app.get('/api/push/public-key', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const push = getWebPush();
+  if (push) {
+    res.set('Cache-Control', 'no-store');
+    res.json({ publicKey: (await getVapidKeys()).publicKey });
+  } else {
+    res.status(503).json({ error: '浏览器推送暂不可用' });
+  }
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const sub = (req.body && (req.body.subscription || req.body)) || null;
+  if (!validPushSubscription(sub)) return res.status(400).json({ error: '推送订阅无效' });
+  const list = await getPushSubs(session.username);
+  const next = list.filter(x => x && x.endpoint !== sub.endpoint);
+  next.push({
+    endpoint: sub.endpoint,
+    expirationTime: sub.expirationTime || null,
+    keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+  });
+  await savePushSubs(session.username, next);
+  res.json({ success: true });
+});
+
+app.post('/api/push/unsubscribe', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const endpoint = String((req.body && req.body.endpoint) || '');
+  const list = await getPushSubs(session.username);
+  await savePushSubs(session.username, list.filter(x => x && x.endpoint !== endpoint));
+  res.json({ success: true });
+});
+
+app.post('/api/push/test', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const sent = await sendPushToUser(session.username, {
+    id: genNotifId(),
+    title: 'GreenBox 推送测试',
+    content: '如果你看到这条通知，说明浏览器推送已经配置成功。',
+    link: '/notifications.html',
+    category: 'system',
+  }, { force: true });
+  res.json({ success: true, sent });
 });
 
 // 用户给指定用户发送“一起下五子棋”通知
@@ -2349,17 +2585,23 @@ app.post('/api/notifications/send', async (req, res) => {
     sender: session.username,
     major: true,
     kind: 'gomoku',
+    category: 'game',
     link,
     createdAt: Date.now(),
   };
   const list = (await kvGet('notifications')) || [];
   list.push(notif);
   await kvPut('notifications', list.slice(-500));
-  try { emitToUser(io, to, 'notify:major', notif); } catch (e) {}
+  const prefs = await getNotifPrefs(to);
+  if (notifCategoryEnabled(prefs, 'game')) {
+    try { emitToUser(io, to, 'notify:major', notif); } catch (e) {}
+    if (prefs.push !== false) sendPushToUser(to, notif).catch(e => console.error('push error:', e.message));
+  }
   res.json({ success: true, notification: notif, remaining: Math.max(0, 5 - dayCount) });
 });
 
 async function pushSystemNotification(target, title, content, type, kind, link) {
+  const category = notifCategory({ kind });
   const notif = {
     id: genNotifId(),
     title: String(title || '系统通知').replace(/[<>]/g, '').slice(0, 100),
@@ -2369,13 +2611,20 @@ async function pushSystemNotification(target, title, content, type, kind, link) 
     sender: 'admin',
     major: false,
     kind: kind || 'system',
+    category,
     link: typeof link === 'string' && link.startsWith('/') ? link : '',
     createdAt: Date.now(),
   };
   const list = (await kvGet('notifications')) || [];
   list.push(notif);
   await kvPut('notifications', list.slice(-500));
-  try { emitToUser(io, target, 'notify:update', notif); } catch (e) {}
+  const prefs = await getNotifPrefs(target);
+  if (notifCategoryEnabled(prefs, category)) {
+    try { emitToUser(io, target, 'notify:update', notif); } catch (e) {}
+  }
+  if (prefs.push !== false && notifCategoryEnabled(prefs, category)) {
+    sendPushToUser(target, notif).catch(e => console.error('push error:', e.message));
+  }
   return notif;
 }
 
@@ -2531,6 +2780,7 @@ app.post('/api/admin/notifications', async (req, res) => {
     target: target || 'all',
     sender: 'admin',
     major: !!major,
+    category: 'system',
     link: typeof link === 'string' && link.startsWith('/') ? link.slice(0, 200) : '',
     createdAt: Date.now(),
   };
@@ -2544,6 +2794,27 @@ app.post('/api/admin/notifications', async (req, res) => {
   list.push(notif);
   const trimmed = list.slice(-500);
   await kvPut('notifications', trimmed);
+
+  if (notif.target === 'all') {
+    kvGet('users').then(users => {
+      const names = Object.keys(users || {});
+      for (const name of names) {
+        getNotifPrefs(name).then(prefs => {
+          if (notif.major && notifCategoryEnabled(prefs, 'system')) {
+            try { emitToUser(io, name, 'notify:major', notif); } catch (e) {}
+          }
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+    sendPushToAll(notif).catch(e => console.error('push all error:', e.message));
+  } else {
+    getNotifPrefs(notif.target).then(prefs => {
+      if (notif.major && notifCategoryEnabled(prefs, 'system')) {
+        try { emitToUser(io, notif.target, 'notify:major', notif); } catch (e) {}
+      }
+    }).catch(() => {});
+    sendPushToUser(notif.target, notif).catch(e => console.error('push error:', e.message));
+  }
   res.json({ success: true, notification: notif });
 });
 

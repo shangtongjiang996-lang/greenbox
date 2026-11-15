@@ -320,11 +320,19 @@ if (toggle) {
     document.head.appendChild(script);
   }
 
+  function setupServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    });
+  }
+
   function boot() {
     setupNav();
     setupTour();
     setupMajorNotices();
     setupPresence();
+    setupServiceWorker();
   }
 
   if (document.readyState === 'loading') {
