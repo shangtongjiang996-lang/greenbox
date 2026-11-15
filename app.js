@@ -2459,7 +2459,7 @@ app.put('/api/notifications/preferences', async (req, res) => {
 });
 
 function validPushSubscription(sub) {
-  return !!(
+  if (!(
     sub &&
     typeof sub.endpoint === 'string' &&
     /^https:\/\//.test(sub.endpoint) &&
@@ -2469,7 +2469,21 @@ function validPushSubscription(sub) {
     typeof sub.keys.auth === 'string' &&
     sub.keys.p256dh.length <= 500 &&
     sub.keys.auth.length <= 200
-  );
+  )) return false;
+
+  let host = '';
+  try { host = new URL(sub.endpoint).hostname.toLowerCase(); } catch (e) { return false; }
+  const allowedHosts = [
+    'fcm.googleapis.com',
+    'android.googleapis.com',
+    'updates.push.services.mozilla.com',
+    'push.services.mozilla.com',
+    'web.push.apple.com',
+  ];
+  if (allowedHosts.includes(host)) return true;
+  if (host.endsWith('.push.apple.com')) return true;
+  if (host.endsWith('.notify.windows.com')) return true;
+  return false;
 }
 
 app.get('/api/push/public-key', async (req, res) => {
