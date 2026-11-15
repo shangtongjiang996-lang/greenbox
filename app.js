@@ -134,6 +134,10 @@ const upload = multer({
   storage: multer.memoryStorage(), 
   limits: { fileSize: 50 * 1024 * 1024 } // 限制最大 50MB，防止撑爆 Render 内存
 });
+const backupUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 80 * 1024 * 1024 },
+});
 
 // ======== 辅助函数 ========
 const SESSION_TTL = 7 * 24 * 60 * 60;
@@ -2956,7 +2960,7 @@ app.post('/api/admin/backup/restore',
     if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
     next();
   },
-  upload.single('file'),
+  backupUpload.single('file'),
   async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   if (!req.file) return res.status(400).json({ error: '请选择备份 JSON 文件' });
