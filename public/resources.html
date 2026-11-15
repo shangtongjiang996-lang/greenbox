@@ -37,6 +37,24 @@
   .cat-tab { padding: 8px 16px; border-radius: 20px; background: var(--card-bg); border: 1px solid var(--border); cursor: pointer; color: var(--muted); font-weight: 500; white-space: nowrap; transition: all 0.2s; }
   .cat-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
 
+  .res-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .res-tools input, .res-tools select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg); color: var(--text); font-family: inherit; font-size: 13px; outline: none; }
+  .res-tools input { flex: 1; min-width: 180px; }
+  .res-tools input:focus, .res-tools select:focus { border-color: var(--primary); }
+  .res-count { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .res-more { display: flex; justify-content: center; margin: 6px 0 20px; }
+  .res-more button { border: 1px solid var(--border); background: var(--card-bg); color: var(--text); border-radius: 999px; padding: 8px 22px; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .res-more button:hover { border-color: var(--primary); color: var(--primary); }
+  .res-more button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .res-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .res-action { border: 1px solid var(--border); background: transparent; color: var(--muted); border-radius: 6px; padding: 4px 8px; font-family: inherit; font-size: 11.5px; cursor: pointer; text-decoration: none; }
+  .res-action:hover { border-color: var(--primary); color: var(--primary); }
+  .res-kind { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--bg-alt); color: var(--muted); margin-bottom: 6px; }
+  .quota-bar { width: 100%; height: 7px; background: var(--bg-alt); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+  .quota-bar span { display: block; height: 100%; width: 0; background: var(--primary); border-radius: 999px; transition: width 0.25s; }
+  .drop-zone { border: 1.5px dashed var(--border); border-radius: 10px; padding: 12px; text-align: center; color: var(--muted); font-size: 12.5px; margin-bottom: 10px; transition: all 0.2s; }
+  .drop-zone.dragover { border-color: var(--primary); background: var(--bg-alt); color: var(--primary); }
+
   .res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
   .res-item { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; position: relative; }
   .res-info { padding: 12px; flex: 1; display: flex; flex-direction: column; }
@@ -97,7 +115,10 @@
 <div class="res-wrap">
   <div class="res-header">
     <h2>资源中心</h2>
-    <div id="quotaDisplay" style="font-size: 14px; font-weight: bold; color: #16a34a;">配额加载中...</div>
+    <div style="min-width:220px;">
+      <div id="quotaDisplay" style="font-size: 14px; font-weight: bold; color: #16a34a;">配额加载中...</div>
+      <div class="quota-bar"><span id="quotaFill"></span></div>
+    </div>
   </div>
 
   <div class="res-card" id="uploadPanel" style="display: none;">
@@ -112,6 +133,7 @@
       </select>
       <label class="btn-upload" id="selectFileBtn">选择文件 <input type="file" id="resFile"></label>
     </div>
+    <div class="drop-zone" id="dropZone">也可以把文件拖到这里上传</div>
     <div id="fileName" style="font-size: 12px; color: var(--muted); margin-bottom: 10px;"></div>
     
     <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
@@ -152,9 +174,31 @@
     <button class="cat-tab" data-cat="other">其他</button>
   </div>
 
+  <div class="res-tools">
+    <input id="resSearch" type="search" placeholder="搜索标题、上传者或扩展名…">
+    <select id="resTypeFilter">
+      <option value="all">全部类型</option>
+      <option value="video">视频</option>
+      <option value="audio">音频</option>
+      <option value="image">图片</option>
+      <option value="document">文档</option>
+      <option value="archive">压缩包 / 安装包</option>
+      <option value="link">外链</option>
+      <option value="other">其他</option>
+    </select>
+    <select id="resSort">
+      <option value="new">最新上传</option>
+      <option value="old">最早上传</option>
+      <option value="size">文件最大</option>
+      <option value="name">按名称</option>
+    </select>
+    <span class="res-count" id="resCount"></span>
+  </div>
+
   <div class="res-grid" id="resList">
     <p style="text-align:center;width:100%;color:var(--muted);">加载中...</p>
   </div>
+  <div class="res-more" id="resMoreWrap" style="display:none;"><button id="resMoreBtn" type="button">加载更多</button></div>
 </div>
 
 <!-- 引入公共 script.js 修复月亮按钮 -->
@@ -164,6 +208,14 @@
   let selectedFile = null;
   let currentCategory = 'movie';
   let currentUser = null;
+  let resPage = 1;
+  let resTotalPages = 1;
+  let resLoading = false;
+  let resRequestId = 0;
+  let resQuery = '';
+  let resType = 'all';
+  let resSort = 'new';
+  const resItemMap = new Map();
   const MP_STORAGE = 'gb_res_multipart_v1';
   const MP_PART_SIZE = 8 * 1024 * 1024;
   let uploadState = null;
@@ -232,8 +284,16 @@
     try {
       const q = await api('/api/resource/quota');
       const el = document.getElementById('quotaDisplay');
-      if (q.unlimited) el.textContent = '管理员 · 无限配额';
-      else el.textContent = `剩余空间：${formatSize(q.remaining)} / 50 MB`;
+      const fill = document.getElementById('quotaFill');
+      if (q.unlimited) {
+        el.textContent = '管理员 · 无限配额';
+        fill.style.width = '100%';
+      } else {
+        el.textContent = `已用 ${formatSize(q.used || 0)} / 50 MB`;
+        const percent = Math.min(100, ((q.used || 0) / (q.limit || 50 * 1024 * 1024)) * 100);
+        fill.style.width = percent.toFixed(1) + '%';
+        fill.style.background = percent > 85 ? '#ef4444' : 'var(--primary)';
+      }
     } catch (e) {
       document.getElementById('quotaDisplay').textContent = '配额加载失败';
     }
@@ -479,6 +539,33 @@
     setUploadStatus('');
   });
 
+  const dropZone = document.getElementById('dropZone');
+  const resFileInput = document.getElementById('resFile');
+  ['dragenter', 'dragover'].forEach(function (type) {
+    dropZone.addEventListener(type, function (e) {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (type) {
+    dropZone.addEventListener(type, function (e) {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+    });
+  });
+  dropZone.addEventListener('drop', function (e) {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      resFileInput.files = dt.files;
+      resFileInput.dispatchEvent(new Event('change'));
+    } catch (err) {
+      alert('拖拽上传失败，请使用“选择文件”');
+    }
+  });
+
   document.getElementById('startUploadBtn').addEventListener('click', async () => {
     if (!selectedFile) return alert('请选择文件');
     const title = document.getElementById('resTitle').value.trim();
@@ -666,76 +753,134 @@
     });
   }
 
-  async function loadResources(category) {
-    const listEl = document.getElementById('resList');
-    listEl.innerHTML = '<p style="text-align:center;width:100%;color:var(--muted);">加载中...</p>';
-    
-    try {
-      const data = await api(`/api/resource/list/${category}`);
-      if (!data || data.length === 0) {
-        listEl.innerHTML = '<p style="text-align:center;width:100%;color:var(--muted);">该分区暂无资源</p>';
-        return;
-      }
-      
-      listEl.innerHTML = data.map(item => {
-        const playUrlRaw = typeof item.playUrl === 'string' ? item.playUrl : '';
-        const ext = (playUrlRaw.split('?')[0] || '').split('.').pop().toLowerCase();
-        const playUrl = esc(playUrlRaw);
-        const title = esc(item.title || '');
-        const uploader = esc(item.uploader || '');
-        const rid = esc(item.id || '');
-        let previewHtml = '';
-        const canDelete = currentUser && (currentUser.username === item.uploader || currentUser.role === 'admin');
+  function renderResourceItem(item) {
+    const playUrlRaw = typeof item.playUrl === 'string' ? item.playUrl : '';
+    const ext = item.ext || (playUrlRaw.split('?')[0] || '').split('.').pop().toLowerCase();
+    const kind = item.kind || 'other';
+    const playUrl = esc(playUrlRaw);
+    const title = esc(item.title || '');
+    const uploader = esc(item.uploader || '');
+    const rid = esc(item.id || '');
+    const canDelete = currentUser && (currentUser.username === item.uploader || currentUser.role === 'admin');
+    const kindLabels = { video: '视频', audio: '音频', image: '图片', document: '文档', archive: '压缩包', link: '外链', other: '文件' };
+    let previewHtml = '';
 
-        if (item.type === 'link' || ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'm3u8'].includes(ext)) {
-          previewHtml = `
-            <div class="player-wrapper paused">
-              <video data-src="${playUrl}" preload="metadata"></video>
-              <div class="player-controls">
-                <button class="play-btn">▶</button>
-                <span class="time-current">00:00</span>
-                <div class="progress-bar">
-                  <div class="progress-filled"></div>
-                  <div class="progress-thumb"></div>
-                </div>
-                <span class="time-duration">00:00</span>
-                <button class="vol-btn">音量</button>
-                <input type="range" class="vol-slider" min="0" max="1" step="0.05" value="1">
-                <select class="speed-select">
-                  <option value="0.5">0.5x</option>
-                  <option value="1" selected>1.0x</option>
-                  <option value="1.5">1.5x</option>
-                  <option value="2">2.0x</option>
-                </select>
-                <button class="fullscreen-btn">⛶</button>
-              </div>
-            </div>`;
-        } else if (['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext)) {
-          previewHtml = `<div class="res-preview-box"><span class="file-ext">${esc(ext)} Audio</span><audio src="${playUrl}" controls style="width:90%; margin-top:5px;"></audio></div>`;
-        } else if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
-          previewHtml = `<img class="res-img" src="${playUrl}" alt="${title}" loading="lazy">`;
-        } else {
-          previewHtml = `<div class="res-preview-box"><span class="file-ext">${esc(ext)}</span><a class="download-btn" href="${playUrl}" target="_blank" download>点击下载</a></div>`;
-        }
-
-        return `
-          <div class="res-item">
-            ${canDelete ? `<button class="del-btn" onclick="deleteResource('${rid}')">删除</button>` : ''}
-            ${previewHtml}
-            <div class="res-info">
-              <div class="res-title">${title}</div>
-              <div class="res-meta">
-                <span>${uploader}</span>
-                <span>${item.type === 'link' ? '外链' : formatSize(item.fileSize)}</span>
-              </div>
+    if (kind === 'video') {
+      previewHtml = `
+        <div class="player-wrapper paused">
+          <video data-src="${playUrl}" preload="metadata"></video>
+          <div class="player-controls">
+            <button class="play-btn">▶</button>
+            <span class="time-current">00:00</span>
+            <div class="progress-bar">
+              <div class="progress-filled"></div>
+              <div class="progress-thumb"></div>
             </div>
+            <span class="time-duration">00:00</span>
+            <button class="vol-btn">音量</button>
+            <input type="range" class="vol-slider" min="0" max="1" step="0.05" value="1">
+            <select class="speed-select">
+              <option value="0.5">0.5x</option>
+              <option value="1" selected>1.0x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2.0x</option>
+            </select>
+            <button class="fullscreen-btn">⛶</button>
           </div>
-        `;
-      }).join('');
-      
+        </div>`;
+    } else if (kind === 'audio') {
+      previewHtml = `<div class="res-preview-box"><span class="file-ext">${esc(ext)} Audio</span><audio src="${playUrl}" controls preload="metadata" style="width:90%; margin-top:5px;"></audio></div>`;
+    } else if (kind === 'image') {
+      previewHtml = `<img class="res-img" src="${playUrl}" alt="${title}" loading="lazy" decoding="async">`;
+    } else if (item.type === 'link') {
+      previewHtml = `<div class="res-preview-box"><span class="file-ext">LINK</span><a class="download-btn" href="${playUrl}" target="_blank" rel="noopener">打开外链</a></div>`;
+    } else {
+      previewHtml = `<div class="res-preview-box"><span class="file-ext">${esc(ext || 'FILE')}</span><a class="download-btn" href="${playUrl}" target="_blank" rel="noopener" download>点击下载</a></div>`;
+    }
+
+    return `
+      <div class="res-item">
+        ${canDelete ? `<button class="del-btn" onclick="deleteResource('${rid}')">删除</button>` : ''}
+        ${previewHtml}
+        <div class="res-info">
+          <div class="res-title">${title}</div>
+          <span class="res-kind">${kindLabels[kind] || '文件'}</span>
+          <div class="res-meta">
+            <span>${uploader} · ${new Date(item.createdAt || Date.now()).toLocaleDateString('zh-CN')}</span>
+            <span>${item.type === 'link' ? '外链' : formatSize(item.fileSize)}</span>
+          </div>
+          <div class="res-actions">
+            <button class="res-action" type="button" onclick="copyResourceLink('${rid}')">复制链接</button>
+            <a class="res-action" href="${playUrl}" target="_blank" rel="noopener" ${item.type === 'link' ? '' : 'download'}>${item.type === 'link' ? '打开' : '下载'}</a>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function copyResourceLink(id) {
+    const item = resItemMap.get(id);
+    if (!item || !item.playUrl) return;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(item.playUrl).then(function () {
+        setUploadStatus('链接已复制，7 天内有效');
+      }).catch(function () {
+        prompt('复制链接', item.playUrl);
+      });
+    } else {
+      prompt('复制链接', item.playUrl);
+    }
+  }
+
+  async function loadResources(category, append) {
+    const listEl = document.getElementById('resList');
+    const moreWrap = document.getElementById('resMoreWrap');
+    const countEl = document.getElementById('resCount');
+    if (append && resPage >= resTotalPages) return;
+    const requestId = ++resRequestId;
+    resLoading = true;
+    const nextPage = append ? resPage + 1 : 1;
+    if (!append) {
+      listEl.innerHTML = '<p style="text-align:center;width:100%;color:var(--muted);">加载中...</p>';
+      moreWrap.style.display = 'none';
+      resItemMap.clear();
+    } else {
+      document.getElementById('resMoreBtn').disabled = true;
+      document.getElementById('resMoreBtn').textContent = '加载中...';
+    }
+
+    try {
+      const params = new URLSearchParams({
+        q: resQuery,
+        type: resType,
+        sort: resSort,
+        page: String(nextPage),
+        limit: '12'
+      });
+      const data = await api(`/api/resource/list/${encodeURIComponent(category)}?${params.toString()}`);
+      if (requestId !== resRequestId) return;
+      const items = data && Array.isArray(data.items) ? data.items : [];
+      if (!append) listEl.innerHTML = '';
+      if (!items.length && !append) {
+        listEl.innerHTML = '<p style="text-align:center;width:100%;color:var(--muted);">没有找到资源</p>';
+      }
+      items.forEach(function (item) {
+        resItemMap.set(item.id, item);
+        listEl.insertAdjacentHTML('beforeend', renderResourceItem(item));
+      });
+      resPage = data.page || nextPage;
+      resTotalPages = data.totalPages || 1;
+      countEl.textContent = `共 ${data.total || items.length} 个 · ${formatSize(data.totalSize || 0)}`;
+      moreWrap.style.display = resPage < resTotalPages ? 'flex' : 'none';
+      document.getElementById('resMoreBtn').disabled = false;
+      document.getElementById('resMoreBtn').textContent = '加载更多';
       initPlayers();
     } catch (e) {
-      listEl.innerHTML = '<p style="text-align:center;width:100%;color:#ef4444;">加载失败</p>';
+      if (requestId !== resRequestId) return;
+      if (!append) listEl.innerHTML = '<p style="text-align:center;width:100%;color:#ef4444;">加载失败</p>';
+      document.getElementById('resMoreBtn').disabled = false;
+      document.getElementById('resMoreBtn').textContent = '加载更多';
+    } finally {
+      if (requestId === resRequestId) resLoading = false;
     }
   }
 
@@ -746,6 +891,26 @@
       currentCategory = tab.dataset.cat;
       loadResources(currentCategory);
     });
+  });
+
+  let searchTimer = null;
+  document.getElementById('resSearch').addEventListener('input', function (e) {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      resQuery = e.target.value.trim();
+      loadResources(currentCategory);
+    }, 300);
+  });
+  document.getElementById('resTypeFilter').addEventListener('change', function (e) {
+    resType = e.target.value;
+    loadResources(currentCategory);
+  });
+  document.getElementById('resSort').addEventListener('change', function (e) {
+    resSort = e.target.value;
+    loadResources(currentCategory);
+  });
+  document.getElementById('resMoreBtn').addEventListener('click', function () {
+    loadResources(currentCategory, true);
   });
 
   (async function() {

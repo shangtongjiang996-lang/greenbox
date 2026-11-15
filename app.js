@@ -1985,31 +1985,95 @@ app.delete('/api/resource/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+function resourceKind(item) {
+  if (!item) return 'other';
+  const path = String(item.objectKey || item.playUrl || '').split('?')[0];
+  const ext = (path.split('.').pop() || '').toLowerCase();
+  const mediaKind = ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'm3u8', 'avi'].includes(ext) ? 'video'
+    : ['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext) ? 'audio'
+      : ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext) ? 'image'
+        : '';
+  if (item.type === 'link') return mediaKind || 'link';
+  if (mediaKind) return mediaKind;
+  if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md'].includes(ext)) return 'document';
+  if (['zip', 'rar', '7z', 'tar', 'gz', 'apk', 'exe', 'msi', 'dmg'].includes(ext)) return 'archive';
+  return 'other';
+}
+
+function resourceExt(item) {
+  if (!item) return '';
+  if (item.type === 'link') return 'link';
+  const path = String(item.objectKey || item.playUrl || '').split('?')[0];
+  return (path.split('.').pop() || '').toLowerCase();
+}
+
 app.get('/api/resource/list/:category', async (req, res) => {
   const category = req.params.category;
   const indexKey = `resource_index:${category}`;
   const ids = (await kvGet(indexKey)) || [];
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const type = String(req.query.type || 'all');
+  const sort = String(req.query.sort || 'new');
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const pageSize = Math.min(50, Math.max(6, parseInt(req.query.limit, 10) || 12));
 
-  const list = [];
-  for (const id of ids.slice(0, 50)) {
-    const item = await kvGet(`resource:${id}`);
-    if (!item) continue;
-    // B2 预签名链接最长 7 天，入库时存的那份会过期（资源中心里表现为点开 403）。
-    // 这里按 objectKey 在每次读取时重新签名，保证文件始终可打开。
-    if (item.objectKey && item.objectKey !== 'external' && item.type !== 'link') {
+  const records = (await Promise.all(ids.slice(0, 500).map(id => kvGet(`resource:${id}`))))
+    .filter(Boolean);
+
+  let filtered = records;
+  if (q) {
+    filtered = filtered.filter(item =>
+      String(item.title || '').toLowerCase().includes(q) ||
+      String(item.uploader || '').toLowerCase().includes(q) ||
+      resourceExt(item).includes(q)
+    );
+  }
+  if (type && type !== 'all') {
+    filtered = filtered.filter(item => resourceKind(item) === type);
+  }
+
+  if (sort === 'size') {
+    filtered.sort((a, b) => (Number(b.fileSize) || 0) - (Number(a.fileSize) || 0));
+  } else if (sort === 'name') {
+    filtered.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN'));
+  } else if (sort === 'old') {
+    filtered.sort((a, b) => (Number(a.createdAt) || 0) - (Number(b.createdAt) || 0));
+  } else {
+    filtered.sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
+  }
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = (page - 1) * pageSize;
+  const pageItems = filtered.slice(start, start + pageSize);
+
+  const signed = await Promise.all(pageItems.map(async item => {
+    const copy = Object.assign({}, item);
+    if (copy.objectKey && copy.objectKey !== 'external' && copy.type !== 'link') {
       try {
         const cmd = new GetObjectCommand({
           Bucket: process.env.B2_BUCKET_NAME,
-          Key: item.objectKey,
+          Key: copy.objectKey,
         });
-        item.playUrl = await getSignedUrl(b2Client, cmd, { expiresIn: 7 * 24 * 3600 });
+        copy.playUrl = await getSignedUrl(b2Client, cmd, { expiresIn: 7 * 24 * 3600 });
       } catch (e) {
-        console.error('资源重新签名失败:', item.objectKey, e.message);
+        console.error('资源重新签名失败:', copy.objectKey, e.message);
       }
     }
-    list.push(item);
-  }
-  res.json(list);
+    copy.kind = resourceKind(copy);
+    copy.ext = resourceExt(copy);
+    return copy;
+  }));
+
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    items: signed,
+    total,
+    page,
+    pageSize,
+    totalPages,
+    totalSize: filtered.reduce((sum, item) => sum + (Number(item.fileSize) || 0), 0),
+  });
 });
 
 // ======== 资源中心：分片上传（支持暂停与断点续传） ========
