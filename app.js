@@ -751,6 +751,49 @@ app.post('/api/admin/users/:username/sessions/:sid/revoke', async (req, res) => 
   res.json({ success: true });
 });
 
+const DEFAULT_USER_SETTINGS = {
+  themeMode: 'system',
+  accent: 'green',
+};
+const ALLOWED_THEME_MODES = ['system', 'light', 'dark'];
+const ALLOWED_ACCENTS = ['green', 'blue', 'violet', 'orange', 'rose'];
+
+function normalizeUserSettings(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  return {
+    themeMode: ALLOWED_THEME_MODES.includes(src.themeMode) ? src.themeMode : DEFAULT_USER_SETTINGS.themeMode,
+    accent: ALLOWED_ACCENTS.includes(src.accent) ? src.accent : DEFAULT_USER_SETTINGS.accent,
+    updatedAt: src.updatedAt || null,
+  };
+}
+
+app.get('/api/user/settings', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  res.json(normalizeUserSettings(await kvGet(`user_settings:${session.username}`)));
+});
+
+app.put('/api/user/settings', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const body = req.body || {};
+  if (body.themeMode !== undefined && !ALLOWED_THEME_MODES.includes(body.themeMode)) {
+    return res.status(400).json({ error: '无效的主题模式' });
+  }
+  if (body.accent !== undefined && !ALLOWED_ACCENTS.includes(body.accent)) {
+    return res.status(400).json({ error: '无效的强调色' });
+  }
+  const key = `user_settings:${session.username}`;
+  const next = await kvUpdate(key, current => {
+    const settings = normalizeUserSettings(current);
+    if (body.themeMode !== undefined) settings.themeMode = body.themeMode;
+    if (body.accent !== undefined) settings.accent = body.accent;
+    settings.updatedAt = Date.now();
+    return settings;
+  }, Object.assign({}, DEFAULT_USER_SETTINGS));
+  res.json(normalizeUserSettings(next));
+});
+
 app.get('/api/verify', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);

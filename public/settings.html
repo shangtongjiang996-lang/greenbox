@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>主题与偏好设置 - GreenBox</title>
+<meta name="description" content="设置 GreenBox 的主题、深色模式与强调色，登录后自动同步到云端。">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#22c55e">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+    var a = localStorage.getItem('accent') || 'green';
+    document.documentElement.setAttribute('data-accent', a);
+  })();
+</script>
+<style>
+  .settings-wrap { max-width: 820px; margin: 0 auto; padding: 1.8rem 1.25rem 3rem; }
+  .settings-head h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .settings-head p { color: var(--muted); font-size: 0.9rem; line-height: 1.8; margin-bottom: 1.2rem; }
+  .settings-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.1rem 1.2rem; margin-bottom: 1rem; }
+  .settings-card h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
+  .settings-hint { color: var(--muted); font-size: 0.82rem; line-height: 1.7; margin-bottom: 0.8rem; }
+  .theme-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; margin-bottom: 1.1rem; }
+  .theme-option { border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 10px; padding: 0.9rem 0.6rem; cursor: pointer; font-family: inherit; text-align: center; transition: all .2s; }
+  .theme-option:hover { border-color: var(--primary); }
+  .theme-option.active { border-color: var(--primary); background: var(--primary-light); color: var(--primary-dark); font-weight: 700; }
+  .theme-option .theme-sample { display: block; width: 54px; height: 34px; margin: 0 auto 0.45rem; border-radius: 6px; border: 1px solid var(--border); background: #f3f5f0; }
+  .theme-option .theme-sample.dark { background: #0d1511; }
+  .theme-option .theme-sample.system { background: linear-gradient(135deg, #f3f5f0 50%, #0d1511 50%); }
+  .accent-grid { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .accent-option { border: 2px solid transparent; background: transparent; border-radius: 999px; padding: 4px; cursor: pointer; line-height: 0; }
+  .accent-option.active { border-color: var(--text); }
+  .accent-dot { width: 30px; height: 30px; border-radius: 50%; display: block; }
+  .sync-status { font-size: 0.78rem; color: var(--muted); margin-top: 0.8rem; min-height: 1.2em; }
+  .settings-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.8rem; }
+  .settings-actions a { display: inline-block; text-decoration: none; border-radius: 8px; padding: 0.5rem 1rem; font-size: 0.86rem; font-weight: 700; }
+  .settings-actions .primary { background: var(--primary); color: #fff; }
+  .settings-actions .outline { border: 1px solid var(--border); color: var(--text); }
+  @media (max-width: 560px) { .theme-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<main class="settings-wrap">
+  <div class="settings-head">
+    <h1>主题与偏好设置</h1>
+    <p>选择界面模式与强调色。登录后设置会保存到云端，在其他设备登录时自动恢复。</p>
+  </div>
+
+  <section class="settings-card">
+    <h2>界面模式</h2>
+    <p class="settings-hint">跟随系统会随设备的深色模式自动切换。</p>
+    <div class="theme-grid" id="themeOptions">
+      <button class="theme-option" type="button" data-mode="system">
+        <span class="theme-sample system"></span>跟随系统
+      </button>
+      <button class="theme-option" type="button" data-mode="light">
+        <span class="theme-sample"></span>浅色
+      </button>
+      <button class="theme-option" type="button" data-mode="dark">
+        <span class="theme-sample dark"></span>深色
+      </button>
+    </div>
+
+    <h2>强调色</h2>
+    <p class="settings-hint">影响按钮、链接、选中状态和高亮颜色。</p>
+    <div class="accent-grid" id="accentOptions">
+      <button class="accent-option" type="button" data-accent="green" title="嫩绿" aria-label="嫩绿"><span class="accent-dot" style="background:#15803d"></span></button>
+      <button class="accent-option" type="button" data-accent="blue" title="蓝色" aria-label="蓝色"><span class="accent-dot" style="background:#2563eb"></span></button>
+      <button class="accent-option" type="button" data-accent="violet" title="紫色" aria-label="紫色"><span class="accent-dot" style="background:#7c3aed"></span></button>
+      <button class="accent-option" type="button" data-accent="orange" title="橙色" aria-label="橙色"><span class="accent-dot" style="background:#ea580c"></span></button>
+      <button class="accent-option" type="button" data-accent="rose" title="玫红" aria-label="玫红"><span class="accent-dot" style="background:#e11d48"></span></button>
+    </div>
+    <div class="sync-status" id="syncStatus"></div>
+  </section>
+
+  <section class="settings-card">
+    <h2>意见反馈</h2>
+    <p class="settings-hint">遇到问题、发现 Bug，或者希望增加新功能，都可以直接提交。反馈处理后会通过站内通知告知。</p>
+    <div class="settings-actions">
+      <a class="primary" href="/feedback.html">提交反馈</a>
+      <a class="outline" href="/other.html">更多帮助</a>
+    </div>
+  </section>
+</main>
+
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var theme = window.GBTheme;
+  var statusEl = document.getElementById('syncStatus');
+  var loggedIn = false;
+  try { loggedIn = !!localStorage.getItem('greenbox_token'); } catch (e) {}
+
+  function render() {
+    var mode = theme.getMode();
+    var accent = theme.getAccent();
+    document.querySelectorAll('.theme-option').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
+    });
+    document.querySelectorAll('.accent-option').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-accent') === accent);
+    });
+  }
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  document.querySelectorAll('.theme-option').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var mode = btn.getAttribute('data-mode');
+      render();
+      if (!loggedIn) setStatus('未登录：设置只保存在本设备');
+      else setStatus('正在同步到云端...');
+      theme.setThemeMode(mode).then(function () {
+        render();
+        if (loggedIn) setStatus('已保存到云端');
+      });
+    });
+  });
+
+  document.querySelectorAll('.accent-option').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var accent = btn.getAttribute('data-accent');
+      render();
+      if (!loggedIn) setStatus('未登录：设置只保存在本设备');
+      else setStatus('正在同步到云端...');
+      theme.setAccent(accent).then(function () {
+        render();
+        if (loggedIn) setStatus('已保存到云端');
+      });
+    });
+  });
+
+  window.addEventListener('gb-settings-loaded', function () {
+    render();
+    if (loggedIn) setStatus('已从云端同步');
+  });
+  window.addEventListener('gb-settings-synced', function (e) {
+    render();
+    if (e.detail && e.detail.ok && loggedIn) setStatus('已保存到云端');
+    else if (e.detail && !e.detail.ok) setStatus('保存失败，设置暂存在本设备');
+  });
+  window.addEventListener('gb-theme-change', render);
+
+  render();
+  if (loggedIn) {
+    setStatus('正在读取云端设置...');
+    theme.sync().then(function (settings) {
+      if (settings) setStatus('已从云端同步');
+      else setStatus('云端读取失败，使用本设备设置');
+    });
+  } else {
+    setStatus('未登录：设置只保存在本设备');
+  }
+})();
+</script>
+</body>
+</html>

@@ -2,20 +2,144 @@ const THEME_ICON = {
   dark: '<svg class="ico" aria-hidden="true"><use href="/icons.svg#sun"/></svg>',
   light: '<svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg>'
 };
-const toggle = document.getElementById('theme-toggle');
-if (toggle) {
-  const currentTheme = localStorage.getItem('theme') || 
-                       (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  document.documentElement.setAttribute('data-theme', currentTheme);
-  toggle.innerHTML = currentTheme === 'dark' ? THEME_ICON.dark : THEME_ICON.light;
 
-  toggle.addEventListener('click', () => {
-    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-    toggle.innerHTML = theme === 'dark' ? THEME_ICON.dark : THEME_ICON.light;
-  });
-}
+(function () {
+  var root = document.documentElement;
+  var VALID_MODES = ['system', 'light', 'dark'];
+  var VALID_ACCENTS = ['green', 'blue', 'violet', 'orange', 'rose'];
+  var toggle = document.getElementById('theme-toggle');
+  var media = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+  function systemTheme() {
+    return media && media.matches ? 'dark' : 'light';
+  }
+
+  function readMode() {
+    try {
+      var saved = localStorage.getItem('themeMode');
+      if (VALID_MODES.indexOf(saved) >= 0) return saved;
+      var legacy = localStorage.getItem('theme');
+      if (legacy === 'dark' || legacy === 'light') return legacy;
+    } catch (e) {}
+    return 'system';
+  }
+
+  function resolvedTheme(mode) {
+    return mode === 'system' ? systemTheme() : mode;
+  }
+
+  function updateToggleIcon() {
+    if (!toggle) return;
+    var current = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    toggle.innerHTML = current === 'dark' ? THEME_ICON.dark : THEME_ICON.light;
+  }
+
+  function applyThemeMode(mode, options) {
+    options = options || {};
+    if (VALID_MODES.indexOf(mode) < 0) mode = 'system';
+    var resolved = resolvedTheme(mode);
+    root.setAttribute('data-theme', resolved);
+    try {
+      localStorage.setItem('themeMode', mode);
+      localStorage.setItem('theme', resolved);
+    } catch (e) {}
+    updateToggleIcon();
+    if (!options.silent) {
+      window.dispatchEvent(new CustomEvent('gb-theme-change', { detail: { mode: mode, theme: resolved } }));
+    }
+    return resolved;
+  }
+
+  function applyAccent(accent, options) {
+    options = options || {};
+    if (VALID_ACCENTS.indexOf(accent) < 0) accent = 'green';
+    root.setAttribute('data-accent', accent);
+    try { localStorage.setItem('accent', accent); } catch (e) {}
+    if (!options.silent) {
+      window.dispatchEvent(new CustomEvent('gb-theme-change', { detail: { accent: accent } }));
+    }
+    return accent;
+  }
+
+  function getToken() {
+    try { return localStorage.getItem('greenbox_token') || ''; } catch (e) { return ''; }
+  }
+
+  function saveCloud(patch) {
+    var token = getToken();
+    if (!token) {
+      window.dispatchEvent(new CustomEvent('gb-settings-synced', { detail: { ok: true, local: true } }));
+      return Promise.resolve(null);
+    }
+    return fetch('/api/user/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(patch)
+    }).then(function (res) {
+      if (!res.ok) throw new Error('sync failed');
+      return res.json();
+    }).then(function (settings) {
+      window.dispatchEvent(new CustomEvent('gb-settings-synced', { detail: { ok: true, settings: settings } }));
+      return settings;
+    }).catch(function () {
+      window.dispatchEvent(new CustomEvent('gb-settings-synced', { detail: { ok: false } }));
+      return null;
+    });
+  }
+
+  window.GBTheme = {
+    modes: VALID_MODES,
+    accents: VALID_ACCENTS,
+    getMode: readMode,
+    getTheme: function () { return root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; },
+    getAccent: function () {
+      try { return localStorage.getItem('accent') || root.getAttribute('data-accent') || 'green'; } catch (e) { return 'green'; }
+    },
+    setThemeMode: function (mode) {
+      applyThemeMode(mode);
+      return saveCloud({ themeMode: mode });
+    },
+    setAccent: function (accent) {
+      applyAccent(accent);
+      return saveCloud({ accent: accent });
+    },
+    sync: function () {
+      var token = getToken();
+      if (!token) return Promise.resolve(null);
+      return fetch('/api/user/settings', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(function (res) { if (!res.ok) throw new Error('load failed'); return res.json(); })
+        .then(function (settings) {
+          applyThemeMode(settings.themeMode || 'system', { silent: true });
+          applyAccent(settings.accent || 'green', { silent: true });
+          window.dispatchEvent(new CustomEvent('gb-settings-loaded', { detail: settings }));
+          return settings;
+        }).catch(function () { return null; });
+    }
+  };
+
+  applyThemeMode(readMode(), { silent: true });
+  applyAccent((function () { try { return localStorage.getItem('accent') || 'green'; } catch (e) { return 'green'; } })(), { silent: true });
+
+  if (toggle) {
+    toggle.addEventListener('click', function () {
+      var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      window.GBTheme.setThemeMode(next);
+    });
+  }
+
+  if (media) {
+    var onSystemThemeChange = function () {
+      if (readMode() === 'system') applyThemeMode('system', { silent: true });
+    };
+    if (media.addEventListener) media.addEventListener('change', onSystemThemeChange);
+    else if (media.addListener) media.addListener(onSystemThemeChange);
+  }
+
+  // 登录后从云端恢复主题与强调色；未登录时只使用本地设置
+  if (getToken()) {
+    window.GBTheme.sync();
+  }
+})();
 
 // ===== 导航：个人中心常显 + “其它”入口 =====
 (function () {
@@ -355,6 +479,33 @@ if (toggle) {
     }).catch(function () {});
   }
 
+  function setupSettingsLink() {
+    var right = document.querySelector('.navbar-right');
+    if (!right || document.getElementById('settings-link')) return;
+    var link = document.createElement('a');
+    link.id = 'settings-link';
+    link.className = 'nav-icon-link';
+    link.href = '/settings.html';
+    link.title = '主题与偏好设置';
+    link.setAttribute('aria-label', '主题与偏好设置');
+    link.innerHTML = '<svg class="ico" aria-hidden="true"><use href="/icons.svg#gear"/></svg>';
+    var themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle && themeToggle.parentNode === right) right.insertBefore(link, themeToggle);
+    else right.appendChild(link);
+  }
+
+  function setupFeedbackEntry() {
+    if (location.pathname === '/feedback.html') return;
+    if (document.getElementById('gb-feedback-btn')) return;
+    var link = document.createElement('a');
+    link.id = 'gb-feedback-btn';
+    link.className = 'gb-feedback-btn';
+    link.href = '/feedback.html?from=' + encodeURIComponent(location.pathname + location.search);
+    link.title = '意见反馈';
+    link.innerHTML = '<svg class="ico" aria-hidden="true"><use href="/icons.svg#chat"/></svg><span>反馈</span>';
+    document.body.appendChild(link);
+  }
+
   function setupInstallPrompt() {
     var deferredPrompt = null;
     function hide() {
@@ -390,6 +541,8 @@ if (toggle) {
     setupPresence();
     setupServiceWorker();
     setupInstallPrompt();
+    setupSettingsLink();
+    setupFeedbackEntry();
   }
 
   if (document.readyState === 'loading') {
