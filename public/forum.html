@@ -1220,7 +1220,7 @@
         const isFaved = myFavSet.has(p.id);
         const avatarHtml = authorAvatarHtml(p.author, p.authorHasAvatar, null, 'post-avatar');
         const coverHtml = p.coverImage
-          ? `<div class="post-cover"><img src="${p.coverImage}" data-lightbox="${p.coverImage}" onclick="event.stopPropagation()" alt=""></div>`
+          ? `<div class="post-cover"><img src="${p.coverImage}" data-lightbox="${p.coverImage}" onclick="event.stopPropagation()" loading="lazy" decoding="async" alt=""></div>`
           : (p.hasLinks ? `<div class="post-cover"><svg class="ico" aria-hidden="true"><use href="/icons.svg#link"/></svg></div>` : '');
 
         return `
@@ -1377,7 +1377,7 @@
 
       const imagesHtml = (post.images || []).length > 0
         ? `<div class="post-detail-images">${post.images.map(img =>
-            `<img src="${img}" data-lightbox="${img}" alt="">`
+            `<img src="${img}" data-lightbox="${img}" loading="lazy" decoding="async" alt="">`
           ).join('')}</div>`
         : '';
 
@@ -1404,7 +1404,7 @@
               ? `<img class="comment-avatar" src="${c.authorAvatar}" alt="" data-user="${escapeHtml(c.author)}" onerror="this.style.display='none'">`
               : `<div class="comment-avatar" data-user="${escapeHtml(c.author)}">${c.author === 'admin' ? '管' : (c.author || '?').slice(0,1).toUpperCase()}</div>`;
             const cImages = (c.images || []).length > 0
-              ? `<div class="comment-images">${c.images.map(img => `<img src="${img}" data-lightbox="${img}" alt="">`).join('')}</div>`
+              ? `<div class="comment-images">${c.images.map(img => `<img src="${img}" data-lightbox="${img}" loading="lazy" decoding="async" alt="">`).join('')}</div>`
               : '';
             return `
               <div class="comment-item">

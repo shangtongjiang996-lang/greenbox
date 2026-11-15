@@ -3943,15 +3943,68 @@ function extractLinks(text) {
   return [...new Set(matches)].slice(0, 10);
 }
 
+let forumIndexCache = null;
+let forumIndexCachedAt = 0;
 async function getForumIndex() {
+  if (forumIndexCache && Date.now() - forumIndexCachedAt < 5000) return forumIndexCache;
   const list = await kvGet('forum_index');
-  return Array.isArray(list) ? list : [];
+  forumIndexCache = Array.isArray(list) ? list : [];
+  forumIndexCachedAt = Date.now();
+  return forumIndexCache;
 }
 async function saveForumIndex(list) {
-  await kvPut('forum_index', list.slice(0, 500));
+  const next = list.slice(0, 500);
+  forumIndexCache = next;
+  forumIndexCachedAt = Date.now();
+  await kvPut('forum_index', next);
 }
 
 // 把历史论坛图片从 JSON 内联 base64 迁移到独立缓存键，降低列表和详情响应体积
+async function migrateForumImageOptimization() {
+  if (!sharpAvatar || await kvGet('forum_image_opt_v1')) return;
+  try {
+    const coverKeys = await kvScan('forum_cover:*', 100);
+    for (const key of coverKeys) {
+      const raw = await kvGetRaw(key);
+      if (!raw || !raw.startsWith('data:image/')) continue;
+      const thumb = await makeForumCoverThumb(raw);
+      if (thumb && thumb !== raw) {
+        const id = key.slice('forum_cover:'.length);
+        await kvPutRaw(`forum_cover_thumb:${id}`, thumb, { expirationTtl: 90 * 24 * 3600 });
+      }
+    }
+
+    const imageKeys = await kvScan('forum_image:*', 100);
+    for (const key of imageKeys) {
+      const raw = await kvGetRaw(key);
+      if (!raw || !raw.startsWith('data:image/')) continue;
+      const buffer = dataUriToBuffer(raw);
+      if (!buffer) continue;
+      const optimized = await optimizeForumImage(buffer, 'image/jpeg', 1600, 82);
+      if (optimized.buffer.length < buffer.length) {
+        await kvPutRaw(key, `data:${optimized.mime};base64,${optimized.buffer.toString('base64')}`, { expirationTtl: 90 * 24 * 3600 });
+      }
+    }
+
+    const commentKeys = await kvScan('forum_comment_image:*', 100);
+    for (const key of commentKeys) {
+      const raw = await kvGetRaw(key);
+      if (!raw || !raw.startsWith('data:image/')) continue;
+      const buffer = dataUriToBuffer(raw);
+      if (!buffer) continue;
+      const optimized = await optimizeForumImage(buffer, 'image/jpeg', 1200, 80);
+      if (optimized.buffer.length < buffer.length) {
+        await kvPutRaw(key, `data:${optimized.mime};base64,${optimized.buffer.toString('base64')}`, { expirationTtl: 90 * 24 * 3600 });
+      }
+    }
+
+    await kvPut('forum_image_opt_v1', '1');
+    console.log('论坛图片压缩迁移完成');
+  } catch (e) {
+    console.error('论坛图片压缩迁移失败:', e.message);
+  }
+}
+
 async function migrateForumMedia() {
   if (await kvGet('forum_media_v1')) return;
   try {
@@ -4005,19 +4058,22 @@ async function migrateForumMedia() {
   }
 }
 
+const forumAvatarCache = new Map();
 async function decoratePosts(items) {
   if (!Array.isArray(items) || items.length === 0) return items;
   let usersCache = {};
   try { usersCache = (await kvGet('users')) || {}; } catch (e) {}
-  const avatarCache = new Map();
   for (const item of items) {
     const author = item.author;
     if (!author) continue;
-    if (!avatarCache.has(author)) {
+    const cached = forumAvatarCache.get(author);
+    if (cached && cached.expires > Date.now()) {
+      item.authorHasAvatar = cached.hasAvatar;
+    } else {
       const av = await kvGet(`user_avatar:${author}`);
-      avatarCache.set(author, !!av);
+      item.authorHasAvatar = !!av;
+      forumAvatarCache.set(author, { hasAvatar: !!av, expires: Date.now() + 60000 });
     }
-    item.authorHasAvatar = avatarCache.get(author);
     if (author === 'admin') item.authorRole = 'admin';
     else item.authorRole = (usersCache[author] && usersCache[author].role) || 'user';
   }
@@ -4073,15 +4129,64 @@ function sendInlineImage(res, data) {
   }
 }
 
+function dataUriToBuffer(data) {
+  if (typeof data !== 'string' || !data.startsWith('data:image/')) return null;
+  const comma = data.indexOf(',');
+  if (comma < 0) return null;
+  try { return Buffer.from(data.slice(comma + 1), 'base64'); } catch (e) { return null; }
+}
+
+async function optimizeForumImage(buffer, mime, maxSize, quality) {
+  if (!sharpAvatar) return { buffer, mime };
+  try {
+    const out = await sharpAvatar(buffer, { animated: false })
+      .rotate()
+      .resize(maxSize, maxSize, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality })
+      .toBuffer();
+    if (out.length >= buffer.length) return { buffer, mime };
+    return { buffer: out, mime: 'image/jpeg' };
+  } catch (e) {
+    return { buffer, mime };
+  }
+}
+
+async function makeForumCoverThumb(data) {
+  const buffer = dataUriToBuffer(data);
+  if (!buffer || !sharpAvatar) return data;
+  try {
+    const out = await sharpAvatar(buffer, { animated: false })
+      .rotate()
+      .resize(720, 420, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 78 })
+      .toBuffer();
+    return `data:image/jpeg;base64,${out.toString('base64')}`;
+  } catch (e) {
+    return data;
+  }
+}
+
 app.get('/api/forum/posts/:id/cover', async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[a-zA-Z0-9]+$/.test(id)) return res.status(404).end();
+  const thumb = await kvGetRaw(`forum_cover_thumb:${id}`);
+  if (thumb) return sendInlineImage(res, thumb);
   const stored = await kvGetRaw(`forum_cover:${id}`);
-  if (stored) return sendInlineImage(res, stored);
+  if (stored) {
+    const made = await makeForumCoverThumb(stored);
+    if (made && made !== stored) {
+      await kvPutRaw(`forum_cover_thumb:${id}`, made, { expirationTtl: 90 * 24 * 3600 });
+    }
+    return sendInlineImage(res, made || stored);
+  }
   const post = await kvGet(`forum_post:${id}`);
   if (!post) return res.status(404).end();
   const cover = post.coverImage || (Array.isArray(post.images) ? post.images[0] : '');
-  sendInlineImage(res, cover);
+  const made = await makeForumCoverThumb(cover);
+  if (made && made !== cover) {
+    await kvPutRaw(`forum_cover_thumb:${id}`, made, { expirationTtl: 90 * 24 * 3600 });
+  }
+  sendInlineImage(res, made || cover);
 });
 
 app.get('/api/forum/posts/:id/image/:index', async (req, res) => {
@@ -4179,7 +4284,8 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
     for (const file of req.files) {
       if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype)) continue;
       if (file.size > 500 * 1024) continue;
-      images.push(`data:${file.mimetype};base64,${file.buffer.toString('base64')}`);
+      const optimized = await optimizeForumImage(file.buffer, file.mimetype, 1600, 82);
+      images.push(`data:${optimized.mime};base64,${optimized.buffer.toString('base64')}`);
     }
   }
 
@@ -4196,6 +4302,10 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
   }
   if (images[0]) {
     await kvPut(`forum_cover:${postId}`, images[0], { expirationTtl: 90 * 24 * 3600 });
+    const coverThumb = await makeForumCoverThumb(images[0]);
+    if (coverThumb && coverThumb !== images[0]) {
+      await kvPutRaw(`forum_cover_thumb:${postId}`, coverThumb, { expirationTtl: 90 * 24 * 3600 });
+    }
   }
   const post = {
     id: postId,
@@ -4411,7 +4521,8 @@ app.post('/api/forum/posts/:id/comments', upload.array('images', 2), async (req,
     for (const file of req.files) {
       if (!/^image\/(jpeg|jpg|png|gif|webp)$/i.test(file.mimetype)) continue;
       if (file.size > 300 * 1024) continue;
-      images.push(`data:${file.mimetype};base64,${file.buffer.toString('base64')}`);
+      const optimized = await optimizeForumImage(file.buffer, file.mimetype, 1200, 80);
+      images.push(`data:${optimized.mime};base64,${optimized.buffer.toString('base64')}`);
     }
   }
 
@@ -5642,6 +5753,7 @@ registerSocialSocket(io, { getSession });
 const PORT = process.env.PORT || 3000;
 setTimeout(function () { migrateLegacyAvatars(); }, 5000);
 setTimeout(function () { migrateForumMedia(); }, 6500);
+setTimeout(function () { migrateForumImageOptimization(); }, 8500);
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
   console.log(`WebSocket 已就绪（五子棋 + 私聊）`);
