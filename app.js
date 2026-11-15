@@ -4075,6 +4075,7 @@ async function recordGomokuMatch(room, roomId) {
   if (!room || room.matchRecorded) return null;
   const players = Object.values(room.players || {});
   if (players.length < 2 || !Array.isArray(room.history) || room.history.length === 0) return null;
+  room.matchRecorded = true;
 
   const sorted = players.slice().sort((a, b) => a.color - b.color);
   const winnerPlayer = room.winner === 1 || room.winner === 2 ? room.players[room.winner] : null;
@@ -4170,7 +4171,6 @@ async function recordGomokuMatch(room, roomId) {
     endedAt,
   }, 500);
 
-  room.matchRecorded = true;
   room.matchId = id;
   room.endedAt = endedAt;
   return record;
