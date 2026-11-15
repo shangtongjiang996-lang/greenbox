@@ -92,6 +92,8 @@ app.get('/sitemap.xml', (req, res) => {
     '/resources.html',
     '/gomoku-online.html',
     '/gomoku-ai.html',
+    '/gomoku-rankings.html',
+    '/gomoku-replay.html',
     '/function-plotter.html',
     '/other.html',
     '/feedback.html',
@@ -4053,9 +4055,125 @@ function resetGame(room) {
   delete room.winner;
   delete room.winLine;
   delete room.endReason;
+  delete room.matchRecorded;
+  delete room.matchId;
   room.undoCountPerPlayer = {};
   room.lastActive = Date.now();
   recalcStatus(room);
+}
+
+// 记录对局、更新 ELO 并写入排行榜
+function genGomokuMatchId() {
+  return 'M' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+}
+
+function gomokuExpectedScore(a, b) {
+  return 1 / (1 + Math.pow(10, (b - a) / 400));
+}
+
+async function recordGomokuMatch(room, roomId) {
+  if (!room || room.matchRecorded) return null;
+  const players = Object.values(room.players || {});
+  if (players.length < 2 || !Array.isArray(room.history) || room.history.length === 0) return null;
+
+  const sorted = players.slice().sort((a, b) => a.color - b.color);
+  const winnerPlayer = room.winner === 1 || room.winner === 2 ? room.players[room.winner] : null;
+  const isDraw = !winnerPlayer;
+  const before = {};
+  const computed = [];
+
+  await kvUpdate('gomoku_ratings', current => {
+    const next = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+    for (const p of sorted) {
+      const old = next[p.username] && typeof next[p.username] === 'object' ? next[p.username] : {};
+      const rating = Number(old.rating) || 1000;
+      before[p.username] = {
+        rating,
+        games: Number(old.games) || 0,
+        wins: Number(old.wins) || 0,
+        losses: Number(old.losses) || 0,
+        draws: Number(old.draws) || 0,
+      };
+    }
+    const [a, b] = sorted;
+    const ra = before[a.username].rating;
+    const rb = before[b.username].rating;
+    const ea = gomokuExpectedScore(ra, rb);
+    const eb = 1 - ea;
+    const scoreA = isDraw ? 0.5 : (winnerPlayer.username === a.username ? 1 : 0);
+    const scoreB = isDraw ? 0.5 : (winnerPlayer.username === b.username ? 1 : 0);
+    const K = 24;
+
+    for (const p of [a, b]) {
+      const old = before[p.username];
+      const expected = p.username === a.username ? ea : eb;
+      const score = p.username === a.username ? scoreA : scoreB;
+      const after = Math.max(100, Math.round(old.rating + K * (score - expected)));
+      next[p.username] = {
+        rating: after,
+        games: old.games + 1,
+        wins: old.wins + (score === 1 ? 1 : 0),
+        losses: old.losses + (score === 0 ? 1 : 0),
+        draws: old.draws + (score === 0.5 ? 1 : 0),
+        lastPlayed: Date.now(),
+      };
+      computed.push({
+        username: p.username,
+        color: p.color,
+        ratingBefore: old.rating,
+        ratingAfter: after,
+        score,
+      });
+    }
+    return next;
+  }, {});
+
+  const id = genGomokuMatchId();
+  const endedAt = Date.now();
+  const record = {
+    id,
+    roomId,
+    roomName: room.name || '',
+    players: sorted.map(p => {
+      const c = computed.find(x => x.username === p.username);
+      return {
+        username: p.username,
+        color: p.color,
+        ratingBefore: c ? c.ratingBefore : 1000,
+        ratingAfter: c ? c.ratingAfter : 1000,
+      };
+    }),
+    winner: winnerPlayer ? winnerPlayer.username : '',
+    winnerColor: winnerPlayer ? winnerPlayer.color : 0,
+    result: isDraw ? 'draw' : 'win',
+    reason: room.endReason || (isDraw ? 'draw' : 'five'),
+    moves: room.history.map((m, i) => ({
+      row: m.row,
+      col: m.col,
+      color: m.color || (i % 2 === 0 ? 1 : 2),
+    })),
+    moveCount: room.history.length,
+    startedAt: room.created || 0,
+    endedAt,
+  };
+
+  await kvPut(`gomoku_match:${id}`, record, { expirationTtl: 180 * 24 * 3600 });
+  await kvAppend('gomoku_matches', {
+    id,
+    roomId,
+    roomName: record.roomName,
+    players: record.players,
+    winner: record.winner,
+    result: record.result,
+    reason: record.reason,
+    moveCount: record.moveCount,
+    endedAt,
+  }, 500);
+
+  room.matchRecorded = true;
+  room.matchId = id;
+  room.endedAt = endedAt;
+  return record;
 }
 
 // ======== 五子棋 REST 辅助接口 ========
@@ -4636,6 +4754,58 @@ app.post('/api/gomoku/ai/chat', async (req, res) => {
   }
 });
 
+app.get('/api/gomoku/leaderboard', async (req, res) => {
+  const ratings = (await kvGet('gomoku_ratings')) || {};
+  const entries = Object.entries(ratings)
+    .map(([username, r]) => ({
+      username,
+      rating: Number(r && r.rating) || 1000,
+      games: Number(r && r.games) || 0,
+      wins: Number(r && r.wins) || 0,
+      losses: Number(r && r.losses) || 0,
+      draws: Number(r && r.draws) || 0,
+      lastPlayed: Number(r && r.lastPlayed) || 0,
+    }))
+    .filter(x => x.games > 0)
+    .sort((a, b) => b.rating - a.rating || b.games - a.games)
+    .slice(0, 50);
+
+  const out = [];
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    const profile = await getPublicProfile(e.username);
+    out.push({
+      rank: i + 1,
+      username: e.username,
+      displayName: profile.displayName || e.username,
+      hasAvatar: !!profile.hasAvatar,
+      rating: e.rating,
+      games: e.games,
+      wins: e.wins,
+      losses: e.losses,
+      draws: e.draws,
+      winRate: e.games ? Math.round((e.wins / e.games) * 100) : 0,
+    });
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json(out);
+});
+
+app.get('/api/gomoku/matches', async (req, res) => {
+  const list = (await kvGet('gomoku_matches')) || [];
+  res.set('Cache-Control', 'no-store');
+  res.json(list.slice(-30).reverse());
+});
+
+app.get('/api/gomoku/matches/:id', async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^M[a-zA-Z0-9]+$/.test(id)) return res.status(400).json({ error: '对局 ID 无效' });
+  const match = await kvGet(`gomoku_match:${id}`);
+  if (!match) return res.status(404).json({ error: '对局不存在或已过期' });
+  res.set('Cache-Control', 'no-store');
+  res.json(match);
+});
+
 app.get('/api/room/:roomId', async (req, res) => {
   const room = await getRoom(req.params.roomId);
   if (!room) return res.status(404).json({ error: '房间不存在' });
@@ -4677,6 +4847,27 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('spectate-room', async ({ roomId, token, inviteToken } = {}) => {
+    try {
+      const session = await getSession(token);
+      if (!session) return socket.emit('error', '请先登录');
+      const room = await getRoom(roomId);
+      if (!room || room.status === 'closed') return socket.emit('error', '房间不存在');
+      if (room.password && !(inviteToken && room.inviteToken && inviteToken === room.inviteToken)) {
+        return socket.emit('error', '这个房间需要密码，不能直接观战');
+      }
+      if (playerByName(room, session.username)) {
+        return socket.emit('error', '你是本局玩家，请直接进入房间');
+      }
+      socket.join(roomId);
+      socket.data = { username: session.username, roomId, spectator: true };
+      socket.emit('joined', { spectator: true, roomId });
+      socket.emit('room-update', sanitizeRoom(room));
+    } catch (e) {
+      socket.emit('error', e.message);
+    }
+  });
+
   socket.on('make-move', async ({ roomId, row, col }) => {
     try {
       const ctx = await roomContext(roomId);
@@ -4692,7 +4883,7 @@ io.on('connection', (socket) => {
       if (room.board[row][col] !== 0) return socket.emit('error', '这里已经有棋子了');
 
       room.board[row][col] = me.color;
-      room.history.push({ row, col });
+      room.history.push({ row, col, color: me.color });
       clearPending(roomId);            // 落子后，之前未处理的悔棋/重开请求作废
       const line = findWinLine(row, col, me.color, room.board);
       if (line) {
@@ -4707,6 +4898,7 @@ io.on('connection', (socket) => {
       } else {
         room.currentPlayer = me.color === 1 ? 2 : 1;
       }
+      if (room.gameOver) await recordGomokuMatch(room, roomId);
       room.lastActive = Date.now();
       recalcStatus(room);
       await saveRoom(roomId, room);
@@ -4798,6 +4990,7 @@ io.on('connection', (socket) => {
       room.endReason = 'resign';
       room.resignedBy = me.username;
       clearPending(roomId);
+      await recordGomokuMatch(room, roomId);
       recalcStatus(room);
       await saveRoom(roomId, room);
       broadcastRoom(roomId, room);
@@ -4825,8 +5018,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', async () => {
-    const { roomId, username } = socket.data || {};
-    if (!roomId) return;
+    const { roomId, username, spectator } = socket.data || {};
+    if (!roomId || spectator) return;
     try {
       const room = await getRoom(roomId);
       if (!room) return;

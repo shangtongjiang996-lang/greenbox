@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五子棋排行榜 - GreenBox</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#22c55e">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  .rk-wrap { max-width: 900px; margin: 0 auto; padding: 1.6rem 1.25rem 3rem; }
+  .rk-head h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .rk-head p { color: var(--muted); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.2rem; }
+  .rk-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.1rem; margin-bottom: 1rem; }
+  .rk-card h2 { font-size: 1.05rem; margin: 0 0 0.7rem; }
+  .rk-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+  .rk-table th, .rk-table td { text-align: left; padding: 0.55rem 0.45rem; border-bottom: 1px solid var(--border); }
+  .rk-table th { color: var(--muted); font-weight: 600; font-size: 0.76rem; }
+  .rk-rank { font-weight: 800; color: var(--muted); width: 40px; }
+  .rk-rank.top1 { color: #eab308; }
+  .rk-rank.top2 { color: #94a3b8; }
+  .rk-rank.top3 { color: #b45309; }
+  .rk-user { display: flex; align-items: center; gap: 0.5rem; }
+  .rk-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--bg-alt); display: grid; place-items: center; font-size: 0.7rem; overflow: hidden; flex-shrink: 0; }
+  .rk-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .rk-user a { color: var(--text); text-decoration: none; font-weight: 600; }
+  .rk-user a:hover { color: var(--primary); }
+  .rk-rating { font-weight: 800; color: var(--primary); }
+  .rk-match { padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.84rem; }
+  .rk-match:last-child { border-bottom: none; }
+  .rk-match-top { display: flex; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+  .rk-match a { color: var(--primary); text-decoration: none; }
+  .rk-match-meta { color: var(--muted); font-size: 0.76rem; margin-top: 3px; }
+  .rk-empty { color: var(--muted); font-size: 0.86rem; text-align: center; padding: 1.4rem 0; }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="rk-wrap">
+  <div class="rk-head">
+    <h1>五子棋排行榜</h1>
+    <p>按 ELO 积分排序。每局结束后自动更新，分数从 1000 开始。点击玩家可以查看主页，点击对局可以回放。</p>
+  </div>
+
+  <div class="rk-card">
+    <h2>积分榜</h2>
+    <div id="leaderboard"><div class="rk-empty">加载中...</div></div>
+  </div>
+
+  <div class="rk-card">
+    <h2>最近对局</h2>
+    <div id="recentMatches"><div class="rk-empty">加载中...</div></div>
+  </div>
+</main>
+
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var lb = document.getElementById('leaderboard');
+  var recent = document.getElementById('recentMatches');
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function avatar(u) {
+    if (u.hasAvatar) return '<span class="rk-avatar"><img src="/api/user/avatar/' + encodeURIComponent(u.username) + '?t=' + Date.now() + '" alt=""></span>';
+    return '<span class="rk-avatar">' + esc((u.displayName || u.username || '?').slice(0, 1)) + '</span>';
+  }
+
+  async function loadLeaderboard() {
+    try {
+      var res = await fetch('/api/gomoku/leaderboard');
+      if (!res.ok) throw new Error('加载失败');
+      var list = await res.json();
+      if (!list.length) { lb.innerHTML = '<div class="rk-empty">还没有完成的对局</div>'; return; }
+      lb.innerHTML = '<table class="rk-table"><thead><tr><th>排名</th><th>玩家</th><th>积分</th><th>对局</th><th>胜/负/平</th><th>胜率</th></tr></thead><tbody>' +
+        list.map(function (u) {
+          var rankClass = u.rank === 1 ? 'top1' : (u.rank === 2 ? 'top2' : (u.rank === 3 ? 'top3' : ''));
+          return '<tr><td class="rk-rank ' + rankClass + '">#' + u.rank + '</td>' +
+            '<td><div class="rk-user">' + avatar(u) + '<a href="/user.html?u=' + encodeURIComponent(u.username) + '">' + esc(u.displayName || u.username) + '</a></div></td>' +
+            '<td class="rk-rating">' + u.rating + '</td><td>' + u.games + '</td><td>' + u.wins + ' / ' + u.losses + ' / ' + u.draws + '</td><td>' + u.winRate + '%</td></tr>';
+        }).join('') + '</tbody></table>';
+    } catch (e) {
+      lb.innerHTML = '<div class="rk-empty">加载失败</div>';
+    }
+  }
+
+  async function loadMatches() {
+    try {
+      var res = await fetch('/api/gomoku/matches');
+      if (!res.ok) throw new Error('加载失败');
+      var list = await res.json();
+      if (!list.length) { recent.innerHTML = '<div class="rk-empty">还没有对局记录</div>'; return; }
+      recent.innerHTML = list.slice(0, 12).map(function (m) {
+        var names = (m.players || []).map(function (p) { return p.username; }).join(' vs ');
+        var result = m.result === 'draw' ? '平局' : ('胜者：' + (m.winner || '-'));
+        var time = new Date(m.endedAt).toLocaleString('zh-CN');
+        return '<div class="rk-match"><div class="rk-match-top"><span>' + esc(names) + ' · ' + esc(result) + '</span><a href="/gomoku-replay.html?id=' + encodeURIComponent(m.id) + '">回放</a></div>' +
+          '<div class="rk-match-meta">' + esc(m.roomName || ('房间 ' + m.roomId)) + ' · ' + m.moveCount + ' 手 · ' + time + '</div></div>';
+      }).join('');
+    } catch (e) {
+      recent.innerHTML = '<div class="rk-empty">加载失败</div>';
+    }
+  }
+
+  loadLeaderboard();
+  loadMatches();
+})();
+</script>
+</body>
+</html>

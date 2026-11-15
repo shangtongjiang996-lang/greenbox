@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五子棋观战 - GreenBox</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#22c55e">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  .sp-wrap { max-width: 1000px; margin: 0 auto; padding: 1.4rem 1.25rem 2.5rem; }
+  .sp-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .sp-head h1 { font-size: 1.6rem; margin: 0; }
+  .sp-head a { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
+  .sp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1rem; align-items: start; }
+  .sp-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; }
+  .sp-board canvas { display: block; width: 100%; height: auto; border-radius: 10px; }
+  .sp-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; background: var(--bg-alt); color: var(--muted); }
+  .sp-badge.live { background: #dcfce7; color: #166534; }
+  .sp-badge.finished { background: #fef3c7; color: #854d0e; }
+  .sp-info { font-size: 0.84rem; line-height: 1.8; color: var(--muted); }
+  .sp-info b { color: var(--text); }
+  .sp-player { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0; border-bottom: 1px solid var(--border); }
+  .sp-player:last-child { border-bottom: none; }
+  .sp-player .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; border: 1px solid #94a3b8; }
+  .sp-chat { max-height: 170px; overflow: auto; margin-top: 0.6rem; font-size: 0.8rem; color: var(--muted); line-height: 1.7; }
+  .sp-chat div { padding: 2px 0; }
+  .sp-error { color: #ef4444; font-size: 0.85rem; padding: 1rem 0; }
+  .sp-gate { display: none; text-align: center; padding: 2rem 1rem; }
+  .sp-gate.show { display: block; }
+  .sp-gate a { display: inline-block; margin-top: 0.7rem; background: var(--primary); color: #fff; padding: 0.5rem 1.2rem; border-radius: 8px; text-decoration: none; font-weight: 700; }
+  @media (max-width: 760px) { .sp-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="sp-wrap">
+  <div class="sp-head">
+    <h1>五子棋观战</h1>
+    <a href="/gomoku-online.html">← 返回大厅</a>
+  </div>
+  <div class="sp-gate" id="spGate">
+    <p style="color:var(--muted);">登录后才能观战。</p>
+    <a id="spLogin" href="/login.html">去登录</a>
+  </div>
+  <div class="sp-grid" id="spMain" style="display:none;">
+    <div class="sp-card sp-board"><canvas id="spBoard"></canvas></div>
+    <aside class="sp-card">
+      <div style="display:flex;justify-content:space-between;gap:0.5rem;align-items:center;margin-bottom:0.6rem;">
+        <h2 style="font-size:1rem;margin:0;" id="spRoomName">房间</h2>
+        <span class="sp-badge" id="spStatus">连接中</span>
+      </div>
+      <div class="sp-info" id="spInfo">正在连接房间...</div>
+      <div class="sp-info" id="spPlayers" style="margin-top:0.7rem;"></div>
+      <div class="sp-chat" id="spChat"></div>
+      <div class="sp-error" id="spError"></div>
+    </aside>
+  </div>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var token = '';
+  try { token = localStorage.getItem('greenbox_token') || ''; } catch (e) {}
+  var params = new URLSearchParams(location.search);
+  var roomId = (params.get('room') || '').toUpperCase();
+  var invite = params.get('invite') || '';
+  var gate = document.getElementById('spGate');
+  var main = document.getElementById('spMain');
+  var login = document.getElementById('spLogin');
+  var canvas = document.getElementById('spBoard');
+  var ctx = canvas.getContext('2d');
+  var room = null;
+  var socket = null;
+
+  login.href = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
+
+  if (!token) {
+    gate.classList.add('show');
+    return;
+  }
+  if (!roomId) {
+    main.style.display = 'grid';
+    document.getElementById('spInfo').innerHTML = '<div class="sp-error">缺少房间号</div>';
+    return;
+  }
+  main.style.display = 'grid';
+
+  function drawBoard() {
+    var logical = Math.min(620, canvas.parentElement.clientWidth - 2);
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = logical * dpr;
+    canvas.height = logical * dpr;
+    canvas.style.width = logical + 'px';
+    canvas.style.height = logical + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var SIZE = 15, PAD = 28, cell = (logical - PAD * 2) / (SIZE - 1);
+    var bg = getComputedStyle(document.documentElement).getPropertyValue('--card-bg') || '#1e293b';
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, logical, logical);
+    ctx.strokeStyle = 'rgba(148,163,184,0.45)';
+    ctx.lineWidth = 1;
+    for (var i = 0; i < SIZE; i++) {
+      var p = PAD + i * cell;
+      ctx.beginPath(); ctx.moveTo(PAD, p); ctx.lineTo(logical - PAD, p); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p, PAD); ctx.lineTo(p, logical - PAD); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(148,163,184,0.7)';
+    [[3,3],[3,11],[11,3],[11,11],[7,7]].forEach(function (pt) {
+      ctx.beginPath(); ctx.arc(PAD + pt[0] * cell, PAD + pt[1] * cell, 3, 0, Math.PI * 2); ctx.fill();
+    });
+    if (!room || !room.board) return;
+    for (var r = 0; r < SIZE; r++) {
+      for (var c = 0; c < SIZE; c++) {
+        var v = room.board[r][c];
+        if (!v) continue;
+        var x = PAD + c * cell, y = PAD + r * cell, rad = cell * 0.4;
+        ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
+        ctx.fillStyle = v === 2 ? '#f8fafc' : '#0f172a'; ctx.fill();
+        ctx.strokeStyle = v === 2 ? '#cbd5e1' : '#334155'; ctx.lineWidth = 1.2; ctx.stroke();
+      }
+    }
+  }
+
+  function render() {
+    if (!room) return;
+    document.getElementById('spRoomName').textContent = room.name || ('房间 ' + roomId);
+    var status = document.getElementById('spStatus');
+    status.textContent = room.gameOver ? '已结束' : (room.status === 'playing' ? '对局中' : (room.status === 'waiting' ? '等待中' : '暂停'));
+    status.className = 'sp-badge' + (room.gameOver ? ' finished' : (room.status === 'playing' ? ' live' : ''));
+    var players = Object.values(room.players || {}).sort(function (a, b) { return a.color - b.color; });
+    document.getElementById('spPlayers').innerHTML = players.map(function (p) {
+      return '<div class="sp-player"><span><span class="dot" style="background:' + (p.color === 2 ? '#f8fafc' : '#0f172a') + ';"></span><b>' + p.username + '</b> ' + (p.color === 1 ? '黑' : '白') + '</span><span>' + (p.online ? '在线' : '离线') + '</span></div>';
+    }).join('');
+    var info = '房间号：<b>' + roomId + '</b>';
+    if (room.gameOver) {
+      info += '<br>结果：<b>' + (room.winner === 1 || room.winner === 2 ? (room.players[room.winner] ? room.players[room.winner].username : '') + ' 胜' : '平局') + '</b>';
+    } else if (room.status === 'playing') {
+      var cp = room.players[room.currentPlayer];
+      info += '<br>当前回合：<b>' + (cp ? cp.username : '-') + '</b>';
+    }
+    info += '<br>手数：<b>' + ((room.history || []).length) + '</b>';
+    document.getElementById('spInfo').innerHTML = info;
+    document.getElementById('spChat').innerHTML = (room.messages || []).slice(-12).map(function (m) {
+      return '<div><b>' + m.username + '</b>：' + String(m.text || '').replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }) + '</div>';
+    }).join('');
+    drawBoard();
+  }
+
+  function connect() {
+    if (socket) socket.disconnect();
+    socket = io();
+    socket.on('connect', function () {
+      document.getElementById('spError').textContent = '';
+      socket.emit('spectate-room', { roomId: roomId, token: token, inviteToken: invite || undefined });
+    });
+    socket.on('room-update', function (r) { room = r; render(); });
+    socket.on('new-message', function (m) {
+      if (!room) return;
+      room.messages = room.messages || [];
+      room.messages.push(m);
+      if (room.messages.length > 100) room.messages = room.messages.slice(-100);
+      render();
+    });
+    socket.on('room-closed', function () {
+      document.getElementById('spError').textContent = '房间已关闭。';
+      room = null;
+      drawBoard();
+    });
+    socket.on('error', function (msg) {
+      document.getElementById('spError').textContent = typeof msg === 'string' ? msg : '观战失败';
+    });
+    socket.on('disconnect', function () {
+      document.getElementById('spStatus').textContent = '重连中';
+    });
+  }
+
+  document.getElementById('spInfo').innerHTML = '正在连接房间 <b>' + roomId + '</b>...';
+  connect();
+  window.addEventListener('resize', function () { if (room) drawBoard(); });
+})();
+</script>
+</body>
+</html>

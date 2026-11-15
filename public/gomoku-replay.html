@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>棋谱回放 - GreenBox</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#22c55e">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  .rp2-wrap { max-width: 980px; margin: 0 auto; padding: 1.6rem 1.25rem 3rem; }
+  .rp2-head h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .rp2-head p { color: var(--muted); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.2rem; }
+  .rp2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1rem; align-items: start; }
+  .rp2-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; }
+  .rp2-board canvas { display: block; width: 100%; height: auto; border-radius: 10px; }
+  .rp2-side h2 { font-size: 1rem; margin: 0 0 0.6rem; }
+  .rp2-info { font-size: 0.84rem; line-height: 1.8; color: var(--muted); }
+  .rp2-info b { color: var(--text); }
+  .rp2-controls { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.8rem 0; }
+  .rp2-controls button { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 7px; padding: 0.38rem 0.65rem; font-family: inherit; font-size: 0.8rem; cursor: pointer; }
+  .rp2-controls button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .rp2-controls button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .rp2-progress { height: 8px; background: var(--bg-alt); border-radius: 999px; overflow: hidden; margin: 0.6rem 0; }
+  .rp2-progress span { display: block; height: 100%; background: var(--primary); width: 0; transition: width 0.2s; }
+  .rp2-moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.25rem; max-height: 260px; overflow: auto; font-size: 0.74rem; color: var(--muted); }
+  .rp2-moves span { padding: 2px 4px; border-radius: 4px; }
+  .rp2-moves span.current { background: var(--primary-light); color: var(--primary-dark); font-weight: 700; }
+  .rp2-error { color: #ef4444; text-align: center; padding: 2rem; }
+  @media (max-width: 760px) { .rp2-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="rp2-wrap">
+  <div class="rp2-head">
+    <h1>棋谱回放</h1>
+    <p>逐步查看对局落子。可以使用按钮或播放功能自动回放。</p>
+  </div>
+  <div class="rp2-grid">
+    <div class="rp2-card rp2-board"><canvas id="board"></canvas></div>
+    <aside class="rp2-card rp2-side">
+      <h2>对局信息</h2>
+      <div class="rp2-info" id="info">加载中...</div>
+      <div class="rp2-progress"><span id="progress"></span></div>
+      <div class="rp2-controls">
+        <button id="first" type="button">⏮</button>
+        <button id="prev" type="button">◀</button>
+        <button class="primary" id="play" type="button">播放</button>
+        <button id="next" type="button">▶</button>
+        <button id="last" type="button">⏭</button>
+      </div>
+      <div class="rp2-info" id="step">第 0 / 0 手</div>
+      <div class="rp2-moves" id="moves" style="margin-top:0.6rem;"></div>
+      <div style="margin-top:0.8rem;"><a href="/gomoku-rankings.html" style="color:var(--primary);font-size:0.84rem;">返回排行榜</a></div>
+    </aside>
+  </div>
+</main>
+
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  var matchId = params.get('id') || '';
+  var canvas = document.getElementById('board');
+  var ctx = canvas.getContext('2d');
+  var info = document.getElementById('info');
+  var stepEl = document.getElementById('step');
+  var progress = document.getElementById('progress');
+  var movesEl = document.getElementById('moves');
+  var SIZE = 15;
+  var PAD = 28;
+  var match = null;
+  var step = 0;
+  var timer = null;
+
+  function boardSize() { return Math.min(620, canvas.parentElement.clientWidth - 2); }
+
+  function draw() {
+    var logical = boardSize();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = logical * dpr;
+    canvas.height = logical * dpr;
+    canvas.style.width = logical + 'px';
+    canvas.style.height = logical + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, logical, logical);
+
+    var cell = (logical - PAD * 2) / (SIZE - 1);
+    var radius = cell * 0.4;
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--card-bg') || '#1e293b';
+    ctx.fillRect(0, 0, logical, logical);
+
+    ctx.strokeStyle = 'rgba(148,163,184,0.45)';
+    ctx.lineWidth = 1;
+    for (var i = 0; i < SIZE; i++) {
+      var p = PAD + i * cell;
+      ctx.beginPath(); ctx.moveTo(PAD, p); ctx.lineTo(logical - PAD, p); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p, PAD); ctx.lineTo(p, logical - PAD); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(148,163,184,0.7)';
+    [[3,3],[3,11],[11,3],[11,11],[7,7]].forEach(function (pt) {
+      ctx.beginPath();
+      ctx.arc(PAD + pt[0] * cell, PAD + pt[1] * cell, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    var moves = (match && match.moves) || [];
+    for (var m = 0; m < Math.min(step, moves.length); m++) {
+      var mv = moves[m];
+      var x = PAD + mv.col * cell;
+      var y = PAD + mv.row * cell;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = mv.color === 2 ? '#f8fafc' : '#0f172a';
+      ctx.fill();
+      ctx.strokeStyle = mv.color === 2 ? '#cbd5e1' : '#334155';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      if (m === step - 1) {
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+
+    stepEl.textContent = '第 ' + step + ' / ' + moves.length + ' 手';
+    progress.style.width = (moves.length ? (step / moves.length) * 100 : 0) + '%';
+    Array.prototype.forEach.call(movesEl.children, function (el, idx) {
+      el.classList.toggle('current', idx + 1 === step);
+    });
+    document.getElementById('first').disabled = step === 0;
+    document.getElementById('prev').disabled = step === 0;
+    document.getElementById('next').disabled = step >= moves.length;
+    document.getElementById('last').disabled = step >= moves.length;
+  }
+
+  function buildInfo() {
+    var players = (match.players || []).map(function (p) {
+      var name = p.username;
+      var rating = p.ratingAfter ? ' (' + p.ratingBefore + ' → ' + p.ratingAfter + ')' : '';
+      return '<a href="/user.html?u=' + encodeURIComponent(name) + '" style="color:var(--text);text-decoration:none;">' + name + '</a>' + rating;
+    }).join(' vs ');
+    var result = match.result === 'draw' ? '平局' : ('胜者：' + match.winner);
+    var reasonMap = { five: '连成五子', resign: '认输', draw: '棋盘下满' };
+    info.innerHTML = '<div><b>' + result + '</b></div>' +
+      '<div>' + players + '</div>' +
+      '<div>结束原因：' + (reasonMap[match.reason] || match.reason || '-') + '</div>' +
+      '<div>总手数：' + match.moveCount + '</div>' +
+      '<div>时间：' + new Date(match.endedAt).toLocaleString('zh-CN') + '</div>';
+    movesEl.innerHTML = (match.moves || []).map(function (mv, i) {
+      return '<span data-step="' + (i + 1) + '">' + (i + 1) + '. ' + String.fromCharCode(65 + mv.col) + (mv.row + 1) + '</span>';
+    }).join('');
+    Array.prototype.forEach.call(movesEl.children, function (el) {
+      el.addEventListener('click', function () { stop(); step = Number(el.dataset.step); draw(); });
+    });
+  }
+
+  function stop() {
+    if (timer) { clearInterval(timer); timer = null; }
+    document.getElementById('play').textContent = '播放';
+  }
+
+  function play() {
+    if (timer) { stop(); return; }
+    if (step >= (match.moves || []).length) step = 0;
+    document.getElementById('play').textContent = '暂停';
+    timer = setInterval(function () {
+      if (!match || step >= match.moves.length) { stop(); return; }
+      step += 1;
+      draw();
+    }, 500);
+  }
+
+  document.getElementById('first').addEventListener('click', function () { stop(); step = 0; draw(); });
+  document.getElementById('prev').addEventListener('click', function () { stop(); step = Math.max(0, step - 1); draw(); });
+  document.getElementById('next').addEventListener('click', function () { stop(); step = Math.min((match.moves || []).length, step + 1); draw(); });
+  document.getElementById('last').addEventListener('click', function () { stop(); step = (match.moves || []).length; draw(); });
+  document.getElementById('play').addEventListener('click', play);
+  window.addEventListener('resize', function () { if (match) draw(); });
+
+  if (!matchId) {
+    info.innerHTML = '<div class="rp2-error">缺少对局 ID</div>';
+  } else {
+    fetch('/api/gomoku/matches/' + encodeURIComponent(matchId))
+      .then(function (res) { return res.json().then(function (data) { if (!res.ok) throw new Error(data.error || '加载失败'); return data; }); })
+      .then(function (data) {
+        match = data;
+        buildInfo();
+        step = match.moves.length;
+        draw();
+      })
+      .catch(function (e) {
+        info.innerHTML = '<div class="rp2-error">' + e.message + '</div>';
+      });
+  }
+})();
+</script>
+</body>
+</html>
