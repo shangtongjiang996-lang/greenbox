@@ -29,6 +29,7 @@ const io = new Server(server, {
 });
 
 // 多实例广播：Socket.IO 的 Redis adapter
+let redisAdapterEnabled = false;
 try {
   const { createAdapter } = require('@socket.io/redis-adapter');
   const Redis = require('ioredis');
@@ -37,6 +38,7 @@ try {
   pubClient.on('error', err => console.error('Socket.IO Redis pub 错误:', err.message));
   subClient.on('error', err => console.error('Socket.IO Redis sub 错误:', err.message));
   io.adapter(createAdapter(pubClient, subClient));
+  redisAdapterEnabled = true;
   console.log('Socket.IO Redis adapter 已启用');
 } catch (e) {
   console.warn('Socket.IO Redis adapter 未启用:', e.message);
@@ -637,6 +639,15 @@ app.delete('/api/user/avatar', async (req, res) => {
 app.get('/api/data', async (req, res) => {
   const data = await kvGet('site_data') || { tools: [], changelogs: [] };
   res.json(data);
+});
+
+app.get('/api/health', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    ok: true,
+    socketAdapter: redisAdapterEnabled,
+    now: Date.now(),
+  });
 });
 
 app.post('/api/update', async (req, res) => {
@@ -2966,6 +2977,7 @@ app.post('/api/admin/backup/restore',
 
   const entries = Object.entries(payload.keys);
   if (entries.length > 20000) return res.status(413).json({ error: '备份键数量过多' });
+  if (Object.prototype.hasOwnProperty.call(payload.keys, 'push_vapid')) vapidCache = null;
   let restored = 0;
   let skipped = 0;
   let total = 0;
