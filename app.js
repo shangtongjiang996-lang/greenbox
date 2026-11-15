@@ -69,7 +69,7 @@ Allow: /
 # 屏蔽不需要收录的接口和后台
 Disallow: /api/
 Disallow: /admin.html
-Disallow: /tool/
+Disallow: /usertool-raw/
 
 # 站点地图地址
 Sitemap: https://greenboxhweb.com/sitemap.xml
@@ -77,13 +77,11 @@ Sitemap: https://greenboxhweb.com/sitemap.xml
 });
 
 // ===== SEO: 站点地图 (Sitemap) =====
-app.get('/sitemap.xml', (req, res) => {
+app.get('/sitemap.xml', async (req, res) => {
   res.type('application/xml');
-  // 注意：这里需要把 greenboxweb.com 换成你实际的域名
   const baseUrl = 'https://greenboxhweb.com';
   const today = new Date().toISOString().split('T')[0];
   
-  // 这里列举你希望被搜索引擎收录的静态页面
   const staticPages = [
     '',
     '/tools.html',
@@ -98,22 +96,28 @@ app.get('/sitemap.xml', (req, res) => {
     '/other.html',
     '/feedback.html',
     '/submit-tool.html',
-    '/notifications.html',
-    '/report.html',
     '/login.html',
     '/register.html'
   ];
 
+  const data = (await kvGet('site_data')) || { tools: [] };
+  const toolPages = Array.isArray(data.tools)
+    ? data.tools
+      .map(t => t && t.url)
+      .filter(url => typeof url === 'string' && (url.startsWith('/tool/') || url.startsWith('/usertool/')))
+    : [];
+  const pages = Array.from(new Set(staticPages.concat(toolPages)));
+
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
 
-  staticPages.forEach(page => {
+  pages.forEach(page => {
     xml += `
   <url>
     <loc>${baseUrl}${page}</loc>
     <lastmod>${today}</lastmod>
     <changefreq>${page === '' ? 'daily' : 'weekly'}</changefreq>
-    <priority>${page === '' ? '1.0' : '0.8'}</priority>
+    <priority>${page === '' ? '1.0' : (page.startsWith('/tool/') || page.startsWith('/usertool/') ? '0.7' : '0.8')}</priority>
   </url>`;
   });
 
@@ -1553,12 +1557,85 @@ function injectUserToolSdk(html, id) {
   return sdk + html;
 }
 
+function escapeSeo(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+async function getToolShareMeta(id, path) {
+  const data = (await kvGet('site_data')) || { tools: [] };
+  const tools = Array.isArray(data.tools) ? data.tools : [];
+  let entry = tools.find(t => t && (t.url === path || t.url === `/usertool/${id}` || t.url === `/tool/${id}`));
+  if (!entry) {
+    const submissions = (await kvGet('tool_submissions')) || [];
+    const sub = Array.isArray(submissions) ? submissions.find(x => x.id === id) : null;
+    if (sub) entry = { name: sub.name, description: sub.description, icon: sub.icon };
+  }
+  const name = entry && entry.name ? entry.name : 'GreenBox 工具';
+  const description = entry && entry.description ? entry.description : 'GreenBox 在线工具，打开即用。';
+  let image = entry && entry.icon && /^https?:\/\//i.test(entry.icon) ? entry.icon : '';
+  if (!image && entry && entry.icon && entry.icon.startsWith('/')) image = 'https://greenboxhweb.com' + entry.icon;
+  if (!image) image = 'https://greenboxhweb.com/icon-512.png';
+  return {
+    name: String(name).slice(0, 60),
+    description: String(description).slice(0, 180),
+    image,
+    url: 'https://greenboxhweb.com' + path,
+  };
+}
+
+function buildToolMetaTags(meta) {
+  const title = escapeSeo(meta.name + ' - GreenBox');
+  const desc = escapeSeo(meta.description);
+  const image = escapeSeo(meta.image);
+  const url = escapeSeo(meta.url);
+  return `
+  <title>${title}</title>
+  <meta name="description" content="${desc}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="GreenBox">
+  <meta property="og:title" content="${escapeSeo(meta.name)}">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:url" content="${url}">
+  <meta property="og:image" content="${image}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${escapeSeo(meta.name)}">
+  <meta name="twitter:description" content="${desc}">
+  <meta name="twitter:image" content="${image}">
+  <link rel="canonical" href="${url}">
+  <script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: meta.name,
+    description: meta.description,
+    applicationCategory: 'WebApplication',
+    operatingSystem: 'Any',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'CNY' },
+    url: meta.url,
+  })}</script>`;
+}
+
+function injectToolMeta(html, meta) {
+  const tags = buildToolMetaTags(meta);
+  const lower = String(html).toLowerCase();
+  if (lower.includes('<title>')) {
+    // 保留工具自己的标题，只插入社交/搜索标签
+    const idx = lower.lastIndexOf('</head>');
+    return idx >= 0 ? html.slice(0, idx) + tags.replace(/<title>[\s\S]*?<\/title>\s*/, '') + html.slice(idx) : tags + html;
+  }
+  const idx = lower.lastIndexOf('</head>');
+  if (idx >= 0) return html.slice(0, idx) + tags + html.slice(idx);
+  return tags + html;
+}
+
 app.get('/usertool/:id', async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[a-zA-Z0-9_]+$/.test(id)) return res.status(404).send('工具不存在');
   let html = await kvGet(`tool_content:${id}`);
   if (!html) html = await kvGet(`tool_sub_content:${id}`);
   if (!html) return res.status(404).send('工具不存在');
+  const shareMeta = await getToolShareMeta(id, `/usertool/${id}`);
   const bridge = `<script>
 (function () {
   'use strict';
@@ -1620,10 +1697,13 @@ app.get('/usertool/:id', async (req, res) => {
 })();
 <\/script>`;
   const wrap = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">' +
-    '<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>用户工具 - GreenBox</title>' +
-    '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b12}iframe{display:block;width:100%;height:100%;border:0}.gb-tool-report{position:fixed;right:10px;bottom:10px;z-index:2147483647;background:rgba(15,23,42,.82);color:#cbd5e1;border:1px solid rgba(148,163,184,.35);border-radius:999px;padding:5px 10px;font:12px system-ui,sans-serif;text-decoration:none}.gb-tool-report:hover{color:#fff;border-color:#22c55e}</style>' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+    buildToolMetaTags(shareMeta) +
+    '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b12}iframe{display:block;width:100%;height:100%;border:0}.gb-tool-report,.gb-tool-share{position:fixed;right:10px;z-index:2147483647;background:rgba(15,23,42,.82);color:#cbd5e1;border:1px solid rgba(148,163,184,.35);border-radius:999px;padding:5px 10px;font:12px system-ui,sans-serif;text-decoration:none;cursor:pointer}.gb-tool-report{bottom:10px}.gb-tool-share{bottom:46px}.gb-tool-report:hover,.gb-tool-share:hover{color:#fff;border-color:#22c55e}</style>' +
     '</head><body><iframe id="gb-usertool-frame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock allow-downloads" allow="fullscreen; gamepad" referrerpolicy="no-referrer" src="/usertool-raw/' + id + '"></iframe>' +
     '<a class="gb-tool-report" href="/report.html?type=tool&id=' + encodeURIComponent(id) + '" target="_blank" rel="noopener">举报</a>' +
+    '<button class="gb-tool-share" id="gb-tool-share" type="button">分享</button>' +
+    '<script>(function(){var b=document.getElementById("gb-tool-share");if(!b)return;b.addEventListener("click",function(){var d={title:' + JSON.stringify(shareMeta.name) + ',url:location.href};if(navigator.share){navigator.share(d).catch(function(){});return;}if(navigator.clipboard){navigator.clipboard.writeText(location.href).then(function(){b.textContent="已复制";setTimeout(function(){b.textContent="分享";},1500);},function(){});}else{prompt("复制链接",location.href);}});})();<\/script>' +
     bridge + '<script src="/presence.js"></script></body></html>';
   res.set('Content-Type', 'text/html; charset=utf-8').send(wrap);
 });
@@ -1743,6 +1823,8 @@ app.get('/tool/:id', async (req, res) => {
   if (id.startsWith('ts_')) return res.redirect(`/usertool/${encodeURIComponent(id)}`);
   let html = await kvGet(`tool_content:${id}`);
   if (!html) return res.status(404).send('工具不存在');
+  const shareMeta = await getToolShareMeta(id, `/tool/${id}`);
+  html = injectToolMeta(html, shareMeta);
   if (!html.includes('/presence.js')) {
     const tag = '<script src="/presence.js"></script>';
     const idx = html.toLowerCase().lastIndexOf('</body>');

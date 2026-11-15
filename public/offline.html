@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网络已断开 - GreenBox</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { min-height: 100vh; display: grid; place-items: center; margin: 0; background: var(--bg); color: var(--text); }
+  .offline { text-align: center; padding: 2rem 1.2rem; max-width: 420px; }
+  .offline .mark { width: 64px; height: 64px; margin: 0 auto 1rem; border-radius: 18px; background: #22c55e; color: #0f172a; display: grid; place-items: center; font-size: 2rem; font-weight: 800; }
+  .offline h1 { font-size: 1.4rem; margin: 0 0 0.4rem; }
+  .offline p { color: var(--muted); font-size: 0.9rem; line-height: 1.8; }
+  .offline a { display: inline-block; margin-top: 1rem; background: var(--primary); color: #fff; text-decoration: none; padding: 0.55rem 1.2rem; border-radius: 8px; font-weight: 700; }
+</style>
+</head>
+<body>
+<main class="offline">
+  <div class="mark">G</div>
+  <h1>网络已断开</h1>
+  <p>GreenBox 暂时没有连上网络。请检查连接后重试，已经缓存的基础页面仍然可以打开。</p>
+  <a href="/index.html">重新打开首页</a>
+</main>
+</body>
+</html>

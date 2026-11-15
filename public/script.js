@@ -320,11 +320,67 @@ if (toggle) {
     document.head.appendChild(script);
   }
 
+  function showUpdateToast(reg) {
+    if (!reg || document.getElementById('gb-update-toast')) return;
+    var box = document.createElement('div');
+    box.id = 'gb-update-toast';
+    box.className = 'gb-update-toast';
+    var text = document.createElement('span');
+    text.textContent = 'GreenBox 有新版本';
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = '刷新';
+    button.addEventListener('click', function () {
+      if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      setTimeout(function () { location.reload(); }, 300);
+    });
+    box.appendChild(text);
+    box.appendChild(button);
+    document.body.appendChild(box);
+  }
+
   function setupServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    navigator.serviceWorker.register('/sw.js').then(function (reg) {
+      if (reg.waiting) showUpdateToast(reg);
+      reg.addEventListener('updatefound', function () {
+        var next = reg.installing;
+        if (!next) return;
+        next.addEventListener('statechange', function () {
+          if (next.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateToast(reg);
+          }
+        });
+      });
+    }).catch(function () {});
+  }
+
+  function setupInstallPrompt() {
+    var deferredPrompt = null;
+    function hide() {
+      var el = document.getElementById('gb-install-btn');
+      if (el) el.remove();
+    }
+    window.addEventListener('beforeinstallprompt', function (event) {
+      event.preventDefault();
+      deferredPrompt = event;
+      if (document.getElementById('gb-install-btn')) return;
+      var btn = document.createElement('button');
+      btn.id = 'gb-install-btn';
+      btn.className = 'gb-install-btn';
+      btn.type = 'button';
+      btn.textContent = '安装 GreenBox';
+      btn.addEventListener('click', function () {
+        if (!deferredPrompt) { hide(); return; }
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function () {
+          deferredPrompt = null;
+          hide();
+        }).catch(hide);
+      });
+      document.body.appendChild(btn);
     });
+    window.addEventListener('appinstalled', hide);
   }
 
   function boot() {
@@ -333,6 +389,7 @@ if (toggle) {
     setupMajorNotices();
     setupPresence();
     setupServiceWorker();
+    setupInstallPrompt();
   }
 
   if (document.readyState === 'loading') {

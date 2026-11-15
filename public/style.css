@@ -675,6 +675,56 @@ footer { margin-top: 4rem; padding: 2rem 0; border-top: 1px solid var(--border);
   .gb-system-toasts { top: 64px; right: 10px; }
 }
 
+/* ===== PWA 安装与更新提示 ===== */
+.gb-install-btn {
+  position: fixed;
+  left: 16px;
+  bottom: 18px;
+  z-index: 10030;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+}
+.gb-install-btn:hover { border-color: var(--primary); color: var(--primary); }
+.gb-update-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 18px;
+  z-index: 10030;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: 9px;
+  box-shadow: var(--shadow-lg);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.82rem;
+}
+.gb-update-toast button {
+  border: 0;
+  border-radius: 6px;
+  background: var(--primary);
+  color: #fff;
+  padding: 0.3rem 0.65rem;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .gb-install-btn { left: 10px; bottom: 12px; }
+  .gb-update-toast { right: 10px; bottom: 12px; }
+}
+
 /* ===== 响应式 ===== */
 /* 手机 / 平板端：导航栏随页面滚动，与首页保持一致 */
 @media (max-width: 900px) {
