@@ -944,16 +944,211 @@ app.post('/api/admin/tools/:id/rollback', async (req, res) => {
   res.json({ success: true, submission: target });
 });
 
+// ======== 用户工具沙箱存储桥 ========
+const USER_TOOL_STORAGE_KEY_RE = /^[a-zA-Z0-9_.-]{1,64}$/;
+const USER_TOOL_STORAGE_RESERVED = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isValidUserToolStorageKey(key) {
+  return USER_TOOL_STORAGE_KEY_RE.test(String(key || '')) && !USER_TOOL_STORAGE_RESERVED.has(String(key));
+}
+
+async function findApprovedUserTool(id) {
+  if (!/^ts_[a-zA-Z0-9_]+$/.test(String(id || ''))) return null;
+  const html = await kvGet(`tool_content:${id}`);
+  return html ? html : null;
+}
+
+function normalizeToolStorage(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+  const out = {};
+  for (const key of Object.keys(data).slice(0, 50)) {
+    if (isValidUserToolStorageKey(key)) out[key] = String(data[key]).slice(0, 4096);
+  }
+  return out;
+}
+
+app.get('/api/usertool/:id/storage', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const html = await findApprovedUserTool(req.params.id);
+  if (!html) return res.status(404).json({ error: '工具不存在或尚未上线' });
+  const rate = await kvIncr(`usertool:storage:rate:${session.username}:${req.params.id}`, 60);
+  if (rate > 120) return res.status(429).json({ error: '存储操作太频繁，请稍后再试' });
+
+  const data = normalizeToolStorage(await kvGet(`usertool_storage:${req.params.id}:${session.username}`));
+  const key = String(req.query.key || '');
+  res.set('Cache-Control', 'no-store');
+  if (key) {
+    if (!isValidUserToolStorageKey(key)) return res.status(400).json({ error: '存储键无效' });
+    return res.json({ success: true, value: Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null });
+  }
+  res.json({ success: true, data });
+});
+
+app.post('/api/usertool/:id/storage', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const html = await findApprovedUserTool(req.params.id);
+  if (!html) return res.status(404).json({ error: '工具不存在或尚未上线' });
+  const rate = await kvIncr(`usertool:storage:rate:${session.username}:${req.params.id}`, 60);
+  if (rate > 120) return res.status(429).json({ error: '存储操作太频繁，请稍后再试' });
+
+  const key = String((req.body && req.body.key) || '');
+  const value = String((req.body && req.body.value) == null ? '' : req.body.value);
+  if (!isValidUserToolStorageKey(key)) return res.status(400).json({ error: '存储键无效' });
+  if (value.length > 4096) return res.status(413).json({ error: '单个存储值不能超过 4096 个字符' });
+
+  const data = normalizeToolStorage(await kvGet(`usertool_storage:${req.params.id}:${session.username}`));
+  if (!Object.prototype.hasOwnProperty.call(data, key) && Object.keys(data).length >= 50) {
+    return res.status(413).json({ error: '存储键数量已达上限' });
+  }
+  data[key] = value;
+  if (Buffer.byteLength(JSON.stringify(data), 'utf8') > 32 * 1024) {
+    return res.status(413).json({ error: '工具存储空间已满' });
+  }
+  await kvPut(`usertool_storage:${req.params.id}:${session.username}`, data);
+  res.json({ success: true, value });
+});
+
+app.delete('/api/usertool/:id/storage/:key', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const html = await findApprovedUserTool(req.params.id);
+  if (!html) return res.status(404).json({ error: '工具不存在或尚未上线' });
+  const key = String(req.params.key || '');
+  if (!isValidUserToolStorageKey(key)) return res.status(400).json({ error: '存储键无效' });
+
+  const data = normalizeToolStorage(await kvGet(`usertool_storage:${req.params.id}:${session.username}`));
+  delete data[key];
+  await kvPut(`usertool_storage:${req.params.id}:${session.username}`, data);
+  res.json({ success: true, value: null });
+});
+
+function injectUserToolSdk(html, id) {
+  const sdk = `<script>
+(function () {
+  if (window.greenbox && window.greenbox.storage) return;
+  var seq = 0;
+  var pending = {};
+  function request(type, payload) {
+    return new Promise(function (resolve, reject) {
+      var id = 'gb' + (++seq) + '_' + Date.now().toString(36);
+      var timer = setTimeout(function () {
+        if (pending[id]) {
+          delete pending[id];
+          reject(new Error('存储请求超时'));
+        }
+      }, 8000);
+      pending[id] = {
+        resolve: function (value) { clearTimeout(timer); resolve(value); },
+        reject: function (err) { clearTimeout(timer); reject(err); }
+      };
+      window.parent.postMessage(Object.assign({ channel: 'greenbox', type: type, id: id }, payload || {}), '*');
+    });
+  }
+  window.addEventListener('message', function (event) {
+    if (event.source !== window.parent) return;
+    var data = event.data;
+    if (!data || data.channel !== 'greenbox' || data.type !== 'storage:result') return;
+    var item = pending[data.id];
+    if (!item) return;
+    delete pending[data.id];
+    if (data.ok) item.resolve(data.value);
+    else item.reject(new Error(data.error || '存储失败'));
+  });
+  window.greenbox = {
+    toolId: ${JSON.stringify(id)},
+    storage: {
+      get: function (key) { return request('storage:get', key ? { key: String(key) } : {}); },
+      all: function () { return request('storage:get', {}); },
+      set: function (key, value) { return request('storage:set', { key: String(key), value: String(value) }); },
+      remove: function (key) { return request('storage:remove', { key: String(key) }); }
+    }
+  };
+})();
+<\/script>`;
+  const lower = String(html).toLowerCase();
+  const headEnd = lower.lastIndexOf('</head>');
+  if (headEnd >= 0) return html.slice(0, headEnd) + sdk + html.slice(headEnd);
+  const bodyMatch = html.match(/<body[^>]*>/i);
+  if (bodyMatch) {
+    const pos = bodyMatch.index + bodyMatch[0].length;
+    return html.slice(0, pos) + sdk + html.slice(pos);
+  }
+  return sdk + html;
+}
+
 app.get('/usertool/:id', async (req, res) => {
   const id = String(req.params.id || '');
   if (!/^[a-zA-Z0-9_]+$/.test(id)) return res.status(404).send('工具不存在');
   let html = await kvGet(`tool_content:${id}`);
   if (!html) html = await kvGet(`tool_sub_content:${id}`);
   if (!html) return res.status(404).send('工具不存在');
+  const bridge = `<script>
+(function () {
+  'use strict';
+  var toolId = ${JSON.stringify(id)};
+  var frame = document.getElementById('gb-usertool-frame');
+  if (!frame) return;
+  var token = '';
+  try { token = localStorage.getItem('greenbox_token') || ''; } catch (e) {}
+  function send(message) {
+    if (frame.contentWindow) frame.contentWindow.postMessage(message, '*');
+  }
+  function reply(req, ok, value, error) {
+    send({ channel: 'greenbox', type: 'storage:result', id: req && req.id, ok: ok, value: value, error: error || '' });
+  }
+  frame.addEventListener('load', function () {
+    send({ channel: 'greenbox', type: 'storage:ready' });
+  });
+  window.addEventListener('message', async function (event) {
+    if (event.source !== frame.contentWindow) return;
+    var req = event.data;
+    if (!req || req.channel !== 'greenbox') return;
+    if (['storage:get', 'storage:set', 'storage:remove'].indexOf(req.type) < 0) return;
+    if (!token) { reply(req, false, null, '请先登录 GreenBox'); return; }
+    var key = String(req.key || '');
+    if (req.type !== 'storage:get' && (!/^[a-zA-Z0-9_.-]{1,64}$/.test(key) || ['__proto__', 'constructor', 'prototype'].indexOf(key) >= 0)) {
+      reply(req, false, null, '存储键无效');
+      return;
+    }
+    var value = String(req.value == null ? '' : req.value);
+    if (req.type === 'storage:set' && value.length > 4096) {
+      reply(req, false, null, '存储值过长');
+      return;
+    }
+    try {
+      var url = '/api/usertool/' + encodeURIComponent(toolId) + '/storage';
+      var options = { headers: { 'Authorization': 'Bearer ' + token } };
+      if (req.type === 'storage:get') {
+        if (key) url += '?key=' + encodeURIComponent(key);
+      } else if (req.type === 'storage:set') {
+        options.method = 'POST';
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify({ key: key, value: value });
+      } else {
+        url += '/' + encodeURIComponent(key);
+        options.method = 'DELETE';
+      }
+      var response = await fetch(url, options);
+      var data = {};
+      try { data = await response.json(); } catch (e) {}
+      if (!response.ok) {
+        reply(req, false, null, data.error || '存储请求失败');
+        return;
+      }
+      reply(req, true, data.value !== undefined ? data.value : data.data, null);
+    } catch (e) {
+      reply(req, false, null, '存储网络错误');
+    }
+  });
+})();
+<\/script>`;
   const wrap = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>用户工具 - GreenBox</title>' +
     '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b12}iframe{display:block;width:100%;height:100%;border:0}</style>' +
-    '</head><body><iframe sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock allow-downloads" allow="fullscreen; gamepad" referrerpolicy="no-referrer" src="/usertool-raw/' + id + '"></iframe><script src="/presence.js"></script></body></html>';
+    '</head><body><iframe id="gb-usertool-frame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock allow-downloads" allow="fullscreen; gamepad" referrerpolicy="no-referrer" src="/usertool-raw/' + id + '"></iframe>' +
+    bridge + '<script src="/presence.js"></script></body></html>';
   res.set('Content-Type', 'text/html; charset=utf-8').send(wrap);
 });
 
@@ -965,7 +1160,7 @@ app.get('/usertool-raw/:id', async (req, res) => {
   if (!html) return res.status(404).send('工具不存在');
   res.set('Content-Type', 'text/html; charset=utf-8');
   res.set('Content-Security-Policy', 'sandbox allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock allow-downloads');
-  res.send(html);
+  res.send(injectUserToolSdk(html, id));
 });
 
 // ======== 快捷上传：密码换 6 位 Key，Key 或密码上传工具 ========
