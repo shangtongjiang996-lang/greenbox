@@ -6,7 +6,10 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const multer = require('multer');
 const crypto = require('crypto');
-const { kvGet, kvPut, kvDelete, kvList, kvIncr } = require('./redis');
+const {
+  kvGet, kvGetRaw, kvPut, kvPutRaw, kvDelete, kvScan, kvList, kvIncr,
+  kvWithLock, kvUpdate, kvAppend
+} = require('./redis');
 
 // ===== 社交模块 =====
 const { registerSocialRoutes, registerSocialSocket, emitToUser } = require('./social');
@@ -24,6 +27,32 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
+
+// 多实例广播：Socket.IO 的 Redis adapter
+try {
+  const { createAdapter } = require('@socket.io/redis-adapter');
+  const Redis = require('ioredis');
+  const pubClient = new Redis(process.env.REDIS_URL);
+  const subClient = pubClient.duplicate();
+  pubClient.on('error', err => console.error('Socket.IO Redis pub 错误:', err.message));
+  subClient.on('error', err => console.error('Socket.IO Redis sub 错误:', err.message));
+  io.adapter(createAdapter(pubClient, subClient));
+  console.log('Socket.IO Redis adapter 已启用');
+} catch (e) {
+  console.warn('Socket.IO Redis adapter 未启用:', e.message);
+}
+
+async function mutateSiteData(mutator) {
+  return kvUpdate('site_data', data => {
+    const next = data && typeof data === 'object' && !Array.isArray(data)
+      ? data
+      : { tools: [], changelogs: [] };
+    if (!Array.isArray(next.tools)) next.tools = [];
+    if (!Array.isArray(next.changelogs)) next.changelogs = [];
+    mutator(next);
+    return next;
+  }, { tools: [], changelogs: [] });
+}
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -337,8 +366,14 @@ app.post('/api/register', async (req, res) => {
   const users = await kvGet('users') || {};
   if (users[username]) return res.status(409).json({ error: '用户名已存在' });
   const record = await createUserRecord(password);
-  users[username] = record;
-  await kvPut('users', users);
+  let existed = false;
+  await kvUpdate('users', current => {
+    const next = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+    if (next[username]) { existed = true; return next; }
+    next[username] = record;
+    return next;
+  }, {});
+  if (existed) return res.status(409).json({ error: '用户名已存在' });
   res.json({ success: true, message: '注册成功' });
 });
 
@@ -364,8 +399,10 @@ app.post('/api/login', async (req, res) => {
   
   if (result.needsUpgrade) {
     const upgraded = result.upgradedRecord;
-    users[username] = upgraded;
-    await kvPut('users', users);
+    await kvUpdate('users', users => {
+      if (users && users[username]) users[username] = upgraded;
+      return users;
+    }, {});
   }
   const token = await createSession(username, user.role || 'user');
   const needsUpgrade = user.algo !== 'pbkdf2-sha256' || !user.iterations;
@@ -416,8 +453,10 @@ app.post('/api/change-my-password', async (req, res) => {
   const newRecord = await createUserRecord(newPassword);
   newRecord.role = user.role || 'user';
   newRecord.createdAt = user.createdAt || Date.now();
-  users[session.username] = newRecord;
-  await kvPut('users', users);
+  await kvUpdate('users', current => {
+    if (current && current[session.username]) current[session.username] = newRecord;
+    return current;
+  }, {});
   res.json({ success: true });
 });
 
@@ -427,8 +466,11 @@ app.post('/api/delete-account', async (req, res) => {
   if (!session) return res.status(401).json({ error: '请先登录' });
   if (session.username === 'admin') return res.status(403).json({ error: '不能删除管理员' });
   const users = await kvGet('users') || {};
-  delete users[session.username];
-  await kvPut('users', users);
+  if (!users[session.username]) return res.status(404).json({ error: '用户不存在' });
+  await kvUpdate('users', current => {
+    if (current && current[session.username]) delete current[session.username];
+    return current;
+  }, {});
   await kvDelete(`session:${token}`);
   await kvDelete(`user_profile:${session.username}`);
   await kvDelete(`user_avatar:${session.username}`);
@@ -600,7 +642,7 @@ app.get('/api/data', async (req, res) => {
 app.post('/api/update', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const clean = req.body;
-  await kvPut('site_data', clean);
+  await kvUpdate('site_data', () => clean, { tools: [], changelogs: [] });
   res.json({ success: true });
 });
 
@@ -615,9 +657,9 @@ app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   if (!htmlContent.trim()) return res.status(400).json({ error: '文件内容为空' });
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   await kvPut(`tool_content:${id}`, htmlContent);
-  const currentData = (await kvGet('site_data')) || { tools: [], changelogs: [] };
-  currentData.tools.push({ name, icon, description, category, url: `/tool/${id}` });
-  await kvPut('site_data', currentData);
+  await mutateSiteData(data => {
+    data.tools.push({ name, icon, description, category, url: `/tool/${id}` });
+  });
   res.json({ success: true, id, url: `/tool/${id}` });
 });
 
@@ -730,8 +772,7 @@ app.post('/api/tools/submit', upload.single('file'), async (req, res) => {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
-  list.push(item);
-  await kvPut('tool_submissions', list.slice(-300));
+  await kvAppend('tool_submissions', item, 300);
 
   if (status === 'rejected') {
     await pushSystemNotification(session.username,
@@ -772,7 +813,7 @@ app.delete('/api/tools/mine/:id', async (req, res) => {
     return res.status(400).json({ error: '已上线的工具不能自行撤回' });
   }
   await kvDelete(`tool_sub_content:${item.id}`);
-  await kvPut('tool_submissions', list.filter(x => x.id !== item.id));
+  await kvUpdate('tool_submissions', current => (Array.isArray(current) ? current.filter(x => x.id !== item.id) : []), []);
   res.json({ success: true });
 });
 
@@ -803,7 +844,16 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
     item.status = 'admin_rejected';
     item.adminReply = adminReply;
     item.updatedAt = Date.now();
-    await kvPut('tool_submissions', list);
+    await kvUpdate('tool_submissions', current => {
+      if (!Array.isArray(current)) return [];
+      const saved = current.find(x => x.id === item.id);
+      if (saved) {
+        saved.status = 'admin_rejected';
+        saved.adminReply = adminReply;
+        saved.updatedAt = Date.now();
+      }
+      return current;
+    }, []);
     await pushSystemNotification(item.username,
       item.kind === 'update' ? '工具更新未通过' : '工具审核未通过',
       `管理员审核未通过。${adminReply || (item.kind === 'update' ? '原工具保持不变，请修改后重新提交更新。' : '请修改后重新提交。')}`,
@@ -830,8 +880,6 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
       });
     }
     await kvPut(`tool_content:${target.id}`, html);
-    const data = (await kvGet('site_data')) || { tools: [], changelogs: [] };
-    if (!Array.isArray(data.tools)) data.tools = [];
     const targetUrl = `/usertool/${target.id}`;
     const entry = {
       name: item.name,
@@ -843,10 +891,11 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
       version: item.version,
       updatedAt: Date.now(),
     };
-    const index = data.tools.findIndex(t => t && t.url === targetUrl);
-    if (index >= 0) data.tools[index] = Object.assign({}, data.tools[index], entry);
-    else data.tools.push(entry);
-    await kvPut('site_data', data);
+    await mutateSiteData(data => {
+      const index = data.tools.findIndex(t => t && t.url === targetUrl);
+      if (index >= 0) data.tools[index] = Object.assign({}, data.tools[index], entry);
+      else data.tools.push(entry);
+    });
 
     Object.assign(target, {
       name: item.name,
@@ -865,7 +914,33 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
     item.toolUrl = targetUrl;
     item.adminReply = adminReply;
     item.updatedAt = Date.now();
-    await kvPut('tool_submissions', list);
+    await kvUpdate('tool_submissions', current => {
+      if (!Array.isArray(current)) return [];
+      const saved = current.find(x => x.id === item.id);
+      if (saved) {
+        saved.status = 'merged';
+        saved.mergedInto = target.id;
+        saved.toolUrl = targetUrl;
+        saved.adminReply = adminReply;
+        saved.updatedAt = Date.now();
+      }
+      const savedTarget = current.find(x => x.id === target.id);
+      if (savedTarget) {
+        Object.assign(savedTarget, {
+          name: item.name,
+          description: item.description,
+          icon: item.icon,
+          category: item.category,
+          version: item.version,
+          adminReply,
+          updatedAt: Date.now(),
+          toolUrl: targetUrl,
+          previousVersion: oldCode ? (Number(target.version) || 1) : 0,
+          canRollback: !!oldCode,
+        });
+      }
+      return current;
+    }, []);
     await pushSystemNotification(item.username, '工具更新已上线',
       `你的工具「${item.name}」已更新到 v${item.version}。${adminReply ? '管理员备注：' + adminReply : ''}`,
       'success', 'tool', targetUrl);
@@ -873,20 +948,19 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
   }
 
   await kvPut(`tool_content:${item.id}`, html);
-  const data = (await kvGet('site_data')) || { tools: [], changelogs: [] };
-  if (!Array.isArray(data.tools)) data.tools = [];
-  data.tools.push({
-    name: item.name,
-    icon: item.icon,
-    description: item.description,
-    category: item.category,
-    url: `/usertool/${item.id}`,
-    submittedBy: item.username,
-    version: item.version || 1,
-    updatedAt: Date.now(),
+  await mutateSiteData(data => {
+    data.tools.push({
+      name: item.name,
+      icon: item.icon,
+      description: item.description,
+      category: item.category,
+      url: `/usertool/${item.id}`,
+      submittedBy: item.username,
+      version: item.version || 1,
+      updatedAt: Date.now(),
+    });
+    if (data.tools.length > 500) data.tools = data.tools.slice(-500);
   });
-  if (data.tools.length > 500) data.tools = data.tools.slice(-500);
-  await kvPut('site_data', data);
 
   item.kind = item.kind || 'new';
   item.version = item.version || 1;
@@ -894,7 +968,19 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
   item.adminReply = adminReply;
   item.toolUrl = `/usertool/${item.id}`;
   item.updatedAt = Date.now();
-  await kvPut('tool_submissions', list);
+  await kvUpdate('tool_submissions', current => {
+    if (!Array.isArray(current)) return [];
+    const saved = current.find(x => x.id === item.id);
+    if (saved) {
+      saved.kind = item.kind;
+      saved.version = item.version;
+      saved.status = 'approved';
+      saved.adminReply = adminReply;
+      saved.toolUrl = item.toolUrl;
+      saved.updatedAt = Date.now();
+    }
+    return current;
+  }, []);
   await pushSystemNotification(item.username, '工具审核通过',
     `你的工具「${item.name}」已通过审核并上线。${adminReply ? '管理员备注：' + adminReply : ''}`,
     'success', 'tool', `/usertool/${item.id}`);
@@ -913,10 +999,7 @@ app.post('/api/admin/tools/:id/rollback', async (req, res) => {
   if (!prevCode) return res.status(400).json({ error: '没有可回滚的上一版' });
 
   await kvPut(`tool_content:${id}`, prevCode);
-  const data = (await kvGet('site_data')) || { tools: [], changelogs: [] };
-  if (!Array.isArray(data.tools)) data.tools = [];
   const targetUrl = `/usertool/${id}`;
-  const index = data.tools.findIndex(t => t && t.url === targetUrl);
   const entry = {
     name: prevMeta.name || target.name,
     icon: prevMeta.icon || target.icon,
@@ -927,9 +1010,11 @@ app.post('/api/admin/tools/:id/rollback', async (req, res) => {
     version: prevMeta.version || 1,
     updatedAt: Date.now(),
   };
-  if (index >= 0) data.tools[index] = Object.assign({}, data.tools[index], entry);
-  else data.tools.push(entry);
-  await kvPut('site_data', data);
+  await mutateSiteData(data => {
+    const index = data.tools.findIndex(t => t && t.url === targetUrl);
+    if (index >= 0) data.tools[index] = Object.assign({}, data.tools[index], entry);
+    else data.tools.push(entry);
+  });
 
   Object.assign(target, entry, {
     version: prevMeta.version || 1,
@@ -938,7 +1023,20 @@ app.post('/api/admin/tools/:id/rollback', async (req, res) => {
     canRollback: false,
     previousVersion: 0,
   });
-  await kvPut('tool_submissions', list);
+  await kvUpdate('tool_submissions', current => {
+    if (!Array.isArray(current)) return [];
+    const saved = current.find(x => x.id === id);
+    if (saved) {
+      Object.assign(saved, entry, {
+        version: prevMeta.version || 1,
+        updatedAt: Date.now(),
+        toolUrl: targetUrl,
+        canRollback: false,
+        previousVersion: 0,
+      });
+    }
+    return current;
+  }, []);
   await kvDelete(`tool_content_prev:${id}`);
   await kvDelete(`tool_prev_meta:${id}`);
   await pushSystemNotification(target.username, '工具已回滚',
@@ -1001,15 +1099,27 @@ app.post('/api/usertool/:id/storage', async (req, res) => {
   if (!isValidUserToolStorageKey(key)) return res.status(400).json({ error: '存储键无效' });
   if (value.length > 4096) return res.status(413).json({ error: '单个存储值不能超过 4096 个字符' });
 
-  const data = normalizeToolStorage(await kvGet(`usertool_storage:${req.params.id}:${session.username}`));
-  if (!Object.prototype.hasOwnProperty.call(data, key) && Object.keys(data).length >= 50) {
-    return res.status(413).json({ error: '存储键数量已达上限' });
+  const storageKey = `usertool_storage:${req.params.id}:${session.username}`;
+  try {
+    await kvUpdate(storageKey, current => {
+      const data = normalizeToolStorage(current);
+      if (!Object.prototype.hasOwnProperty.call(data, key) && Object.keys(data).length >= 50) {
+        const err = new Error('存储键数量已达上限');
+        err.statusCode = 413;
+        throw err;
+      }
+      data[key] = value;
+      if (Buffer.byteLength(JSON.stringify(data), 'utf8') > 32 * 1024) {
+        const err = new Error('工具存储空间已满');
+        err.statusCode = 413;
+        throw err;
+      }
+      return data;
+    }, {});
+  } catch (e) {
+    if (e.statusCode) return res.status(e.statusCode).json({ error: e.message });
+    throw e;
   }
-  data[key] = value;
-  if (Buffer.byteLength(JSON.stringify(data), 'utf8') > 32 * 1024) {
-    return res.status(413).json({ error: '工具存储空间已满' });
-  }
-  await kvPut(`usertool_storage:${req.params.id}:${session.username}`, data);
   res.json({ success: true, value });
 });
 
@@ -1021,9 +1131,12 @@ app.delete('/api/usertool/:id/storage/:key', async (req, res) => {
   const key = String(req.params.key || '');
   if (!isValidUserToolStorageKey(key)) return res.status(400).json({ error: '存储键无效' });
 
-  const data = normalizeToolStorage(await kvGet(`usertool_storage:${req.params.id}:${session.username}`));
-  delete data[key];
-  await kvPut(`usertool_storage:${req.params.id}:${session.username}`, data);
+  const storageKey = `usertool_storage:${req.params.id}:${session.username}`;
+  await kvUpdate(storageKey, current => {
+    const data = normalizeToolStorage(current);
+    delete data[key];
+    return data;
+  }, {});
   res.json({ success: true, value: null });
 });
 
@@ -1218,44 +1331,48 @@ app.post('/api/tool/quick-upload', async (req, res) => {
       const existing = await kvGet(`tool_content:${updateId}`);
       if (!existing) return res.status(404).json({ error: '工具不存在' });
       await kvPut(`tool_content:${updateId}`, htmlContent);
-      data.tools.push({
+      await mutateSiteData(siteData => {
+        siteData.tools.push({
+          name: cleanName,
+          icon: cleanIcon,
+          description: cleanDesc,
+          category: cleanCategory,
+          url: `/tool/${updateId}`,
+        });
+        if (siteData.tools.length > 500) siteData.tools = siteData.tools.slice(-500);
+      });
+      await kvDelete(`toolup:fail:${clientIp(req)}`);
+      return res.json({ success: true, id: updateId, url: `/tool/${updateId}`, restored: true, via: auth.via });
+    }
+    await kvPut(`tool_content:${updateId}`, htmlContent);
+    await mutateSiteData(siteData => {
+      const index = siteData.tools.findIndex(t => t && t.url === `/tool/${updateId}`);
+      const entry = {
         name: cleanName,
         icon: cleanIcon,
         description: cleanDesc,
         category: cleanCategory,
         url: `/tool/${updateId}`,
-      });
-      if (data.tools.length > 500) data.tools = data.tools.slice(-500);
-      await kvPut('site_data', data);
-      await kvDelete(`toolup:fail:${clientIp(req)}`);
-      return res.json({ success: true, id: updateId, url: `/tool/${updateId}`, restored: true, via: auth.via });
-    }
-    await kvPut(`tool_content:${updateId}`, htmlContent);
-    data.tools[idx] = {
-      name: cleanName,
-      icon: cleanIcon,
-      description: cleanDesc,
-      category: cleanCategory,
-      url: `/tool/${updateId}`,
-    };
-    await kvPut('site_data', data);
+      };
+      if (index >= 0) siteData.tools[index] = entry;
+      else siteData.tools.push(entry);
+    });
     await kvDelete(`toolup:fail:${clientIp(req)}`);
     return res.json({ success: true, id: updateId, url: `/tool/${updateId}`, updated: true, via: auth.via });
   }
 
   const id = Date.now().toString(36) + crypto.randomBytes(4).toString('hex');
   await kvPut(`tool_content:${id}`, htmlContent);
-  const currentData = (await kvGet('site_data')) || { tools: [], changelogs: [] };
-  if (!Array.isArray(currentData.tools)) currentData.tools = [];
-  currentData.tools.push({
-    name: cleanName,
-    icon: cleanIcon,
-    description: cleanDesc,
-    category: cleanCategory,
-    url: `/tool/${id}`,
+  await mutateSiteData(siteData => {
+    siteData.tools.push({
+      name: cleanName,
+      icon: cleanIcon,
+      description: cleanDesc,
+      category: cleanCategory,
+      url: `/tool/${id}`,
+    });
+    if (siteData.tools.length > 500) siteData.tools = siteData.tools.slice(-500);
   });
-  if (currentData.tools.length > 500) currentData.tools = currentData.tools.slice(-500);
-  await kvPut('site_data', currentData);
   await kvDelete(`toolup:fail:${clientIp(req)}`);
   res.json({ success: true, id, url: `/tool/${id}`, via: auth.via });
 });
@@ -2503,14 +2620,16 @@ app.post('/api/push/subscribe', async (req, res) => {
   if (!session) return res.status(401).json({ error: '请先登录' });
   const sub = (req.body && (req.body.subscription || req.body)) || null;
   if (!validPushSubscription(sub)) return res.status(400).json({ error: '推送订阅无效' });
-  const list = await getPushSubs(session.username);
-  const next = list.filter(x => x && x.endpoint !== sub.endpoint);
-  next.push({
-    endpoint: sub.endpoint,
-    expirationTime: sub.expirationTime || null,
-    keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
-  });
-  await savePushSubs(session.username, next);
+  await kvUpdate(`push_subs:${session.username}`, current => {
+    const list = Array.isArray(current) ? current : [];
+    const next = list.filter(x => x && x.endpoint !== sub.endpoint);
+    next.push({
+      endpoint: sub.endpoint,
+      expirationTime: sub.expirationTime || null,
+      keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+    });
+    return next.slice(-8);
+  }, []);
   res.json({ success: true });
 });
 
@@ -2518,8 +2637,10 @@ app.post('/api/push/unsubscribe', async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
   const endpoint = String((req.body && req.body.endpoint) || '');
-  const list = await getPushSubs(session.username);
-  await savePushSubs(session.username, list.filter(x => x && x.endpoint !== endpoint));
+  await kvUpdate(`push_subs:${session.username}`, current => {
+    const list = Array.isArray(current) ? current : [];
+    return list.filter(x => x && x.endpoint !== endpoint).slice(-8);
+  }, []);
   res.json({ success: true });
 });
 
@@ -2603,9 +2724,7 @@ app.post('/api/notifications/send', async (req, res) => {
     link,
     createdAt: Date.now(),
   };
-  const list = (await kvGet('notifications')) || [];
-  list.push(notif);
-  await kvPut('notifications', list.slice(-500));
+  await kvAppend('notifications', notif, 500);
   const prefs = await getNotifPrefs(to);
   if (notifCategoryEnabled(prefs, 'game')) {
     try { emitToUser(io, to, 'notify:major', notif); } catch (e) {}
@@ -2629,9 +2748,7 @@ async function pushSystemNotification(target, title, content, type, kind, link) 
     link: typeof link === 'string' && link.startsWith('/') ? link : '',
     createdAt: Date.now(),
   };
-  const list = (await kvGet('notifications')) || [];
-  list.push(notif);
-  await kvPut('notifications', list.slice(-500));
+  await kvAppend('notifications', notif, 500);
   const prefs = await getNotifPrefs(target);
   if (notifCategoryEnabled(prefs, category)) {
     try { emitToUser(io, target, 'notify:update', notif); } catch (e) {}
@@ -2664,9 +2781,7 @@ app.post('/api/feedback', async (req, res) => {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
-  const list = (await kvGet('feedback')) || [];
-  list.push(item);
-  await kvPut('feedback', list.slice(-500));
+  await kvAppend('feedback', item, 500);
   res.json({ success: true, feedback: item });
 });
 
@@ -2680,10 +2795,15 @@ app.get('/api/feedback/mine', async (req, res) => {
 app.delete('/api/feedback/:id', async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
-  const list = (await kvGet('feedback')) || [];
-  const item = list.find(f => f.id === req.params.id);
-  if (!item || item.username !== session.username) return res.status(404).json({ error: '反馈不存在' });
-  await kvPut('feedback', list.filter(f => f.id !== item.id));
+  let removed = false;
+  await kvUpdate('feedback', list => {
+    if (!Array.isArray(list)) return [];
+    const item = list.find(f => f.id === req.params.id);
+    if (!item || item.username !== session.username) return list;
+    removed = true;
+    return list.filter(f => f.id !== item.id);
+  }, []);
+  if (!removed) return res.status(404).json({ error: '反馈不存在' });
   res.json({ success: true });
 });
 
@@ -2699,13 +2819,17 @@ app.post('/api/admin/feedback/:id', async (req, res) => {
   if (!['ignored', 'completed', 'not_completed'].includes(status)) {
     return res.status(400).json({ error: '状态无效' });
   }
-  const list = (await kvGet('feedback')) || [];
-  const item = list.find(f => f.id === req.params.id);
+  let item = null;
+  await kvUpdate('feedback', current => {
+    if (!Array.isArray(current)) return [];
+    item = current.find(f => f.id === req.params.id) || null;
+    if (!item) return current;
+    item.status = status;
+    item.reply = String(reply || '').replace(/[<>]/g, '').trim().slice(0, 500);
+    item.updatedAt = Date.now();
+    return current;
+  }, []);
   if (!item) return res.status(404).json({ error: '反馈不存在' });
-  item.status = status;
-  item.reply = String(reply || '').replace(/[<>]/g, '').trim().slice(0, 500);
-  item.updatedAt = Date.now();
-  await kvPut('feedback', list);
 
   if (status !== 'ignored') {
     const done = status === 'completed';
@@ -2772,6 +2896,89 @@ app.delete('/api/notifications', async (req, res) => {
   res.json({ success: true });
 });
 
+// ============================================================
+//  备份与恢复
+// ============================================================
+const BACKUP_EXCLUDE_PREFIXES = [
+  'session:', '__lock:', 'rl:', 'notif:rate:', 'notif:day:',
+  'feedback:rate:', 'tool_submit:', 'toolup:fail:', 'usertool:storage:rate:',
+  'chat_quota:', 'chat_limit:', 'gomoku:', 'presence:',
+];
+
+function isBackupKey(key) {
+  if (typeof key !== 'string' || !key || key.length > 512) return false;
+  return !BACKUP_EXCLUDE_PREFIXES.some(prefix => key.startsWith(prefix));
+}
+
+app.get('/api/admin/backup/export', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const allKeys = (await kvScan('*', 300)).filter(isBackupKey).sort();
+  if (allKeys.length > 20000) return res.status(413).json({ error: '数据键过多，无法一次性导出' });
+
+  const keys = {};
+  let total = 0;
+  for (const key of allKeys) {
+    const value = await kvGetRaw(key);
+    if (value === null) continue;
+    total += Buffer.byteLength(value, 'utf8');
+    if (total > 80 * 1024 * 1024) {
+      return res.status(413).json({ error: '备份超过 80MB，请先清理大文件' });
+    }
+    keys[key] = value;
+  }
+
+  const payload = {
+    format: 'greenbox-backup',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    keys,
+  };
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  res.set('Content-Type', 'application/json; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="greenbox-backup-${stamp}.json"`);
+  res.set('Cache-Control', 'no-store');
+  res.send(JSON.stringify(payload));
+});
+
+app.post('/api/admin/backup/restore',
+  async (req, res, next) => {
+    if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+    next();
+  },
+  upload.single('file'),
+  async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  if (!req.file) return res.status(400).json({ error: '请选择备份 JSON 文件' });
+  if (req.file.size > 80 * 1024 * 1024) return res.status(413).json({ error: '备份文件不能超过 80MB' });
+  if (String((req.body && req.body.confirm) || '') !== 'RESTORE') {
+    return res.status(400).json({ error: '请输入 RESTORE 确认恢复' });
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(req.file.buffer.toString('utf8'));
+  } catch (e) {
+    return res.status(400).json({ error: '备份文件不是有效 JSON' });
+  }
+  if (!payload || payload.format !== 'greenbox-backup' || !payload.keys || typeof payload.keys !== 'object' || Array.isArray(payload.keys)) {
+    return res.status(400).json({ error: '不是 GreenBox 备份文件' });
+  }
+
+  const entries = Object.entries(payload.keys);
+  if (entries.length > 20000) return res.status(413).json({ error: '备份键数量过多' });
+  let restored = 0;
+  let skipped = 0;
+  let total = 0;
+  for (const [key, value] of entries) {
+    if (!isBackupKey(key) || typeof value !== 'string') { skipped += 1; continue; }
+    total += Buffer.byteLength(value, 'utf8');
+    if (total > 80 * 1024 * 1024) return res.status(413).json({ error: '备份内容超过 80MB' });
+    await kvPutRaw(key, value);
+    restored += 1;
+  }
+  res.json({ success: true, restored, skipped });
+});
+
 app.get('/api/admin/notifications', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const list = (await kvGet('notifications')) || [];
@@ -2804,10 +3011,7 @@ app.post('/api/admin/notifications', async (req, res) => {
     if (!users[notif.target]) return res.status(404).json({ error: '目标用户不存在' });
   }
 
-  const list = (await kvGet('notifications')) || [];
-  list.push(notif);
-  const trimmed = list.slice(-500);
-  await kvPut('notifications', trimmed);
+  await kvAppend('notifications', notif, 500);
 
   if (notif.target === 'all') {
     kvGet('users').then(users => {
@@ -2835,9 +3039,7 @@ app.post('/api/admin/notifications', async (req, res) => {
 app.delete('/api/admin/notifications/:id', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const id = req.params.id;
-  const list = (await kvGet('notifications')) || [];
-  const newList = list.filter(n => n.id !== id);
-  await kvPut('notifications', newList);
+  await kvUpdate('notifications', list => (Array.isArray(list) ? list.filter(n => n.id !== id) : []), []);
   res.json({ success: true });
 });
 
@@ -2981,15 +3183,17 @@ app.get('/api/admin/files/:id', async (req, res) => {
 app.put('/api/admin/tools/:id', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { name, icon, description, category } = req.body;
-  const siteData = await kvGet('site_data');
-  if (!siteData || !siteData.tools) return res.status(404).json({ error: '工具列表不存在' });
-  const tool = siteData.tools.find(t => t.url === `/tool/${req.params.id}`);
-  if (!tool) return res.status(404).json({ error: '工具不存在' });
-  if (name !== undefined) tool.name = name.slice(0,60);
-  if (icon !== undefined) tool.icon = icon.slice(0,8);
-  if (description !== undefined) tool.description = description.slice(0,300);
-  if (category !== undefined) tool.category = category.slice(0,20);
-  await kvPut('site_data', siteData);
+  let found = false;
+  await mutateSiteData(siteData => {
+    const tool = siteData.tools.find(t => t && t.url === `/tool/${req.params.id}`);
+    if (!tool) return;
+    found = true;
+    if (name !== undefined) tool.name = String(name).slice(0, 60);
+    if (icon !== undefined) tool.icon = String(icon).slice(0, 8);
+    if (description !== undefined) tool.description = String(description).slice(0, 300);
+    if (category !== undefined) tool.category = String(category).slice(0, 20);
+  });
+  if (!found) return res.status(404).json({ error: '工具不存在' });
   res.json({ success: true });
 });
 
@@ -2997,11 +3201,9 @@ app.delete('/api/admin/files/:id', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const id = req.params.id;
   await kvDelete(`tool_content:${id}`);
-  const siteData = await kvGet('site_data');
-  if (siteData && siteData.tools) {
-    siteData.tools = siteData.tools.filter(t => t.url !== `/tool/${id}`);
-    await kvPut('site_data', siteData);
-  }
+  await mutateSiteData(siteData => {
+    siteData.tools = siteData.tools.filter(t => t && t.url !== `/tool/${id}`);
+  });
   res.json({ success: true });
 });
 

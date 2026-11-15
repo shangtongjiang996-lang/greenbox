@@ -626,6 +626,7 @@
       <button class="tab-btn" data-tab="notify">通知管理</button>
       <button class="tab-btn" data-tab="feedback">反馈</button>
       <button class="tab-btn" data-tab="review">审核</button>
+      <button class="tab-btn" data-tab="backup">备份</button>
       <button class="tab-btn" data-tab="settings">设置</button>
     </div>
 
@@ -903,6 +904,23 @@
         <p style="color:#64748b;font-size:0.88rem;margin-bottom:1rem;">AI 已完成初审，这里处理等待人工审核的投稿。通过后工具会上线到工具箱。</p>
         <div id="admin-review-list"><p style="color:#94a3b8;">加载中...</p></div>
         <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadToolReviews()">刷新审核</button>
+      </div>
+    </div>
+
+    <div id="tab-backup" class="tab-content">
+      <div class="card">
+        <h2>备份与恢复</h2>
+        <p style="color:#64748b;font-size:0.88rem;line-height:1.7;">导出包含用户、工具、通知、反馈、论坛、私信、头像等数据；不包含登录会话、棋局房间和限流计数。恢复为合并模式，不会删除现有键，恢复前请先下载当前备份。</p>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin:1rem 0;">
+          <button class="btn btn-primary" type="button" onclick="exportBackup()">下载备份 JSON</button>
+        </div>
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:1rem 0;">
+        <div style="display:flex;flex-direction:column;gap:0.6rem;">
+          <input type="file" id="backupFile" accept=".json,application/json">
+          <input id="backupConfirm" placeholder="输入 RESTORE 确认恢复" maxlength="20" style="padding:0.5rem 0.65rem;border:1px solid #cbd5e1;border-radius:7px;font-family:inherit;">
+          <div><button class="btn btn-outline" type="button" onclick="importBackup()">恢复备份</button></div>
+          <div id="backupStatus" style="color:#64748b;font-size:0.82rem;"></div>
+        </div>
       </div>
     </div>
 
@@ -1944,6 +1962,62 @@ async function rollbackTool(id) {
     loadToolReviews();
   } catch (e) {
     showToast('回滚失败：' + e.message, 'error');
+  }
+}
+
+async function exportBackup() {
+  const status = document.getElementById('backupStatus');
+  status.textContent = '正在生成备份...';
+  try {
+    const res = await fetch('/api/admin/backup/export', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) {
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+      throw new Error(data.error || '导出失败');
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : 'greenbox-backup.json';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    status.textContent = '备份已开始下载。';
+  } catch (e) {
+    status.textContent = '导出失败：' + e.message;
+  }
+}
+
+async function importBackup() {
+  const fileInput = document.getElementById('backupFile');
+  const confirmInput = document.getElementById('backupConfirm');
+  const status = document.getElementById('backupStatus');
+  const file = fileInput.files[0];
+  const confirmText = confirmInput.value.trim();
+  if (!file) { status.textContent = '请选择备份 JSON 文件'; return; }
+  if (confirmText !== 'RESTORE') { status.textContent = '请输入 RESTORE 确认恢复'; return; }
+  if (!confirm('恢复会覆盖同名的现有数据，确定继续？')) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('confirm', confirmText);
+  status.textContent = '正在恢复，请勿关闭页面...';
+  try {
+    const res = await fetch('/api/admin/backup/restore', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: fd
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '恢复失败');
+    status.textContent = `恢复完成：写入 ${data.restored} 个键，跳过 ${data.skipped} 个。`;
+    showToast('备份恢复完成', 'success');
+  } catch (e) {
+    status.textContent = '恢复失败：' + e.message;
   }
 }
 

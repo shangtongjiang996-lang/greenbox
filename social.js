@@ -2,7 +2,7 @@
  * social.js — 私聊 / 好友 / 用户主页 / 论坛收藏转发
  * 由 app.js 挂载
  */
-const { kvGet, kvPut, kvDelete } = require('./redis');
+const { kvGet, kvPut, kvDelete, kvScan } = require('./redis');
 
 // 私信附件限制
 const DM_FILE_LIMIT = 200 * 1024 * 1024;
@@ -161,15 +161,29 @@ async function publicProfile(username) {
 //  在线状态
 // ============================================================
 const onlineSockets = new Map(); // username -> Set<socket>
-function isOnline(username) {
-  const s = onlineSockets.get(username);
-  return !!(s && s.size);
+async function isOnline(username) {
+  try {
+    const keys = await kvScan(`presence:${username}:*`, 100);
+    return keys.length > 0;
+  } catch (e) {
+    const s = onlineSockets.get(username);
+    return !!(s && s.size);
+  }
 }
 function addOnline(username, socket) {
   if (!onlineSockets.has(username)) onlineSockets.set(username, new Set());
   onlineSockets.get(username).add(socket);
+  const key = `presence:${username}:${socket.id}`;
+  const refresh = () => kvPut(key, '1', { expirationTtl: 300 }).catch(() => {});
+  refresh();
+  socket.__gbPresenceTimer = setInterval(refresh, 120000);
 }
 function removeOnline(username, socket) {
+  if (socket.__gbPresenceTimer) {
+    clearInterval(socket.__gbPresenceTimer);
+    delete socket.__gbPresenceTimer;
+  }
+  kvDelete(`presence:${username}:${socket.id}`).catch(() => {});
   const set = onlineSockets.get(username);
   if (!set) return false;
   set.delete(socket);
@@ -177,8 +191,15 @@ function removeOnline(username, socket) {
   return false;
 }
 function emitToUser(io, username, event, data) {
+  const room = `user:${username}`;
+  try { io.to(room).emit(event, data); } catch (e) {}
   const set = onlineSockets.get(username);
-  if (set) for (const s of set) { try { s.emit(event, data); } catch (e) {} }
+  if (set) {
+    for (const s of set) {
+      if (s.rooms && s.rooms.has(room)) continue;
+      try { s.emit(event, data); } catch (e) {}
+    }
+  }
 }
 
 // ============================================================
@@ -300,7 +321,7 @@ function registerSocialRoutes(app, deps) {
 
     res.json({
       ...prof,
-      online: st.showOnline ? isOnline(username) : false,
+      online: st.showOnline ? await isOnline(username) : false,
       stats: {
         posts: posts.length,
         friends: friends.filter(f => !f.blocked).length,
@@ -341,7 +362,7 @@ function registerSocialRoutes(app, deps) {
         since: f.since || null,
         muted: !!f.muted,
         blocked: !!f.blocked,
-        online: st.showOnline ? isOnline(f.username) : false,
+        online: st.showOnline ? await isOnline(f.username) : false,
       });
     }
     out.sort((a, b) => (Number(b.online) - Number(a.online)) || (a.displayName || '').localeCompare(b.displayName || ''));
@@ -517,7 +538,7 @@ function registerSocialRoutes(app, deps) {
         peerName: prof.displayName,
         peerAvatar: prof.hasAvatar,
         peerRole: prof.role,
-        online: st.showOnline ? isOnline(c.peer) : false,
+        online: st.showOnline ? await isOnline(c.peer) : false,
       });
     }
     out.sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || ((b.lastTime || 0) - (a.lastTime || 0)));
@@ -700,6 +721,7 @@ function registerSocialSocket(io, deps) {
         if (socketUsers.has(socket.id)) return;
         socketUsers.set(socket.id, s.username);
         addOnline(s.username, socket);
+        socket.join(`user:${s.username}`);
         const friends = await getFriends(s.username);
         for (const f of friends) {
           if (f.blocked) continue;
