@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const compression = require('compression');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
@@ -59,6 +60,12 @@ async function mutateSiteData(mutator) {
 }
 
 app.use(cors());
+app.use(compression({
+  filter: (req, res) => {
+    if (req.path === '/api/chat/stream') return false;
+    return compression.filter(req, res);
+  }
+}));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
 // ===== SEO: 允许搜索引擎抓取所有页面 =====
@@ -3944,6 +3951,60 @@ async function saveForumIndex(list) {
   await kvPut('forum_index', list.slice(0, 500));
 }
 
+// 把历史论坛图片从 JSON 内联 base64 迁移到独立缓存键，降低列表和详情响应体积
+async function migrateForumMedia() {
+  if (await kvGet('forum_media_v1')) return;
+  try {
+    const index = await getForumIndex();
+    let changed = false;
+    for (const item of index) {
+      if (!item || !item.id) continue;
+      if (typeof item.coverImage === 'string' && item.coverImage.startsWith('data:image/')) {
+        await kvPut(`forum_cover:${item.id}`, item.coverImage, { expirationTtl: 90 * 24 * 3600 });
+        item.coverImage = `/api/forum/posts/${encodeURIComponent(item.id)}/cover`;
+        changed = true;
+      }
+    }
+    if (changed) await saveForumIndex(index);
+
+    for (const item of index) {
+      if (!item || !item.id) continue;
+      const post = await kvGet(`forum_post:${item.id}`);
+      if (post && Array.isArray(post.images)) {
+        let postChanged = false;
+        for (let i = 0; i < post.images.length; i++) {
+          const img = post.images[i];
+          if (typeof img === 'string' && img.startsWith('data:image/')) {
+            await kvPut(`forum_image:${item.id}:${i}`, img, { expirationTtl: 90 * 24 * 3600 });
+            post.images[i] = `/api/forum/posts/${item.id}/image/${i}`;
+            postChanged = true;
+          }
+        }
+        if (postChanged) await kvPut(`forum_post:${item.id}`, post, { expirationTtl: 90 * 24 * 3600 });
+      }
+
+      const comments = (await kvGet(`forum_comments:${item.id}`)) || [];
+      let commentsChanged = false;
+      for (const c of comments) {
+        if (!c || !Array.isArray(c.images)) continue;
+        for (let i = 0; i < c.images.length; i++) {
+          const img = c.images[i];
+          if (typeof img === 'string' && img.startsWith('data:image/')) {
+            await kvPut(`forum_comment_image:${item.id}:${c.id}:${i}`, img, { expirationTtl: 90 * 24 * 3600 });
+            c.images[i] = `/api/forum/posts/${item.id}/comments/${c.id}/image/${i}`;
+            commentsChanged = true;
+          }
+        }
+      }
+      if (commentsChanged) await kvPut(`forum_comments:${item.id}`, comments.slice(-500), { expirationTtl: 90 * 24 * 3600 });
+    }
+    await kvPut('forum_media_v1', '1');
+    console.log('论坛图片迁移完成');
+  } catch (e) {
+    console.error('论坛图片迁移失败:', e.message);
+  }
+}
+
 async function decoratePosts(items) {
   if (!Array.isArray(items) || items.length === 0) return items;
   let usersCache = {};
@@ -3974,6 +4035,81 @@ app.get('/api/forum/stats', async (req, res) => {
     totalViews: index.reduce((s, p) => s + (p.views || 0), 0),
     totalComments: index.reduce((s, p) => s + (p.commentCount || 0), 0),
   });
+});
+
+function forumCoverUrl(post) {
+  if (!post || !post.coverImage) return null;
+  if (typeof post.coverImage === 'string' && post.coverImage.startsWith('data:image/')) {
+    return `/api/forum/posts/${encodeURIComponent(post.id)}/cover`;
+  }
+  return post.coverImage;
+}
+
+function forumImageUrls(post) {
+  const images = Array.isArray(post && post.images) ? post.images : [];
+  return images.map((img, index) => {
+    if (typeof img === 'string' && img.startsWith('data:image/')) {
+      return `/api/forum/posts/${encodeURIComponent(post.id)}/image/${index}`;
+    }
+    return img;
+  });
+}
+
+function sendInlineImage(res, data) {
+  if (typeof data !== 'string' || !data) return res.status(404).end();
+  if (!data.startsWith('data:image/')) return res.redirect(data);
+  const comma = data.indexOf(',');
+  if (comma < 0) return res.status(404).end();
+  const meta = data.slice(5, comma);
+  if (!meta.includes(';base64')) return res.status(404).end();
+  const mime = meta.split(';')[0] || 'image/jpeg';
+  try {
+    const buffer = Buffer.from(data.slice(comma + 1), 'base64');
+    res.set('Content-Type', mime);
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(buffer);
+  } catch (e) {
+    res.status(404).end();
+  }
+}
+
+app.get('/api/forum/posts/:id/cover', async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^[a-zA-Z0-9]+$/.test(id)) return res.status(404).end();
+  const stored = await kvGetRaw(`forum_cover:${id}`);
+  if (stored) return sendInlineImage(res, stored);
+  const post = await kvGet(`forum_post:${id}`);
+  if (!post) return res.status(404).end();
+  const cover = post.coverImage || (Array.isArray(post.images) ? post.images[0] : '');
+  sendInlineImage(res, cover);
+});
+
+app.get('/api/forum/posts/:id/image/:index', async (req, res) => {
+  const id = String(req.params.id || '');
+  const index = Number(req.params.index);
+  if (!/^[a-zA-Z0-9]+$/.test(id) || !Number.isInteger(index) || index < 0 || index > 8) {
+    return res.status(404).end();
+  }
+  const stored = await kvGetRaw(`forum_image:${id}:${index}`);
+  if (stored) return sendInlineImage(res, stored);
+  const post = await kvGet(`forum_post:${id}`);
+  if (!post || !Array.isArray(post.images) || !post.images[index]) return res.status(404).end();
+  sendInlineImage(res, post.images[index]);
+});
+
+app.get('/api/forum/posts/:postId/comments/:commentId/image/:index', async (req, res) => {
+  const postId = String(req.params.postId || '');
+  const commentId = String(req.params.commentId || '');
+  const index = Number(req.params.index);
+  if (!/^[a-zA-Z0-9]+$/.test(postId) || !/^[a-zA-Z0-9]+$/.test(commentId) || !Number.isInteger(index) || index < 0 || index > 8) {
+    return res.status(404).end();
+  }
+  const cached = await kvGetRaw(`forum_comment_image:${postId}:${commentId}:${index}`);
+  if (cached) return sendInlineImage(res, cached);
+  const comments = (await kvGet(`forum_comments:${postId}`)) || [];
+  const comment = comments.find(c => c.id === commentId);
+  if (!comment || !Array.isArray(comment.images) || !comment.images[index]) return res.status(404).end();
+  sendInlineImage(res, comment.images[index]);
 });
 
 app.get('/api/forum/posts', async (req, res) => {
@@ -4011,13 +4147,14 @@ app.get('/api/forum/posts', async (req, res) => {
   const items = list.slice(start, start + pageSize);
 
   await decoratePosts(items);
+  const publicItems = items.map(p => Object.assign({}, p, { coverImage: forumCoverUrl(p) }));
 
   res.json({
     total: list.length,
     page: pageNum,
     pageSize,
     totalPages: Math.ceil(list.length / pageSize),
-    items,
+    items: publicItems,
   });
 });
 
@@ -4051,8 +4188,17 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
   const avatar = await kvGet(`user_avatar:${session.username}`);
 
   const now = Date.now();
+  const postId = genPostId();
+  const imageUrls = [];
+  for (let i = 0; i < images.length; i++) {
+    await kvPut(`forum_image:${postId}:${i}`, images[i], { expirationTtl: 90 * 24 * 3600 });
+    imageUrls.push(`/api/forum/posts/${postId}/image/${i}`);
+  }
+  if (images[0]) {
+    await kvPut(`forum_cover:${postId}`, images[0], { expirationTtl: 90 * 24 * 3600 });
+  }
   const post = {
-    id: genPostId(),
+    id: postId,
     title: cleanTitle,
     content: cleanContent,
     excerpt: cleanContent.replace(/https?:\/\/\S+/g, '[链接]').slice(0, 150),
@@ -4061,7 +4207,7 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
     authorAvatar: avatar ? `/api/user/avatar/${encodeURIComponent(session.username)}` : null,
     category: cleanCategory,
     tags: cleanTags,
-    images,
+    images: imageUrls,
     links,
     likes: [],
     views: 0,
@@ -4082,9 +4228,9 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
     authorDisplay: post.authorDisplay,
     category: post.category,
     tags: post.tags,
-    hasImages: images.length > 0,
+    hasImages: imageUrls.length > 0,
     hasLinks: links.length > 0,
-    coverImage: images[0] || null,
+    coverImage: imageUrls.length ? `/api/forum/posts/${post.id}/cover` : null,
     likes: 0,
     views: 0,
     commentCount: 0,
@@ -4102,7 +4248,10 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
 app.get('/api/forum/posts/:id', async (req, res) => {
   const post = await kvGet(`forum_post:${req.params.id}`);
   if (!post) return res.status(404).json({ error: '帖子不存在' });
-  res.json(post);
+  res.json(Object.assign({}, post, {
+    images: forumImageUrls(post),
+    coverImage: post.images && post.images[0] ? forumCoverUrl({ id: post.id, coverImage: post.images[0] }) : null,
+  }));
 });
 
 app.post('/api/forum/posts/:id/view', async (req, res) => {
@@ -4232,7 +4381,15 @@ app.post('/api/forum/posts/:id/pin', async (req, res) => {
 
 app.get('/api/forum/posts/:id/comments', async (req, res) => {
   const comments = (await kvGet(`forum_comments:${req.params.id}`)) || [];
-  res.json(comments);
+  const publicComments = comments.map(c => Object.assign({}, c, {
+    images: (Array.isArray(c.images) ? c.images : []).map((img, index) => {
+      if (typeof img === 'string' && img.startsWith('data:image/')) {
+        return `/api/forum/posts/${encodeURIComponent(req.params.id)}/comments/${encodeURIComponent(c.id)}/image/${index}`;
+      }
+      return img;
+    }),
+  }));
+  res.json(publicComments);
 });
 
 app.post('/api/forum/posts/:id/comments', upload.array('images', 2), async (req, res) => {
@@ -4260,12 +4417,18 @@ app.post('/api/forum/posts/:id/comments', upload.array('images', 2), async (req,
 
   const profile = await getPublicProfile(session.username);
   const avatar = await kvGet(`user_avatar:${session.username}`);
+  const commentId = genCommentId();
+  const commentImages = [];
+  for (let i = 0; i < images.length; i++) {
+    await kvPut(`forum_comment_image:${req.params.id}:${commentId}:${i}`, images[i], { expirationTtl: 90 * 24 * 3600 });
+    commentImages.push(`/api/forum/posts/${req.params.id}/comments/${commentId}/image/${i}`);
+  }
 
   const comment = {
-    id: genCommentId(),
+    id: commentId,
     content: String(content).trim().slice(0, 2000),
     links: extractLinks(String(content)),
-    images,
+    images: commentImages,
     author: session.username,
     authorDisplay: profile.displayName || session.username,
     authorAvatar: avatar ? `/api/user/avatar/${encodeURIComponent(session.username)}` : null,
@@ -5478,6 +5641,7 @@ registerSocialSocket(io, { getSession });
 // ======== 启动服务器 ========
 const PORT = process.env.PORT || 3000;
 setTimeout(function () { migrateLegacyAvatars(); }, 5000);
+setTimeout(function () { migrateForumMedia(); }, 6500);
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
   console.log(`WebSocket 已就绪（五子棋 + 私聊）`);
