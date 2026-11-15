@@ -981,6 +981,7 @@
           <button class="dm-icon-btn" id="dmPinBtn" title="置顶会话"><svg class="ico" aria-hidden="true"><use href="/icons.svg#pin"/></svg></button>
           <button class="dm-icon-btn" id="dmMuteBtn" title="免打扰"><svg class="ico" aria-hidden="true"><use href="/icons.svg#bell"/></svg></button>
           <button class="dm-icon-btn" id="dmProfileBtn" title="查看对方主页"><svg class="ico" aria-hidden="true"><use href="/icons.svg#user"/></svg></button>
+          <button class="dm-icon-btn" id="dmReportBtn" title="举报这个会话"><svg class="ico" aria-hidden="true"><use href="/icons.svg#shield"/></svg></button>
           <button class="dm-icon-btn" id="dmMoreBtn" title="更多">⋮</button>
         </div>
       </div>
@@ -2260,6 +2261,10 @@
     });
 
     document.getElementById('dmMoreBtn').addEventListener('click', openMoreMenu);
+    document.getElementById('dmReportBtn').addEventListener('click', () => {
+      if (!currentConvo) return;
+      location.href = '/report.html?type=message&id=' + encodeURIComponent(currentConvo.id) + '&user=' + encodeURIComponent(currentConvo.peer || '');
+    });
     document.getElementById('dmMoreCancel').addEventListener('click', () => {
       document.getElementById('dmMoreModal').classList.remove('show');
     });

@@ -3,6 +3,7 @@
  * 由 app.js 挂载
  */
 const { kvGet, kvPut, kvDelete, kvScan } = require('./redis');
+const { checkModeration } = require('./moderation');
 
 // 私信附件限制
 const DM_FILE_LIMIT = 200 * 1024 * 1024;
@@ -219,6 +220,8 @@ async function getPostsByUser(username) {
 // ============================================================
 async function deliverMessage(from, to, content, replyTo, io, attachment) {
   if (!to || to === from) return { error: '参数错误', code: 400 };
+  const moderationBlock = await checkModeration(from, 'dm');
+  if (moderationBlock) return { error: moderationBlock, code: 403 };
   const att = normalizeAttachment(attachment, from);
   if (att && att.error) return { error: att.error, code: 400 };
   content = String(content || '').trim();

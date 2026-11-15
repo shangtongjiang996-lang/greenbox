@@ -719,6 +719,7 @@
       if (rel !== 'blocked_by_me' && rel !== 'blocked_me') {
         html += `<button class="ua-btn ua-btn-outline" data-action="invite" title="每分钟 1 条，每天最多 5 条">邀请下五子棋</button>`;
       }
+      html += `<a class="ua-btn ua-btn-ghost" href="/report.html?type=user&id=${encodeURIComponent(p.username)}">举报用户</a>`;
 
       // 好友状态
       if (rel === 'friend') {

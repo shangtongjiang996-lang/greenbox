@@ -618,6 +618,12 @@
     border-radius: 6px; font-family: inherit;
   }
   .comment-del:hover { color: #ef4444; background: #fee2e2; }
+  .comment-report {
+    background: none; border: none; color: var(--forum-muted);
+    font-size: 11.5px; cursor: pointer; padding: 2px 6px;
+    border-radius: 6px; font-family: inherit;
+  }
+  .comment-report:hover { color: #f59e0b; background: #fef3c7; }
 
   .comment-input-area {
     display: flex; gap: 10px; margin-top: 16px;
@@ -1233,6 +1239,7 @@
             <div class="post-quick-actions">
               <button class="quick-btn ${isFaved ? 'active' : ''}" data-action="fav" data-post-id="${p.id}" title="收藏">${isFaved ? '★' : '☆'}</button>
               <button class="quick-btn" data-action="repost" data-post-id="${p.id}" title="转发">转发</button>
+              <button class="quick-btn" data-report-type="post" data-report-id="${p.id}" title="举报">举报</button>
             </div>
             ${coverHtml}
           </div>
@@ -1252,6 +1259,10 @@
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const id = btn.dataset.postId;
+          if (btn.dataset.reportType) {
+            location.href = '/report.html?type=' + encodeURIComponent(btn.dataset.reportType) + '&id=' + encodeURIComponent(btn.dataset.reportId);
+            return;
+          }
           if (btn.dataset.action === 'fav') {
             await toggleFavorite(id, btn);
           } else if (btn.dataset.action === 'repost') {
@@ -1397,7 +1408,10 @@
                   </div>
                   <div class="comment-content">${linkify(c.content)}</div>
                   ${cImages}
-                  ${cCanDel ? `<div class="comment-actions"><button class="comment-del" data-del-comment="${c.id}">删除</button></div>` : ''}
+                  <div class="comment-actions">
+                    <button class="comment-report" data-report-comment="${c.id}" data-report-post="${post.id}">举报</button>
+                    ${cCanDel ? `<button class="comment-del" data-del-comment="${c.id}">删除</button>` : ''}
+                  </div>
                 </div>
               </div>
             `;
@@ -1580,6 +1594,15 @@
               openPostDetail(post.id);
             }
           } catch (e) { showToast('网络错误', 'error'); }
+        });
+      });
+
+      document.querySelectorAll('[data-report-comment]').forEach(b => {
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const cid = b.dataset.reportComment;
+          const pid = b.dataset.reportPost;
+          location.href = '/report.html?type=comment&id=' + encodeURIComponent(cid) + '&parentId=' + encodeURIComponent(pid);
         });
       });
 

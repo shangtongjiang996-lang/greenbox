@@ -626,6 +626,7 @@
       <button class="tab-btn" data-tab="notify">通知管理</button>
       <button class="tab-btn" data-tab="feedback">反馈</button>
       <button class="tab-btn" data-tab="review">审核</button>
+      <button class="tab-btn" data-tab="moderation">治理</button>
       <button class="tab-btn" data-tab="backup">备份</button>
       <button class="tab-btn" data-tab="settings">设置</button>
     </div>
@@ -907,6 +908,38 @@
       </div>
     </div>
 
+    <div id="tab-moderation" class="tab-content">
+      <div class="card">
+        <h2>直接处罚用户</h2>
+        <p style="color:#64748b;font-size:0.88rem;line-height:1.7;margin-bottom:0.8rem;">可以直接警告、禁言、封禁或解除处罚。操作会写入审计日志并通知用户。</p>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+          <input id="modUsername" placeholder="用户名" style="padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
+          <select id="modAction" style="padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
+            <option value="warn">警告</option>
+            <option value="mute">禁言</option>
+            <option value="ban">封禁</option>
+            <option value="unmute">解除禁言</option>
+            <option value="unban">解除封禁</option>
+          </select>
+          <input id="modHours" type="number" min="1" max="8760" value="24" title="时长（小时）" style="width:80px;padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
+          <input id="modReason" placeholder="原因（可选）" maxlength="500" style="flex:1;min-width:180px;padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
+          <button class="btn btn-primary" type="button" onclick="moderateUser()">执行</button>
+        </div>
+        <div id="modStatus" style="color:#64748b;font-size:0.82rem;margin-top:0.5rem;"></div>
+      </div>
+      <div class="card">
+        <h2>举报队列 <span id="report-count" style="font-size:0.8rem;font-weight:400;color:#94a3b8;"></span></h2>
+        <p style="color:#64748b;font-size:0.88rem;line-height:1.7;margin-bottom:1rem;">处理举报时会通知举报人和被举报用户。处罚会写入审计日志。</p>
+        <div id="admin-report-list"><p style="color:#94a3b8;">加载中...</p></div>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadAdminReports()">刷新举报</button>
+      </div>
+      <div class="card">
+        <h2>审计日志</h2>
+        <div id="admin-audit-list"><p style="color:#94a3b8;">加载中...</p></div>
+        <button class="btn btn-primary" style="margin-top:1rem;" onclick="loadAuditLogs()">刷新日志</button>
+      </div>
+    </div>
+
     <div id="tab-backup" class="tab-content">
       <div class="card">
         <h2>备份与恢复</h2>
@@ -1050,6 +1083,8 @@ let allUsers = [];
     loadAdminNotifications();
     loadAdminFeedback();
     loadToolReviews();
+    loadAdminReports();
+    loadAuditLogs();
     setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
     setupNotifyForm();
     setupQuickUpload();
@@ -1962,6 +1997,126 @@ async function rollbackTool(id) {
     loadToolReviews();
   } catch (e) {
     showToast('回滚失败：' + e.message, 'error');
+  }
+}
+
+async function loadAdminReports() {
+  const box = document.getElementById('admin-report-list');
+  const count = document.getElementById('report-count');
+  try {
+    const res = await fetch('/api/admin/reports', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('加载失败');
+    const list = await res.json();
+    const pending = list.filter(x => x.status === 'pending');
+    count.textContent = `（${pending.length} 条待处理 / 共 ${list.length} 条）`;
+    if (!list.length) { box.innerHTML = '<p style="color:#94a3b8;">暂无举报</p>'; return; }
+    const statusLabels = { pending: '待处理', resolved: '已处理', dismissed: '已忽略' };
+    const typeLabels = { post: '帖子', comment: '评论', message: '私信', tool: '工具', user: '用户' };
+    const actionLabels = { none: '不处罚', warn: '警告', mute: '禁言', ban: '封禁' };
+    box.innerHTML = list.map(x => {
+      const cls = x.status === 'pending' ? 'info' : (x.status === 'resolved' ? 'success' : 'warning');
+      const time = new Date(x.createdAt).toLocaleString('zh-CN');
+      const targetLink = x.link ? `<a href="${x.link}" target="_blank" rel="noopener">查看对象</a>` : '';
+      const actions = x.status === 'pending'
+        ? `<div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem;align-items:center;">
+             <select id="report-action-${x.id}" style="padding:0.35rem;border:1px solid #cbd5e1;border-radius:7px;">
+               <option value="none">不处罚</option>
+               <option value="warn">警告</option>
+               <option value="mute">禁言</option>
+               <option value="ban">封禁</option>
+             </select>
+             <input id="report-hours-${x.id}" type="number" min="1" max="8760" value="24" title="时长（小时）" style="width:75px;padding:0.35rem;border:1px solid #cbd5e1;border-radius:7px;">
+             <span style="color:#94a3b8;font-size:0.78rem;">小时</span>
+             <input id="report-note-${x.id}" placeholder="处理备注（可选）" maxlength="500" style="flex:1;min-width:180px;padding:0.35rem;border:1px solid #cbd5e1;border-radius:7px;">
+           </div>
+           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+             <button class="btn btn-primary btn-sm" onclick="reviewReport('${x.id}','resolved')">处理并通知</button>
+             <button class="btn btn-outline btn-sm" onclick="reviewReport('${x.id}','dismissed')">忽略</button>
+           </div>`
+        : `<div class="notif-item-content">处理结果：${statusLabels[x.status] || x.status} · ${actionLabels[x.action] || x.action || '无'}${x.handleNote ? ' · ' + escapeHtmlAdmin(x.handleNote) : ''}</div>`;
+      return `<div class="notif-item ${cls}" style="margin-bottom:0.7rem;">
+        <div class="notif-item-head">
+          <div class="notif-item-title"><span class="notif-type-badge ${cls}">${statusLabels[x.status] || x.status}</span>${escapeHtmlAdmin(typeLabels[x.type] || x.type)} · ${escapeHtmlAdmin(x.reason)}</div>
+          <div class="notif-item-meta"><span>@${escapeHtmlAdmin(x.reporter)} · ${time}</span></div>
+        </div>
+        <div class="notif-item-content">对象：${escapeHtmlAdmin(x.targetTitle || x.targetId)}${x.targetUser ? ' · @' + escapeHtmlAdmin(x.targetUser) : ''}</div>
+        ${x.targetPreview ? `<div class="notif-item-content">${escapeHtmlAdmin(x.targetPreview)}</div>` : ''}
+        ${x.detail ? `<div class="notif-item-content">说明：${escapeHtmlAdmin(x.detail)}</div>` : ''}
+        ${targetLink ? `<div class="notif-item-meta">${targetLink}</div>` : ''}
+        ${actions}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<p style="color:#ef4444;">加载失败</p>';
+  }
+}
+
+async function moderateUser() {
+  const username = document.getElementById('modUsername').value.trim();
+  const action = document.getElementById('modAction').value;
+  const durationHours = Number(document.getElementById('modHours').value) || 24;
+  const reason = document.getElementById('modReason').value.trim();
+  const status = document.getElementById('modStatus');
+  if (!username) { status.textContent = '请输入用户名'; return; }
+  if (!confirm(`确定对 ${username} 执行 ${action}？`)) return;
+  status.textContent = '正在执行...';
+  try {
+    const res = await fetch('/api/admin/users/' + encodeURIComponent(username) + '/moderate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ action, durationHours, reason })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '操作失败');
+    status.textContent = '已执行，并已通知用户。';
+    showToast('处罚已执行', 'success');
+    loadAuditLogs();
+  } catch (e) {
+    status.textContent = '操作失败：' + e.message;
+  }
+}
+
+async function reviewReport(id, status) {
+  const actionEl = document.getElementById('report-action-' + id);
+  const hoursEl = document.getElementById('report-hours-' + id);
+  const noteEl = document.getElementById('report-note-' + id);
+  const action = actionEl ? actionEl.value : 'none';
+  const durationHours = hoursEl ? Number(hoursEl.value) || 24 : 24;
+  const note = noteEl ? noteEl.value.trim() : '';
+  if (status === 'dismissed' && !confirm('确定忽略这条举报？')) return;
+  if (status === 'resolved' && !confirm('确定处理这条举报并通知双方？')) return;
+  try {
+    const res = await fetch('/api/admin/reports/' + encodeURIComponent(id), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ status, action, durationHours, note })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '操作失败');
+    showToast('举报已处理', 'success');
+    loadAdminReports();
+    loadAuditLogs();
+  } catch (e) {
+    showToast('操作失败：' + e.message, 'error');
+  }
+}
+
+async function loadAuditLogs() {
+  const box = document.getElementById('admin-audit-list');
+  try {
+    const res = await fetch('/api/admin/audit-logs', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('加载失败');
+    const list = await res.json();
+    if (!list.length) { box.innerHTML = '<p style="color:#94a3b8;">暂无审计记录</p>'; return; }
+    box.innerHTML = list.slice(0, 100).map(x => `<div class="notif-item" style="margin-bottom:0.5rem;padding:0.6rem 0.7rem;">
+      <div class="notif-item-head">
+        <div class="notif-item-title"><span class="notif-type-badge info">${escapeHtmlAdmin(x.action)}</span>${escapeHtmlAdmin(x.target)}</div>
+        <div class="notif-item-meta"><span>@${escapeHtmlAdmin(x.actor)} · ${new Date(x.createdAt).toLocaleString('zh-CN')}</span></div>
+      </div>
+      ${x.detail ? `<div class="notif-item-content">${escapeHtmlAdmin(x.detail)}</div>` : ''}
+    </div>`).join('');
+  } catch (e) {
+    box.innerHTML = '<p style="color:#ef4444;">加载失败</p>';
   }
 }
 

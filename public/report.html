@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>举报 - GreenBox</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#22c55e">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<style>
+  .rp-wrap { max-width: 620px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+  .rp-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.3rem; }
+  .rp-card h1 { font-size: 1.5rem; margin: 0 0 0.3rem; }
+  .rp-card .sub { color: var(--muted); font-size: 0.86rem; line-height: 1.7; margin-bottom: 1.1rem; }
+  .rp-field { margin-bottom: 0.9rem; }
+  .rp-field label { display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 0.3rem; }
+  .rp-field select, .rp-field textarea {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--text); font-family: inherit; font-size: 0.88rem;
+    padding: 0.55rem 0.65rem;
+  }
+  .rp-field textarea { min-height: 120px; resize: vertical; line-height: 1.7; }
+  .rp-field select:focus, .rp-field textarea:focus { outline: none; border-color: var(--primary); }
+  .rp-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; margin-top: 1rem; }
+  .rp-submit { border: 0; border-radius: 8px; background: var(--primary); color: #fff; padding: 0.55rem 1.2rem; font-family: inherit; font-weight: 700; cursor: pointer; }
+  .rp-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+  .rp-back { color: var(--muted); text-decoration: none; font-size: 0.85rem; }
+  .rp-status { margin-top: 0.8rem; min-height: 22px; color: var(--muted); font-size: 0.84rem; line-height: 1.7; }
+  .rp-status.error { color: #ef4444; }
+  .rp-status.success { color: var(--primary); }
+  .rp-gate { display: none; text-align: center; padding: 2rem 1rem; }
+  .rp-gate.show { display: block; }
+  .rp-gate a { display: inline-block; margin-top: 0.7rem; background: var(--primary); color: #fff; padding: 0.5rem 1.2rem; border-radius: 8px; text-decoration: none; font-weight: 700; }
+  .rp-target { padding: 0.6rem 0.7rem; border-radius: 8px; background: var(--bg-alt); color: var(--muted); font-size: 0.82rem; margin-bottom: 1rem; word-break: break-word; }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+  </div>
+</nav>
+
+<main class="rp-wrap">
+  <div class="rp-card">
+    <h1>举报</h1>
+    <p class="sub">请选择举报原因并补充必要说明。管理员会尽快处理，处理结果会通过站内通知告诉你。</p>
+    <div class="rp-gate" id="rpGate">
+      <p style="color:var(--muted);">登录后才能提交举报。</p>
+      <a href="/login.html?redirect=%2Freport.html">去登录</a>
+    </div>
+    <div id="rpMain">
+      <div class="rp-target" id="rpTarget">正在读取举报对象...</div>
+      <div class="rp-field">
+        <label for="rpReason">举报原因</label>
+        <select id="rpReason">
+          <option value="垃圾广告">垃圾广告</option>
+          <option value="诈骗或钓鱼">诈骗或钓鱼</option>
+          <option value="色情低俗">色情低俗</option>
+          <option value="辱骂攻击">辱骂攻击</option>
+          <option value="侵权内容">侵权内容</option>
+          <option value="其他">其他</option>
+        </select>
+      </div>
+      <div class="rp-field">
+        <label for="rpDetail">补充说明（可选）</label>
+        <textarea id="rpDetail" maxlength="1000" placeholder="请描述发生了什么，方便管理员判断。"></textarea>
+      </div>
+      <div class="rp-actions">
+        <button class="rp-submit" id="rpSubmit" type="button">提交举报</button>
+        <a class="rp-back" href="javascript:history.back()">返回</a>
+      </div>
+      <div class="rp-status" id="rpStatus"></div>
+    </div>
+  </div>
+</main>
+
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var token = '';
+  try { token = localStorage.getItem('greenbox_token') || ''; } catch (e) {}
+  var gate = document.getElementById('rpGate');
+  var main = document.getElementById('rpMain');
+  var targetEl = document.getElementById('rpTarget');
+  var statusEl = document.getElementById('rpStatus');
+  var submitBtn = document.getElementById('rpSubmit');
+
+  var params = new URLSearchParams(location.search);
+  var type = params.get('type') || '';
+  var targetId = params.get('id') || '';
+  var parentId = params.get('parentId') || '';
+  var targetUser = params.get('user') || '';
+  var typeLabels = { post: '论坛帖子', comment: '论坛评论', message: '私信会话', tool: '用户工具', user: '用户' };
+
+  if (!typeLabels[type] || !targetId) {
+    targetEl.textContent = '举报参数不完整，请从帖子、评论或工具页面点击举报。';
+    submitBtn.disabled = true;
+  } else {
+    targetEl.textContent = '举报对象：' + typeLabels[type] + ' · ' + targetId + (targetUser ? ' · ' + targetUser : '');
+  }
+
+  if (!token) {
+    gate.classList.add('show');
+    main.style.display = 'none';
+    return;
+  }
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text || '';
+    statusEl.className = 'rp-status' + (kind ? ' ' + kind : '');
+  }
+
+  submitBtn.addEventListener('click', async function () {
+    if (!typeLabels[type] || !targetId) return;
+    var reason = document.getElementById('rpReason').value;
+    var detail = document.getElementById('rpDetail').value.trim();
+    submitBtn.disabled = true;
+    setStatus('正在提交...');
+    try {
+      var res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          type: type,
+          targetId: targetId,
+          parentId: parentId,
+          targetUser: targetUser,
+          reason: reason,
+          detail: detail
+        })
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || '提交失败');
+      setStatus('举报已提交，管理员处理后会通知你。', 'success');
+      submitBtn.textContent = '已提交';
+      submitBtn.disabled = true;
+    } catch (e) {
+      setStatus(e.message || '提交失败', 'error');
+      submitBtn.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

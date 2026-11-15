@@ -10,6 +10,8 @@ const {
   kvGet, kvGetRaw, kvPut, kvPutRaw, kvDelete, kvScan, kvList, kvIncr,
   kvWithLock, kvUpdate, kvAppend
 } = require('./redis');
+const { getModerationState, checkModeration, applyModeration } = require('./moderation');
+const { writeAudit } = require('./audit');
 
 // ===== 社交模块 =====
 const { registerSocialRoutes, registerSocialSocket, emitToUser } = require('./social');
@@ -95,6 +97,7 @@ app.get('/sitemap.xml', (req, res) => {
     '/feedback.html',
     '/submit-tool.html',
     '/notifications.html',
+    '/report.html',
     '/login.html',
     '/register.html'
   ];
@@ -388,6 +391,10 @@ app.post('/api/login', async (req, res) => {
   if (!(await checkRateLimit(`rl:login:${ip}`, 10, 600))) return res.status(429).json({ error: '登录过于频繁' });
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+  if (username !== 'admin') {
+    const moderationBlock = await checkModeration(username, 'login');
+    if (moderationBlock) return res.status(403).json({ error: moderationBlock });
+  }
   
   if (username === 'admin') {
     let adminPwd = await kvGet('admin_password') || process.env.ADMIN;
@@ -729,6 +736,8 @@ async function reviewToolWithAI(html, meta) {
 app.post('/api/tools/submit', upload.single('file'), async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
+  const moderationBlock = await checkModeration(session.username, 'tool');
+  if (moderationBlock) return res.status(403).json({ error: moderationBlock });
   const file = req.file;
   if (!file || !file.originalname.toLowerCase().endsWith('.html')) {
     return res.status(400).json({ error: '请上传 .html 文件' });
@@ -873,6 +882,7 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
       item.kind === 'update' ? '工具更新未通过' : '工具审核未通过',
       `管理员审核未通过。${adminReply || (item.kind === 'update' ? '原工具保持不变，请修改后重新提交更新。' : '请修改后重新提交。')}`,
       'warning', 'tool', '/submit-tool.html');
+    await writeAudit('admin', 'tool:reject', item.id, adminReply || '审核退回');
     return res.json({ success: true, submission: item });
   }
 
@@ -959,6 +969,7 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
     await pushSystemNotification(item.username, '工具更新已上线',
       `你的工具「${item.name}」已更新到 v${item.version}。${adminReply ? '管理员备注：' + adminReply : ''}`,
       'success', 'tool', targetUrl);
+    await writeAudit('admin', 'tool:update', target.id, `更新到 v${item.version}`);
     return res.json({ success: true, submission: item });
   }
 
@@ -999,6 +1010,7 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
   await pushSystemNotification(item.username, '工具审核通过',
     `你的工具「${item.name}」已通过审核并上线。${adminReply ? '管理员备注：' + adminReply : ''}`,
     'success', 'tool', `/usertool/${item.id}`);
+  await writeAudit('admin', 'tool:approve', item.id, item.name);
   res.json({ success: true, submission: item });
 });
 
@@ -1057,6 +1069,7 @@ app.post('/api/admin/tools/:id/rollback', async (req, res) => {
   await pushSystemNotification(target.username, '工具已回滚',
     `你的工具「${target.name}」已回滚到 v${target.version}。`,
     'info', 'tool', targetUrl);
+  await writeAudit('admin', 'tool:rollback', id, `回滚到 v${target.version}`);
   res.json({ success: true, submission: target });
 });
 
@@ -1277,8 +1290,9 @@ app.get('/usertool/:id', async (req, res) => {
 <\/script>`;
   const wrap = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1.0"><title>用户工具 - GreenBox</title>' +
-    '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b12}iframe{display:block;width:100%;height:100%;border:0}</style>' +
+    '<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070b12}iframe{display:block;width:100%;height:100%;border:0}.gb-tool-report{position:fixed;right:10px;bottom:10px;z-index:2147483647;background:rgba(15,23,42,.82);color:#cbd5e1;border:1px solid rgba(148,163,184,.35);border-radius:999px;padding:5px 10px;font:12px system-ui,sans-serif;text-decoration:none}.gb-tool-report:hover{color:#fff;border-color:#22c55e}</style>' +
     '</head><body><iframe id="gb-usertool-frame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock allow-downloads" allow="fullscreen; gamepad" referrerpolicy="no-referrer" src="/usertool-raw/' + id + '"></iframe>' +
+    '<a class="gb-tool-report" href="/report.html?type=tool&id=' + encodeURIComponent(id) + '" target="_blank" rel="noopener">举报</a>' +
     bridge + '<script src="/presence.js"></script></body></html>';
   res.set('Content-Type', 'text/html; charset=utf-8').send(wrap);
 });
@@ -2781,6 +2795,8 @@ function genFeedbackId() {
 app.post('/api/feedback', async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
+  const moderationBlock = await checkModeration(session.username, 'feedback');
+  if (moderationBlock) return res.status(403).json({ error: moderationBlock });
   const content = String((req.body && req.body.content) || '').trim().slice(0, 2000);
   if (content.length < 5) return res.status(400).json({ error: '反馈内容至少 5 个字' });
   const rateKey = `feedback:rate:${session.username}:${todayKey()}`;
@@ -2854,6 +2870,7 @@ app.post('/api/admin/feedback/:id', async (req, res) => {
       done ? `你提交的反馈已处理完成。\n${detail}` : `你提交的反馈暂时无法完成。\n${detail}`,
       done ? 'success' : 'warning', 'feedback', '/feedback.html');
   }
+  await writeAudit('admin', 'feedback:update', item.id, `${status} ${item.reply || ''}`.slice(0, 300));
   res.json({ success: true, feedback: item });
 });
 
@@ -2992,7 +3009,212 @@ app.post('/api/admin/backup/restore',
     await kvPutRaw(key, value);
     restored += 1;
   }
+  await writeAudit('admin', 'backup:restore', 'all', `写入 ${restored} 个键，跳过 ${skipped} 个`);
   res.json({ success: true, restored, skipped });
+});
+
+// ============================================================
+//  举报与审核队列
+// ============================================================
+const REPORT_TYPES = ['post', 'comment', 'message', 'tool', 'user'];
+const REPORT_REASONS = ['垃圾广告', '诈骗或钓鱼', '色情低俗', '辱骂攻击', '侵权内容', '其他'];
+
+function genReportId() {
+  return 'R' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+}
+
+async function resolveReportTarget(type, targetId, parentId, targetUserHint) {
+  const result = { targetUser: '', targetTitle: '', targetPreview: '', link: '' };
+  if (type === 'user') {
+    const users = (await kvGet('users')) || {};
+    if (!users[targetId]) return null;
+    result.targetUser = targetId;
+    result.targetTitle = '用户 ' + targetId;
+    result.link = `/user.html?u=${encodeURIComponent(targetId)}`;
+    return result;
+  }
+  if (type === 'tool') {
+    const list = (await kvGet('tool_submissions')) || [];
+    const tool = list.find(x => x.id === targetId);
+    if (!tool) return null;
+    result.targetUser = tool.username;
+    result.targetTitle = tool.name;
+    result.targetPreview = String(tool.description || '').slice(0, 240);
+    result.link = tool.id.startsWith('ts_') ? `/usertool/${encodeURIComponent(tool.id)}` : `/tool/${encodeURIComponent(tool.id)}`;
+    return result;
+  }
+  if (type === 'post') {
+    const post = await kvGet(`forum_post:${targetId}`);
+    if (!post) return null;
+    result.targetUser = post.author;
+    result.targetTitle = post.title;
+    result.targetPreview = String(post.excerpt || post.content || '').slice(0, 240);
+    result.link = '/forum.html';
+    return result;
+  }
+  if (type === 'comment') {
+    if (!parentId) return null;
+    const comments = (await kvGet(`forum_comments:${parentId}`)) || [];
+    const comment = comments.find(c => c.id === targetId);
+    if (!comment) return null;
+    result.targetUser = comment.author;
+    result.targetTitle = '帖子评论';
+    result.targetPreview = String(comment.content || '').slice(0, 240);
+    result.link = '/forum.html';
+    return result;
+  }
+  if (type === 'message') {
+    result.targetTitle = '私信会话';
+    result.link = '/messages.html';
+    if (targetUserHint) {
+      const users = (await kvGet('users')) || {};
+      if (users[targetUserHint]) {
+        result.targetUser = targetUserHint;
+        result.targetTitle = `与 ${targetUserHint} 的私信`;
+      }
+    }
+    return result;
+  }
+  return null;
+}
+
+app.post('/api/reports', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const moderationBlock = await checkModeration(session.username, 'report');
+  if (moderationBlock) return res.status(403).json({ error: moderationBlock });
+
+  const type = String((req.body && req.body.type) || '');
+  const targetId = String((req.body && req.body.targetId) || '').trim().slice(0, 120);
+  const parentId = String((req.body && req.body.parentId) || '').trim().slice(0, 120);
+  const reason = String((req.body && req.body.reason) || '').trim().slice(0, 80);
+  const detail = String((req.body && req.body.detail) || '').trim().slice(0, 1000);
+  if (!REPORT_TYPES.includes(type)) return res.status(400).json({ error: '举报类型无效' });
+  if (!targetId) return res.status(400).json({ error: '缺少举报对象' });
+  if (!reason) return res.status(400).json({ error: '请选择举报原因' });
+
+  const target = await resolveReportTarget(type, targetId, parentId, String((req.body && req.body.targetUser) || '').trim());
+  if (!target) return res.status(404).json({ error: '举报对象不存在或已删除' });
+  if (target.targetUser === session.username) return res.status(400).json({ error: '不能举报自己' });
+
+  const reports = (await kvGet('reports')) || [];
+  if (reports.some(r => r.status === 'pending' && r.reporter === session.username && r.type === type && r.targetId === targetId)) {
+    return res.status(409).json({ error: '你已经举报过这个对象，正在等待处理' });
+  }
+  const rate = await kvIncr(`report:rate:${session.username}:${todayKey()}`, 48 * 3600);
+  if (rate > 20) return res.status(429).json({ error: '今天提交的举报太多了' });
+
+  const report = {
+    id: genReportId(),
+    reporter: session.username,
+    type,
+    targetId,
+    parentId,
+    targetUser: target.targetUser,
+    targetTitle: target.targetTitle,
+    targetPreview: target.targetPreview,
+    link: target.link,
+    reason: REPORT_REASONS.includes(reason) ? reason : '其他',
+    detail,
+    status: 'pending',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    handledBy: '',
+    handleNote: '',
+    action: '',
+  };
+  await kvAppend('reports', report, 500);
+  res.json({ success: true, report });
+});
+
+app.get('/api/admin/reports', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const status = String(req.query.status || '');
+  let list = (await kvGet('reports')) || [];
+  if (status) list = list.filter(r => r.status === status);
+  res.json(list.slice().sort((a, b) => b.createdAt - a.createdAt));
+});
+
+app.post('/api/admin/reports/:id', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const session = await getSession(getBearerToken(req));
+  const status = String((req.body && req.body.status) || 'resolved');
+  const action = String((req.body && req.body.action) || 'none');
+  const durationHours = Number((req.body && req.body.durationHours) || 24);
+  const note = String((req.body && req.body.note) || '').replace(/[<>]/g, '').trim().slice(0, 500);
+  if (!['resolved', 'dismissed'].includes(status)) return res.status(400).json({ error: '状态无效' });
+  if (!['none', 'warn', 'mute', 'ban'].includes(action)) return res.status(400).json({ error: '处罚动作无效' });
+
+  let report = null;
+  await kvUpdate('reports', list => {
+    if (!Array.isArray(list)) return [];
+    report = list.find(r => r.id === req.params.id) || null;
+    if (!report) return list;
+    report.status = status;
+    report.action = action;
+    report.handleNote = note;
+    report.handledBy = session ? session.username : 'admin';
+    report.handledAt = Date.now();
+    report.updatedAt = Date.now();
+    return list;
+  }, []);
+  if (!report) return res.status(404).json({ error: '举报不存在' });
+
+  let moderation = null;
+  if (status === 'resolved' && action !== 'none' && report.targetUser) {
+    if (report.targetUser === 'admin') return res.status(400).json({ error: '不能处罚管理员账号' });
+    moderation = await applyModeration(report.targetUser, action, durationHours, note, session ? session.username : 'admin');
+    await pushSystemNotification(report.targetUser, '账号处罚通知',
+      `你的账号收到处理：${action === 'warn' ? '警告' : (action === 'mute' ? `禁言 ${durationHours} 小时` : `封禁 ${durationHours} 小时`)}。${note ? '原因：' + note : ''}`,
+      'warning', 'system', '/notifications.html');
+  }
+
+  if (status === 'dismissed') {
+    await pushSystemNotification(report.reporter, '举报未通过',
+      `你提交的举报未通过审核。${note ? '管理员备注：' + note : '感谢你的反馈。'}`,
+      'info', 'system', '/notifications.html');
+  } else {
+    await pushSystemNotification(report.reporter, '举报已处理',
+      `你提交的举报已处理。${note ? '管理员备注：' + note : '感谢你帮助维护社区。'}`,
+      'success', 'system', '/notifications.html');
+  }
+
+  await writeAudit(session ? session.username : 'admin', 'report:resolve', report.id,
+    `类型=${report.type} 对象=${report.targetId} 动作=${action} 状态=${status}`,
+    { reportId: report.id, targetUser: report.targetUser, action, status, moderation });
+  res.json({ success: true, report, moderation });
+});
+
+app.get('/api/admin/audit-logs', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const list = (await kvGet('audit_logs')) || [];
+  res.json(list.slice(-300).reverse());
+});
+
+app.post('/api/admin/users/:username/moderate', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const session = await getSession(getBearerToken(req));
+  const username = String(req.params.username || '');
+  if (!username || username === 'admin') return res.status(400).json({ error: '不能处理这个账号' });
+  const users = (await kvGet('users')) || {};
+  if (!users[username]) return res.status(404).json({ error: '用户不存在' });
+  const action = String((req.body && req.body.action) || '');
+  if (!['warn', 'mute', 'ban', 'unmute', 'unban'].includes(action)) {
+    return res.status(400).json({ error: '处罚动作无效' });
+  }
+  const durationHours = Number((req.body && req.body.durationHours) || 24);
+  const reason = String((req.body && req.body.reason) || '').replace(/[<>]/g, '').trim().slice(0, 500);
+  const state = await applyModeration(username, action, durationHours, reason, session ? session.username : 'admin');
+  await pushSystemNotification(username, '账号处罚更新',
+    `你的账号状态已更新：${action}。${reason ? '原因：' + reason : ''}`,
+    'warning', 'system', '/notifications.html');
+  res.json({ success: true, moderation: state });
+});
+
+app.get('/api/user/moderation', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  res.json(await getModerationState(session.username));
 });
 
 app.get('/api/admin/notifications', async (req, res) => {
@@ -3029,6 +3251,7 @@ app.post('/api/admin/notifications', async (req, res) => {
 
   await kvAppend('notifications', notif, 500);
 
+  await writeAudit('admin', 'notification:send', notif.target, notif.title);
   if (notif.target === 'all') {
     kvGet('users').then(users => {
       const names = Object.keys(users || {});
@@ -3389,6 +3612,8 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
+  const moderationBlock = await checkModeration(session.username, 'post');
+  if (moderationBlock) return res.status(403).json({ error: moderationBlock });
 
   const { title, content, category = 'general', tags = '' } = req.body;
   if (!title || !String(title).trim()) return res.status(400).json({ error: '标题不能为空' });
@@ -3601,6 +3826,8 @@ app.post('/api/forum/posts/:id/comments', upload.array('images', 2), async (req,
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
+  const moderationBlock = await checkModeration(session.username, 'comment');
+  if (moderationBlock) return res.status(403).json({ error: moderationBlock });
 
   const { content } = req.body;
   if (!content || !String(content).trim()) return res.status(400).json({ error: '内容不能为空' });
