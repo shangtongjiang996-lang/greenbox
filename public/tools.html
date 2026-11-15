@@ -325,7 +325,7 @@
           container.innerHTML = builtinTool + data.tools.map(t => `
             <a href="${t.url}" class="tool-card" target="_blank" rel="noopener">
               <span class="tool-icon">${t.icon || '<svg class="ico" aria-hidden="true"><use href="/icons.svg#tool"/></svg>'}</span>
-              <h3>${t.name}</h3>
+              <h3>${t.name}${t.version ? ` <span style="font-size:0.7rem;font-weight:500;color:#94a3b8;">v${t.version}</span>` : ''}</h3>
               <p>${t.description}</p>
             </a>
           `).join('');

@@ -1880,25 +1880,28 @@ async function loadToolReviews() {
     const pending = list.filter(x => x.status === 'pending_admin');
     count.textContent = `（${pending.length} 条待审核 / 共 ${list.length} 条）`;
     if (!list.length) { box.innerHTML = '<p style="color:#94a3b8;">暂无投稿</p>'; return; }
-    const labels = { pending_admin: '待人工审核', rejected: 'AI 未通过', approved: '已上线', admin_rejected: '管理员未通过' };
+    const labels = { pending_admin: '待人工审核', rejected: 'AI 未通过', approved: '已上线', admin_rejected: '管理员未通过', merged: '更新已合并' };
     box.innerHTML = list.map(x => {
-      const cls = x.status === 'pending_admin' ? 'info' : (x.status === 'approved' ? 'success' : 'warning');
+      const cls = x.status === 'pending_admin' ? 'info' : (x.status === 'approved' || x.status === 'merged' ? 'success' : 'warning');
       const time = new Date(x.createdAt).toLocaleString('zh-CN');
       const ai = x.ai ? `AI 初审：${x.ai.pass === true ? '通过' : (x.ai.pass === false ? '未通过' : '未给出结论')} · ${escapeHtmlAdmin(x.ai.reason || '')}` : '';
+      const version = x.version ? `v${x.version}` : 'v1';
+      const updateLabel = x.kind === 'update' ? `更新 ${version} · ` : '';
       const actions = x.status === 'pending_admin'
         ? `<textarea id="review-reply-${x.id}" placeholder="审核备注（可选）" maxlength="500" style="width:100%;min-height:48px;margin-top:0.5rem;padding:0.5rem;border:1px solid #cbd5e1;border-radius:7px;font-family:inherit;"></textarea>
            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
-             <button class="btn btn-primary btn-sm" onclick="reviewToolSubmission('${x.id}','approve')">通过并上线</button>
-             <button class="btn btn-outline btn-sm" onclick="reviewToolSubmission('${x.id}','reject')">退回</button>
+             <button class="btn btn-primary btn-sm" onclick="reviewToolSubmission('${x.id}','approve')">${x.kind === 'update' ? '通过更新并上线' : '通过并上线'}</button>
+             <button class="btn btn-outline btn-sm" onclick="reviewToolSubmission('${x.id}','reject')">${x.kind === 'update' ? '退回更新' : '退回'}</button>
            </div>`
-        : (x.toolUrl ? `<div class="notif-item-actions"><a class="btn btn-outline btn-sm" href="${x.toolUrl}" target="_blank" rel="noopener">查看工具</a></div>` : '');
+        : (x.toolUrl ? `<div class="notif-item-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;"><a class="btn btn-outline btn-sm" href="${x.toolUrl}" target="_blank" rel="noopener">查看工具</a>${x.status === 'approved' && x.canRollback ? `<button class="btn btn-outline btn-sm" onclick="rollbackTool('${x.id}')">回滚上一版</button>` : ''}</div>` : '');
       return `<div class="notif-item ${cls}" style="margin-bottom:0.7rem;">
         <div class="notif-item-head">
-          <div class="notif-item-title"><span class="notif-type-badge ${cls}">${labels[x.status] || x.status}</span>${escapeHtmlAdmin(x.name)}</div>
+          <div class="notif-item-title"><span class="notif-type-badge ${cls}">${labels[x.status] || x.status}</span>${updateLabel}${escapeHtmlAdmin(x.name)}</div>
           <div class="notif-item-meta"><span>@${escapeHtmlAdmin(x.username)} · ${time}</span></div>
         </div>
         <div class="notif-item-content">${escapeHtmlAdmin(x.description || '无描述')}</div>
         <div class="notif-item-content">${ai}</div>
+        ${x.kind === 'update' && x.targetToolId ? `<div class="notif-item-meta">目标工具：${escapeHtmlAdmin(x.targetToolId)}</div>` : ''}
         <div class="notif-item-meta"><a href="/usertool-raw/${x.id}" target="_blank" rel="noopener">预览 HTML（沙箱）</a></div>
         ${x.adminReply ? `<div class="notif-item-content">审核备注：${escapeHtmlAdmin(x.adminReply)}</div>` : ''}
         ${actions}
@@ -1925,6 +1928,22 @@ async function reviewToolSubmission(id, action) {
     loadToolReviews();
   } catch (e) {
     showToast('操作失败：' + e.message, 'error');
+  }
+}
+
+async function rollbackTool(id) {
+  if (!confirm('确定把这个工具回滚到上一版？')) return;
+  try {
+    const res = await fetch('/api/admin/tools/' + encodeURIComponent(id) + '/rollback', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '回滚失败');
+    showToast('已回滚上一版', 'success');
+    loadToolReviews();
+  } catch (e) {
+    showToast('回滚失败：' + e.message, 'error');
   }
 }
 

@@ -682,6 +682,21 @@ app.post('/api/tools/submit', upload.single('file'), async (req, res) => {
   if (!name) return res.status(400).json({ error: '请填写工具名称' });
   if (!html.trim()) return res.status(400).json({ error: 'HTML 内容为空' });
 
+  const toolId = String((req.body && req.body.toolId) || '').trim();
+  const list = (await kvGet('tool_submissions')) || [];
+  let target = null;
+  let kind = 'new';
+  let baseVersion = 0;
+  if (toolId) {
+    target = list.find(x => x.id === toolId && x.username === session.username && x.status === 'approved');
+    if (!target) return res.status(404).json({ error: '找不到可更新的已上线工具' });
+    if (list.some(x => x.kind === 'update' && x.targetToolId === toolId && x.status === 'pending_admin')) {
+      return res.status(409).json({ error: '这个工具已经有一个更新在等待审核了' });
+    }
+    kind = 'update';
+    baseVersion = Number(target.version) || 1;
+  }
+
   const submitRateKey = `tool_submit:${session.username}:${todayKey()}`;
   const submitCount = await kvIncr(submitRateKey, 48 * 3600);
   if (submitCount > 5) return res.status(429).json({ error: '今天提交的工具太多了，明天再试' });
@@ -702,25 +717,34 @@ app.post('/api/tools/submit', upload.single('file'), async (req, res) => {
     icon,
     category,
     status,
+    kind,
+    version: kind === 'update' ? baseVersion + 1 : 1,
+    baseVersion,
+    targetToolId: kind === 'update' ? target.id : '',
+    rootId: kind === 'update' ? (target.rootId || target.id) : id,
     ai,
     adminReply: '',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
-  const list = (await kvGet('tool_submissions')) || [];
   list.push(item);
   await kvPut('tool_submissions', list.slice(-300));
 
   if (status === 'rejected') {
-    await pushSystemNotification(session.username, '工具初审未通过',
-      `AI 初审未通过：${ai.reason || '内容不符合要求'}。你可以修改后重新提交。`,
+    await pushSystemNotification(session.username,
+      kind === 'update' ? '工具更新初审未通过' : '工具初审未通过',
+      `AI 初审未通过：${ai.reason || '内容不符合要求'}。${kind === 'update' ? '原工具保持不变。' : '你可以修改后重新提交。'}`,
       'warning', 'tool', '/submit-tool.html');
   } else if (ai.pass === true) {
-    await pushSystemNotification(session.username, '工具初审通过',
-      'AI 初审已通过，正在等待管理员审核，结果会再通知你。',
+    await pushSystemNotification(session.username,
+      kind === 'update' ? '工具更新已提交' : '工具初审通过',
+      kind === 'update'
+        ? `更新版本 v${item.version} 已通过 AI 初审，等待管理员审核。原工具暂时保持在线。`
+        : 'AI 初审已通过，正在等待管理员审核，结果会再通知你。',
       'success', 'tool', '/submit-tool.html');
   } else {
-    await pushSystemNotification(session.username, '工具已提交',
+    await pushSystemNotification(session.username,
+      kind === 'update' ? '工具更新已提交' : '工具已提交',
       'AI 初审暂不可用，已转人工审核，结果会通知你。',
       'info', 'tool', '/submit-tool.html');
   }
@@ -741,7 +765,9 @@ app.delete('/api/tools/mine/:id', async (req, res) => {
   const list = (await kvGet('tool_submissions')) || [];
   const item = list.find(x => x.id === req.params.id);
   if (!item || item.username !== session.username) return res.status(404).json({ error: '投稿不存在' });
-  if (item.status === 'approved') return res.status(400).json({ error: '已上线的工具不能自行撤回' });
+  if (item.status === 'approved' || item.status === 'merged') {
+    return res.status(400).json({ error: '已上线的工具不能自行撤回' });
+  }
   await kvDelete(`tool_sub_content:${item.id}`);
   await kvPut('tool_submissions', list.filter(x => x.id !== item.id));
   res.json({ success: true });
@@ -775,14 +801,74 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
     item.adminReply = adminReply;
     item.updatedAt = Date.now();
     await kvPut('tool_submissions', list);
-    await pushSystemNotification(item.username, '工具审核未通过',
-      `管理员审核未通过。${adminReply || '请修改后重新提交。'}`,
+    await pushSystemNotification(item.username,
+      item.kind === 'update' ? '工具更新未通过' : '工具审核未通过',
+      `管理员审核未通过。${adminReply || (item.kind === 'update' ? '原工具保持不变，请修改后重新提交更新。' : '请修改后重新提交。')}`,
       'warning', 'tool', '/submit-tool.html');
     return res.json({ success: true, submission: item });
   }
 
   const html = await kvGet(`tool_sub_content:${item.id}`);
   if (!html) return res.status(404).json({ error: '工具内容不存在' });
+
+  if (item.kind === 'update') {
+    const target = list.find(x => x.id === item.targetToolId && x.username === item.username && x.status === 'approved');
+    if (!target) return res.status(404).json({ error: '原工具不存在或已下线，无法应用更新' });
+
+    const oldCode = await kvGet(`tool_content:${target.id}`);
+    if (oldCode) {
+      await kvPut(`tool_content_prev:${target.id}`, oldCode);
+      await kvPut(`tool_prev_meta:${target.id}`, {
+        name: target.name,
+        description: target.description,
+        icon: target.icon,
+        category: target.category,
+        version: Number(target.version) || 1,
+      });
+    }
+    await kvPut(`tool_content:${target.id}`, html);
+    const data = (await kvGet('site_data')) || { tools: [], changelogs: [] };
+    if (!Array.isArray(data.tools)) data.tools = [];
+    const targetUrl = `/usertool/${target.id}`;
+    const entry = {
+      name: item.name,
+      icon: item.icon,
+      description: item.description,
+      category: item.category,
+      url: targetUrl,
+      submittedBy: item.username,
+      version: item.version,
+      updatedAt: Date.now(),
+    };
+    const index = data.tools.findIndex(t => t && t.url === targetUrl);
+    if (index >= 0) data.tools[index] = Object.assign({}, data.tools[index], entry);
+    else data.tools.push(entry);
+    await kvPut('site_data', data);
+
+    Object.assign(target, {
+      name: item.name,
+      description: item.description,
+      icon: item.icon,
+      category: item.category,
+      version: item.version,
+      adminReply,
+      updatedAt: Date.now(),
+      toolUrl: targetUrl,
+      previousVersion: oldCode ? (Number(target.version) || 1) : 0,
+      canRollback: !!oldCode,
+    });
+    item.status = 'merged';
+    item.mergedInto = target.id;
+    item.toolUrl = targetUrl;
+    item.adminReply = adminReply;
+    item.updatedAt = Date.now();
+    await kvPut('tool_submissions', list);
+    await pushSystemNotification(item.username, '工具更新已上线',
+      `你的工具「${item.name}」已更新到 v${item.version}。${adminReply ? '管理员备注：' + adminReply : ''}`,
+      'success', 'tool', targetUrl);
+    return res.json({ success: true, submission: item });
+  }
+
   await kvPut(`tool_content:${item.id}`, html);
   const data = (await kvGet('site_data')) || { tools: [], changelogs: [] };
   if (!Array.isArray(data.tools)) data.tools = [];
@@ -793,10 +879,14 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
     category: item.category,
     url: `/usertool/${item.id}`,
     submittedBy: item.username,
+    version: item.version || 1,
+    updatedAt: Date.now(),
   });
   if (data.tools.length > 500) data.tools = data.tools.slice(-500);
   await kvPut('site_data', data);
 
+  item.kind = item.kind || 'new';
+  item.version = item.version || 1;
   item.status = 'approved';
   item.adminReply = adminReply;
   item.toolUrl = `/usertool/${item.id}`;
@@ -806,6 +896,52 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
     `你的工具「${item.name}」已通过审核并上线。${adminReply ? '管理员备注：' + adminReply : ''}`,
     'success', 'tool', `/usertool/${item.id}`);
   res.json({ success: true, submission: item });
+});
+
+app.post('/api/admin/tools/:id/rollback', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const id = String(req.params.id || '');
+  if (!/^[a-zA-Z0-9_]+$/.test(id)) return res.status(400).json({ error: '工具 ID 无效' });
+  const list = (await kvGet('tool_submissions')) || [];
+  const target = list.find(x => x.id === id && x.status === 'approved');
+  if (!target) return res.status(404).json({ error: '已上线工具不存在' });
+  const prevCode = await kvGet(`tool_content_prev:${id}`);
+  const prevMeta = (await kvGet(`tool_prev_meta:${id}`)) || {};
+  if (!prevCode) return res.status(400).json({ error: '没有可回滚的上一版' });
+
+  await kvPut(`tool_content:${id}`, prevCode);
+  const data = (await kvGet('site_data')) || { tools: [], changelogs: [] };
+  if (!Array.isArray(data.tools)) data.tools = [];
+  const targetUrl = `/usertool/${id}`;
+  const index = data.tools.findIndex(t => t && t.url === targetUrl);
+  const entry = {
+    name: prevMeta.name || target.name,
+    icon: prevMeta.icon || target.icon,
+    description: prevMeta.description || target.description,
+    category: prevMeta.category || target.category,
+    url: targetUrl,
+    submittedBy: target.username,
+    version: prevMeta.version || 1,
+    updatedAt: Date.now(),
+  };
+  if (index >= 0) data.tools[index] = Object.assign({}, data.tools[index], entry);
+  else data.tools.push(entry);
+  await kvPut('site_data', data);
+
+  Object.assign(target, entry, {
+    version: prevMeta.version || 1,
+    updatedAt: Date.now(),
+    toolUrl: targetUrl,
+    canRollback: false,
+    previousVersion: 0,
+  });
+  await kvPut('tool_submissions', list);
+  await kvDelete(`tool_content_prev:${id}`);
+  await kvDelete(`tool_prev_meta:${id}`);
+  await pushSystemNotification(target.username, '工具已回滚',
+    `你的工具「${target.name}」已回滚到 v${target.version}。`,
+    'info', 'tool', targetUrl);
+  res.json({ success: true, submission: target });
 });
 
 app.get('/usertool/:id', async (req, res) => {

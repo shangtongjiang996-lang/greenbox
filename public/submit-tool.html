@@ -27,6 +27,33 @@
   .st-note { color: var(--muted); font-size: 0.78rem; line-height: 1.7; }
   .st-submit { border: none; border-radius: 8px; background: var(--primary); color: #fff; padding: 0.6rem 1.5rem; font-family: inherit; font-weight: 700; cursor: pointer; }
   .st-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+  .st-update-bar {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin-bottom: 0.9rem;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid var(--primary);
+    border-radius: 9px;
+    background: var(--primary-light);
+    color: var(--primary-dark);
+    font-size: 0.84rem;
+    flex-wrap: wrap;
+  }
+  .st-update-bar b { display: block; }
+  .st-update-bar small { display: block; margin-top: 2px; opacity: 0.85; font-size: 0.76rem; }
+  .st-update-bar button {
+    border: 1px solid var(--primary);
+    background: transparent;
+    color: var(--primary-dark);
+    border-radius: 7px;
+    padding: 0.3rem 0.7rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .st-status.merged { background: #dcfce7; color: #166534; }
+  .st-status.pending_update { background: #dbeafe; color: #1e40af; }
   .st-item { border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 0.9rem; margin-bottom: 0.65rem; }
   .st-item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
   .st-status { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
@@ -75,6 +102,10 @@
 
   <div id="stMain">
     <div class="st-card">
+      <div class="st-update-bar" id="stUpdateBar">
+        <div><b>正在更新：<span id="stUpdateName"></span></b><small>原工具会保持在线，审核通过后才会替换。</small></div>
+        <button type="button" id="stCancelUpdate">取消更新</button>
+      </div>
       <form id="stForm">
         <div class="st-grid">
           <div class="st-field"><label>工具名称 *</label><input id="stName" maxlength="60" placeholder="例如 我的计算器" required></div>
@@ -112,6 +143,9 @@
   var listBox = document.getElementById('stList');
   var statusEl = document.getElementById('stStatus');
   var submitBtn = document.getElementById('stSubmit');
+  var updateBar = document.getElementById('stUpdateBar');
+  var updateName = document.getElementById('stUpdateName');
+  var updateToolId = '';
 
   if (!token) {
     gate.classList.add('show');
@@ -120,6 +154,14 @@
   }
 
   function label(item) {
+    if (item.kind === 'update') {
+      if (item.status === 'pending_admin') {
+        if (item.ai && item.ai.pass === true) return '更新初审通过 / 等待人工审核';
+        if (item.ai && item.ai.pass === null) return '更新初审不可用 / 等待人工审核';
+        return '更新等待人工审核';
+      }
+      return { rejected: '更新初审未通过', admin_rejected: '更新被退回', merged: '更新已合并' }[item.status] || item.status;
+    }
     if (item.status === 'pending_admin') {
       if (item.ai && item.ai.pass === true) return 'AI 初审通过 / 等待人工审核';
       if (item.ai && item.ai.pass === null) return 'AI 初审不可用 / 等待人工审核';
@@ -128,11 +170,43 @@
     return { rejected: 'AI 初审未通过', approved: '已上线', admin_rejected: '管理员退回' }[item.status] || item.status;
   }
 
+  function beginUpdate(item) {
+    updateToolId = item.id;
+    updateBar.style.display = 'flex';
+    updateName.textContent = (item.name || '') + '（当前 v' + (item.version || 1) + '）';
+    document.getElementById('stName').value = item.name || '';
+    document.getElementById('stDesc').value = item.description || '';
+    document.getElementById('stIcon').value = item.icon || '';
+    document.getElementById('stCategory').value = item.category || 'other';
+    submitBtn.textContent = '提交更新';
+    statusEl.textContent = '正在更新工具，原工具保持在线，审核通过后替换。';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('stFile').focus();
+  }
+
+  function cancelUpdate() {
+    updateToolId = '';
+    updateBar.style.display = 'none';
+    updateName.textContent = '';
+    form.reset();
+    submitBtn.textContent = '提交审核';
+    statusEl.textContent = '';
+  }
+
+  document.getElementById('stCancelUpdate').addEventListener('click', cancelUpdate);
+
   async function loadMine() {
     try {
       var res = await fetch('/api/tools/mine', { headers: { 'Authorization': 'Bearer ' + token } });
       if (!res.ok) throw new Error('加载失败');
-      var list = await res.json();
+      var all = await res.json();
+      var list = all.filter(function (x) { return x.status !== 'merged'; });
+      var pendingTargets = {};
+      all.forEach(function (x) {
+        if (x.kind === 'update' && x.status === 'pending_admin' && x.targetToolId) {
+          pendingTargets[x.targetToolId] = true;
+        }
+      });
       listBox.innerHTML = '';
       if (!list.length) { listBox.innerHTML = '<div class="st-empty">还没有投稿</div>'; return; }
       list.forEach(function (item) {
@@ -141,7 +215,7 @@
         var head = document.createElement('div');
         head.className = 'st-item-head';
         var name = document.createElement('b');
-        name.textContent = item.name;
+        name.textContent = item.name + (item.version ? ' · v' + item.version : '');
         var st = document.createElement('span');
         st.className = 'st-status ' + item.status;
         st.textContent = label(item);
@@ -167,6 +241,21 @@
           a.textContent = '打开已上线的工具';
           link.appendChild(a);
           box.appendChild(link);
+
+          var updateButton = document.createElement('button');
+          updateButton.type = 'button';
+          updateButton.className = 'st-submit';
+          updateButton.style.padding = '0.35rem 0.8rem';
+          updateButton.style.fontSize = '0.8rem';
+          updateButton.style.marginTop = '0.4rem';
+          if (pendingTargets[item.id]) {
+            updateButton.textContent = '更新审核中';
+            updateButton.disabled = true;
+          } else {
+            updateButton.textContent = '更新工具';
+            updateButton.addEventListener('click', function () { beginUpdate(item); });
+          }
+          box.appendChild(updateButton);
         }
         if (item.status === 'rejected' || item.status === 'admin_rejected') {
           var retry = document.createElement('button');
@@ -177,6 +266,17 @@
           retry.style.marginTop = '0.4rem';
           retry.textContent = '返回修改并重新提交';
           retry.addEventListener('click', function () {
+            if (item.kind === 'update' && item.targetToolId) {
+              beginUpdate({
+                id: item.targetToolId,
+                name: item.name,
+                description: item.description,
+                icon: item.icon,
+                category: item.category,
+                version: item.baseVersion || Math.max(1, (item.version || 2) - 1)
+              });
+              return;
+            }
             document.getElementById('stName').value = item.name || '';
             document.getElementById('stDesc').value = item.description || '';
             document.getElementById('stIcon').value = item.icon || '';
@@ -200,14 +300,16 @@
     if (!file) { alert('请选择 HTML 文件'); return; }
     if (!name) { alert('请填写工具名称'); return; }
     if (file.size > 2 * 1024 * 1024) { alert('HTML 文件不能超过 2MB'); return; }
+    var wasUpdate = !!updateToolId;
     var fd = new FormData();
     fd.append('file', file);
     fd.append('name', name);
     fd.append('description', document.getElementById('stDesc').value.trim());
     fd.append('icon', document.getElementById('stIcon').value.trim());
     fd.append('category', document.getElementById('stCategory').value);
+    if (wasUpdate) fd.append('toolId', updateToolId);
     submitBtn.disabled = true;
-    statusEl.textContent = 'AI 初审中，通常需要几秒到二十秒，请稍候...';
+    statusEl.textContent = wasUpdate ? '更新内容 AI 初审中，请稍候...' : 'AI 初审中，通常需要几秒到二十秒，请稍候...';
     try {
       var res = await fetch('/api/tools/submit', {
         method: 'POST',
@@ -217,12 +319,21 @@
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || '提交失败');
       var item = data.submission;
-      statusEl.textContent = item.status === 'rejected'
-        ? 'AI 初审未通过：' + ((item.ai && item.ai.reason) || '内容不符合要求')
-        : (item.ai && item.ai.pass === true
-          ? '已提交，AI 初审通过，等待管理员审核。'
-          : '已提交，AI 初审暂不可用，已转人工审核。');
-      form.reset();
+      var message;
+      if (item.status === 'rejected') {
+        message = (wasUpdate ? '更新初审未通过：' : 'AI 初审未通过：') + ((item.ai && item.ai.reason) || '内容不符合要求');
+      } else if (item.ai && item.ai.pass === true) {
+        message = wasUpdate
+          ? '更新已提交，AI 初审通过，等待管理员审核。原工具保持在线。'
+          : '已提交，AI 初审通过，等待管理员审核。';
+      } else {
+        message = wasUpdate
+          ? '更新已提交，AI 初审暂不可用，已转人工审核。'
+          : '已提交，AI 初审暂不可用，已转人工审核。';
+      }
+      if (wasUpdate) cancelUpdate();
+      else form.reset();
+      statusEl.textContent = message;
       loadMine();
     } catch (err) {
       statusEl.textContent = '提交失败：' + (err.message || '请稍后重试');
