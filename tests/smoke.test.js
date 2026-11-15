@@ -72,6 +72,12 @@ test('核心 API 正常，权限接口受保护', async () => {
   assert.equal(matches.res.status, 200);
   assert.ok(Array.isArray(matches.data));
 
+  const resources = await getJson('/api/resource/list/movie?page=1&limit=6&sort=new');
+  assert.equal(resources.res.status, 200);
+  assert.ok(resources.data && Array.isArray(resources.data.items));
+  assert.ok(Number.isFinite(resources.data.total));
+  assert.ok(Number.isFinite(resources.data.totalPages));
+
   const guards = [
     ['/api/sessions', 401],
     ['/api/notifications/preferences', 401],
