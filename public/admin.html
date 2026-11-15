@@ -628,6 +628,7 @@
       <button class="tab-btn" data-tab="review">审核</button>
       <button class="tab-btn" data-tab="moderation">治理</button>
       <button class="tab-btn" data-tab="backup">备份</button>
+      <button class="tab-btn" data-tab="security">安全</button>
       <button class="tab-btn" data-tab="settings">设置</button>
     </div>
 
@@ -957,6 +958,35 @@
       </div>
     </div>
 
+    <div id="tab-security" class="tab-content">
+      <div class="card">
+        <h2>管理员二次验证</h2>
+        <p style="color:#64748b;font-size:0.88rem;line-height:1.7;">开启后，管理员登录除密码外还需要身份验证器中的 6 位验证码。恢复码只显示一次，请妥善保存。</p>
+        <div id="twofaStatus" style="margin:0.7rem 0;color:#64748b;font-size:0.84rem;">加载中...</div>
+        <div id="twofaSetupBox" style="display:none;border:1px solid #cbd5e1;border-radius:9px;padding:0.8rem;margin:0.7rem 0;">
+          <div style="font-size:0.82rem;color:#64748b;margin-bottom:0.35rem;">在身份验证器中手动添加以下密钥：</div>
+          <code id="twofaSecret" style="display:block;word-break:break-all;background:#f1f5f9;padding:0.5rem;border-radius:6px;margin-bottom:0.5rem;"></code>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <input id="twofaEnableCode" inputmode="numeric" maxlength="8" placeholder="输入 6 位验证码" style="padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
+            <button class="btn btn-primary btn-sm" type="button" onclick="enable2fa()">验证并开启</button>
+            <button class="btn btn-outline btn-sm" type="button" onclick="copyTwofaSecret()">复制密钥</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-top:0.6rem;">
+          <button class="btn btn-primary" type="button" onclick="start2faSetup()">开始设置 2FA</button>
+          <input id="twofaDisableCode" inputmode="numeric" maxlength="12" placeholder="关闭/重置时输入验证码" style="padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
+          <button class="btn btn-outline" type="button" onclick="disable2fa()">关闭 2FA</button>
+          <button class="btn btn-outline" type="button" onclick="regenerateRecovery()">重新生成恢复码</button>
+        </div>
+        <div id="twofaRecovery" style="margin-top:0.7rem;"></div>
+      </div>
+      <div class="card">
+        <h2>登录设备</h2>
+        <div id="adminSessionList" style="color:#94a3b8;font-size:0.84rem;">加载中...</div>
+        <button class="btn btn-primary" style="margin-top:0.8rem;" type="button" onclick="loadSecurity()">刷新设备</button>
+      </div>
+    </div>
+
     <div id="tab-settings" class="tab-content">
       <div class="card">
         <h2>修改管理员密码</h2>
@@ -1085,6 +1115,7 @@ let allUsers = [];
     loadToolReviews();
     loadAdminReports();
     loadAuditLogs();
+    loadSecurity();
     setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
     setupNotifyForm();
     setupQuickUpload();
@@ -2117,6 +2148,148 @@ async function loadAuditLogs() {
     </div>`).join('');
   } catch (e) {
     box.innerHTML = '<p style="color:#ef4444;">加载失败</p>';
+  }
+}
+
+let twofaCurrentSecret = '';
+
+async function loadSecurity() {
+  const statusEl = document.getElementById('twofaStatus');
+  const listEl = document.getElementById('adminSessionList');
+  try {
+    const [statusRes, sessionRes] = await Promise.all([
+      fetch('/api/admin/2fa/status', { headers: { 'Authorization': `Bearer ${token}` } }),
+      fetch('/api/sessions', { headers: { 'Authorization': `Bearer ${token}` } })
+    ]);
+    const status = await statusRes.json();
+    const sessions = await sessionRes.json();
+    statusEl.textContent = status.enabled
+      ? `二次验证已开启，剩余恢复码 ${status.recoveryCount} 个。`
+      : '二次验证未开启。建议立即开启。';
+    if (!status.enabled) document.getElementById('twofaSetupBox').style.display = 'none';
+
+    if (!Array.isArray(sessions) || !sessions.length) {
+      listEl.innerHTML = '<p style="color:#94a3b8;">没有记录到登录设备</p>';
+    } else {
+      listEl.innerHTML = sessions.map(s => `<div class="notif-item" style="margin-bottom:0.5rem;padding:0.6rem 0.7rem;">
+        <div class="notif-item-head">
+          <div class="notif-item-title"><span class="notif-type-badge ${s.current ? 'success' : 'info'}">${s.current ? '当前设备' : '已登录'}</span>${escapeHtmlAdmin((s.ua || '未知设备').slice(0, 80))}</div>
+          <div class="notif-item-meta"><span>${escapeHtmlAdmin(s.ip || '')}</span></div>
+        </div>
+        <div class="notif-item-content">最近活跃：${s.lastSeenAt ? new Date(s.lastSeenAt).toLocaleString('zh-CN') : '-'}<br>登录时间：${s.createdAt ? new Date(s.createdAt).toLocaleString('zh-CN') : '-'}</div>
+        <div class="notif-item-actions"><button class="btn btn-outline btn-sm" onclick="revokeAdminSession('${escapeHtmlAdmin(s.sid)}', ${s.current ? 'true' : 'false'})">下线此设备</button></div>
+      </div>`).join('');
+    }
+  } catch (e) {
+    statusEl.textContent = '安全信息加载失败：' + e.message;
+    listEl.innerHTML = '<p style="color:#ef4444;">设备列表加载失败</p>';
+  }
+}
+
+async function start2faSetup() {
+  try {
+    const res = await fetch('/api/admin/2fa/setup', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '生成失败');
+    twofaCurrentSecret = data.secret;
+    document.getElementById('twofaSecret').textContent = data.secret;
+    document.getElementById('twofaSetupBox').style.display = 'block';
+    document.getElementById('twofaStatus').textContent = '把密钥添加到身份验证器，然后输入验证码开启。';
+  } catch (e) {
+    showToast('2FA 设置失败：' + e.message, 'error');
+  }
+}
+
+function copyTwofaSecret() {
+  if (!twofaCurrentSecret) return;
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(twofaCurrentSecret).then(() => showToast('密钥已复制', 'success'), () => {});
+  } else {
+    prompt('复制以下密钥：', twofaCurrentSecret);
+  }
+}
+
+async function enable2fa() {
+  const code = document.getElementById('twofaEnableCode').value.trim();
+  if (!code) { showToast('请输入验证码', 'error'); return; }
+  try {
+    const res = await fetch('/api/admin/2fa/enable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '开启失败');
+    document.getElementById('twofaRecovery').innerHTML = '<div style="color:#166534;font-size:0.84rem;margin-bottom:0.4rem;">恢复码只显示一次，请立即保存：</div><pre style="background:#f1f5f9;padding:0.7rem;border-radius:7px;white-space:pre-wrap;">' + escapeHtmlAdmin((data.recoveryCodes || []).join('\n')) + '</pre>';
+    document.getElementById('twofaSetupBox').style.display = 'none';
+    showToast('二次验证已开启', 'success');
+    loadSecurity();
+  } catch (e) {
+    showToast('开启失败：' + e.message, 'error');
+  }
+}
+
+async function disable2fa() {
+  const code = document.getElementById('twofaDisableCode').value.trim();
+  if (!code) { showToast('请输入当前验证码', 'error'); return; }
+  if (!confirm('确定关闭管理员二次验证？')) return;
+  try {
+    const res = await fetch('/api/admin/2fa/disable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '关闭失败');
+    showToast('二次验证已关闭', 'success');
+    document.getElementById('twofaRecovery').innerHTML = '';
+    loadSecurity();
+  } catch (e) {
+    showToast('关闭失败：' + e.message, 'error');
+  }
+}
+
+async function regenerateRecovery() {
+  const code = document.getElementById('twofaDisableCode').value.trim();
+  if (!code) { showToast('请输入当前验证码', 'error'); return; }
+  try {
+    const res = await fetch('/api/admin/2fa/recovery', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '生成失败');
+    document.getElementById('twofaRecovery').innerHTML = '<div style="color:#166534;font-size:0.84rem;margin-bottom:0.4rem;">新的恢复码只显示一次：</div><pre style="background:#f1f5f9;padding:0.7rem;border-radius:7px;white-space:pre-wrap;">' + escapeHtmlAdmin((data.recoveryCodes || []).join('\n')) + '</pre>';
+    loadSecurity();
+  } catch (e) {
+    showToast('生成失败：' + e.message, 'error');
+  }
+}
+
+async function revokeAdminSession(sid, isCurrent) {
+  if (!confirm(isCurrent ? '这会退出当前设备，确定继续？' : '确定下线这个设备？')) return;
+  try {
+    const res = await fetch('/api/sessions/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ sid })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '下线失败');
+    if (isCurrent) {
+      localStorage.removeItem('greenbox_token');
+      localStorage.removeItem('greenbox_user');
+      location.href = '/login.html';
+      return;
+    }
+    showToast('设备已下线', 'success');
+    loadSecurity();
+  } catch (e) {
+    showToast('下线失败：' + e.message, 'error');
   }
 }
 

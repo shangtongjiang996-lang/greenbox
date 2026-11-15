@@ -202,14 +202,171 @@ async function getSession(token) {
     await kvDelete(`session:${token}`);
     return null;
   }
+  // 每 5 分钟刷新一次最近活跃时间，不阻塞正常请求
+  if (!session.lastSeenAt || Date.now() - session.lastSeenAt > 5 * 60 * 1000) {
+    session.lastSeenAt = Date.now();
+    const ttl = Math.max(60, Math.floor(((session.expires || Date.now() + SESSION_TTL * 1000) - Date.now()) / 1000));
+    kvPut(`session:${token}`, session, { expirationTtl: ttl }).catch(() => {});
+  }
   return session;
 }
 
-async function createSession(username, role) {
+function requestMeta(req) {
+  const ua = String((req.headers && req.headers['user-agent']) || '').slice(0, 300);
+  const ip = String(clientIp(req) || '').slice(0, 80);
+  const deviceId = crypto.createHash('sha256').update(`${ua}|${ip}`).digest('hex').slice(0, 16);
+  return { ip, ua, deviceId };
+}
+
+async function removeSessionIndex(username, token) {
+  const key = `user_sessions:${username}`;
+  await kvUpdate(key, list => {
+    if (!Array.isArray(list)) return [];
+    return list.filter(x => x && x.token !== token).slice(-30);
+  }, []);
+}
+
+async function revokeSessionToken(username, token) {
+  await kvDelete(`session:${token}`);
+  await removeSessionIndex(username, token);
+}
+
+async function createSession(username, role, meta) {
   const token = crypto.randomUUID() + Date.now().toString(36);
+  const sid = crypto.randomUUID();
   const expires = Date.now() + SESSION_TTL * 1000;
-  await kvPut(`session:${token}`, { username, role, expires }, { expirationTtl: SESSION_TTL });
+  const info = meta || {};
+  const session = {
+    username,
+    role,
+    sid,
+    ip: info.ip || '',
+    ua: info.ua || '',
+    deviceId: info.deviceId || '',
+    createdAt: Date.now(),
+    lastSeenAt: Date.now(),
+    expires,
+  };
+  await kvPut(`session:${token}`, session, { expirationTtl: SESSION_TTL });
+  await kvAppend(`user_sessions:${username}`, {
+    token,
+    sid,
+    ip: session.ip,
+    ua: session.ua,
+    deviceId: session.deviceId,
+    createdAt: session.createdAt,
+  }, 30);
   return token;
+}
+
+async function listSessions(username, currentToken) {
+  const list = (await kvGet(`user_sessions:${username}`)) || [];
+  const out = [];
+  for (const entry of list) {
+    if (!entry || !entry.token) continue;
+    const session = await kvGet(`session:${entry.token}`);
+    if (!session) continue;
+    out.push({
+      sid: entry.sid || session.sid || '',
+      ip: session.ip || entry.ip || '',
+      ua: session.ua || entry.ua || '',
+      deviceId: session.deviceId || entry.deviceId || '',
+      createdAt: session.createdAt || entry.createdAt || 0,
+      lastSeenAt: session.lastSeenAt || 0,
+      current: entry.token === currentToken,
+    });
+  }
+  return out.sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+}
+
+async function revokeSessionBySid(username, sid) {
+  const list = (await kvGet(`user_sessions:${username}`)) || [];
+  const entry = list.find(x => x && x.sid === sid);
+  if (!entry || !entry.token) return false;
+  await revokeSessionToken(username, entry.token);
+  return true;
+}
+
+// ===== TOTP / 2FA =====
+const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function base32Encode(buffer) {
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (const byte of buffer) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  return out;
+}
+
+function base32Decode(input) {
+  const clean = String(input || '').toUpperCase().replace(/[^A-Z2-7]/g, '');
+  let bits = 0;
+  let value = 0;
+  const out = [];
+  for (const ch of clean) {
+    const idx = BASE32_ALPHABET.indexOf(ch);
+    if (idx < 0) continue;
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return Buffer.from(out);
+}
+
+function totpAt(secret, counter) {
+  const key = base32Decode(secret);
+  const buf = Buffer.alloc(8);
+  buf.writeUInt32BE(Math.floor(counter / 0x100000000), 0);
+  buf.writeUInt32BE(counter % 0x100000000, 4);
+  const digest = crypto.createHmac('sha1', key).update(buf).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const code = ((digest[offset] & 0x7f) << 24) |
+    ((digest[offset + 1] & 0xff) << 16) |
+    ((digest[offset + 2] & 0xff) << 8) |
+    (digest[offset + 3] & 0xff);
+  return String(code % 1000000).padStart(6, '0');
+}
+
+function verifyTotp(secret, code) {
+  const normalized = String(code || '').replace(/\s/g, '');
+  if (!/^\d{6}$/.test(normalized)) return false;
+  const counter = Math.floor(Date.now() / 30000);
+  for (let delta = -1; delta <= 1; delta++) {
+    if (totpAt(secret, counter + delta) === normalized) return true;
+  }
+  return false;
+}
+
+function generateTotpSecret() {
+  return base32Encode(crypto.randomBytes(20));
+}
+
+function totpUri(secret, label) {
+  return `otpauth://totp/GreenBox:${encodeURIComponent(label)}?secret=${secret}&issuer=GreenBox&algorithm=SHA1&digits=6&period=30`;
+}
+
+function hashRecoveryCode(code) {
+  return crypto.createHash('sha256').update(String(code).replace(/[^A-Za-z0-9]/g, '').toUpperCase()).digest('hex');
+}
+
+function generateRecoveryCodes(count) {
+  const codes = [];
+  for (let i = 0; i < (count || 10); i++) {
+    const raw = crypto.randomBytes(5).toString('hex').toUpperCase().slice(0, 10);
+    codes.push(raw.slice(0, 5) + '-' + raw.slice(5));
+  }
+  return codes;
 }
 
 function getBearerToken(req) {
@@ -402,7 +559,18 @@ app.post('/api/login', async (req, res) => {
     let adminPwd = await kvGet('admin_password') || process.env.ADMIN;
     if (!adminPwd) return res.status(503).json({ error: '管理员未配置' });
     if (password !== adminPwd) return res.status(401).json({ error: '用户名或密码错误' });
-    const token = await createSession('admin', 'admin');
+    const tfa = await kvGet('admin_2fa');
+    if (tfa && tfa.enabled && tfa.secret) {
+      const challengeId = crypto.randomUUID();
+      await kvPut(`2fa_challenge:${challengeId}`, {
+        username: 'admin',
+        role: 'admin',
+        attempts: 0,
+        createdAt: Date.now(),
+      }, { expirationTtl: 300 });
+      return res.json({ success: true, twoFactorRequired: true, challengeId, expiresIn: 300 });
+    }
+    const token = await createSession('admin', 'admin', requestMeta(req));
     return res.json({ success: true, token, username: 'admin', role: 'admin', needsUpgrade: false });
   }
   
@@ -419,9 +587,157 @@ app.post('/api/login', async (req, res) => {
       return users;
     }, {});
   }
-  const token = await createSession(username, user.role || 'user');
+  const token = await createSession(username, user.role || 'user', requestMeta(req));
   const needsUpgrade = user.algo !== 'pbkdf2-sha256' || !user.iterations;
   res.json({ success: true, token, username, role: user.role || 'user', needsUpgrade });
+});
+
+app.post('/api/login/2fa', async (req, res) => {
+  const ip = clientIp(req);
+  if (!(await checkRateLimit(`rl:2fa:${ip}`, 12, 600))) return res.status(429).json({ error: '验证过于频繁' });
+  const { challengeId, code } = req.body || {};
+  if (!challengeId || !code) return res.status(400).json({ error: '参数错误' });
+  const challengeKey = `2fa_challenge:${challengeId}`;
+  const challenge = await kvGet(challengeKey);
+  if (!challenge) return res.status(401).json({ error: '验证已过期，请重新登录' });
+  if (Number(challenge.attempts) >= 5) {
+    await kvDelete(challengeKey);
+    return res.status(429).json({ error: '尝试次数过多，请重新登录' });
+  }
+  const tfa = await kvGet('admin_2fa');
+  if (!tfa || !tfa.enabled || !tfa.secret) {
+    await kvDelete(challengeKey);
+    return res.status(400).json({ error: '管理员未启用二次验证' });
+  }
+
+  let valid = verifyTotp(tfa.secret, code);
+  if (!valid) {
+    const hash = hashRecoveryCode(code);
+    if (Array.isArray(tfa.recoveryCodes) && tfa.recoveryCodes.includes(hash)) {
+      valid = true;
+      await kvUpdate('admin_2fa', current => {
+        if (!current || !Array.isArray(current.recoveryCodes)) return current;
+        current.recoveryCodes = current.recoveryCodes.filter(h => h !== hash);
+        return current;
+      }, {});
+    }
+  }
+  if (!valid) {
+    challenge.attempts = (Number(challenge.attempts) || 0) + 1;
+    await kvPut(challengeKey, challenge, { expirationTtl: 300 });
+    return res.status(401).json({ error: '验证码错误' });
+  }
+
+  await kvDelete(challengeKey);
+  const token = await createSession('admin', 'admin', requestMeta(req));
+  res.json({ success: true, token, username: 'admin', role: 'admin', needsUpgrade: false });
+});
+
+// ===== 登录设备与管理员 2FA =====
+app.get('/api/sessions', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  res.json(await listSessions(session.username, token));
+});
+
+app.post('/api/sessions/revoke', async (req, res) => {
+  const token = getBearerToken(req);
+  const session = await getSession(token);
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const sid = String((req.body && req.body.sid) || '');
+  if (!sid) return res.status(400).json({ error: '缺少设备 ID' });
+  const sessions = await listSessions(session.username, token);
+  const target = sessions.find(s => s.sid === sid);
+  if (!target) return res.status(404).json({ error: '设备不存在' });
+  await revokeSessionBySid(session.username, sid);
+  res.json({ success: true, current: target.current });
+});
+
+app.get('/api/admin/2fa/status', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const tfa = await kvGet('admin_2fa');
+  const setup = await kvGet('admin_2fa_setup');
+  res.json({
+    enabled: !!(tfa && tfa.enabled),
+    recoveryCount: Array.isArray(tfa && tfa.recoveryCodes) ? tfa.recoveryCodes.length : 0,
+    pendingSetup: !!(setup && setup.secret),
+  });
+});
+
+app.post('/api/admin/2fa/setup', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const tfa = await kvGet('admin_2fa');
+  if (tfa && tfa.enabled) return res.status(400).json({ error: '二次验证已经开启' });
+  const secret = generateTotpSecret();
+  await kvPut('admin_2fa_setup', { secret, createdAt: Date.now() }, { expirationTtl: 600 });
+  res.json({ success: true, secret, uri: totpUri(secret, 'admin') });
+});
+
+app.post('/api/admin/2fa/enable', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const code = String((req.body && req.body.code) || '').trim();
+  const setup = await kvGet('admin_2fa_setup');
+  if (!setup || !setup.secret) return res.status(400).json({ error: '请先生成 2FA 密钥' });
+  if (!verifyTotp(setup.secret, code)) return res.status(401).json({ error: '验证码错误' });
+  const recoveryCodes = generateRecoveryCodes(10);
+  const tfa = {
+    secret: setup.secret,
+    enabled: true,
+    recoveryCodes: recoveryCodes.map(hashRecoveryCode),
+    createdAt: Date.now(),
+  };
+  await kvPut('admin_2fa', tfa);
+  await kvDelete('admin_2fa_setup');
+  await writeAudit('admin', '2fa:enable', 'admin', '管理员开启二次验证');
+  res.json({ success: true, recoveryCodes });
+});
+
+app.post('/api/admin/2fa/disable', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const code = String((req.body && req.body.code) || '').trim();
+  const tfa = await kvGet('admin_2fa');
+  if (!tfa || !tfa.enabled || !tfa.secret) return res.status(400).json({ error: '二次验证未开启' });
+  let valid = verifyTotp(tfa.secret, code);
+  if (!valid) {
+    const hash = hashRecoveryCode(code);
+    valid = Array.isArray(tfa.recoveryCodes) && tfa.recoveryCodes.includes(hash);
+  }
+  if (!valid) return res.status(401).json({ error: '验证码错误' });
+  await kvDelete('admin_2fa');
+  await kvDelete('admin_2fa_setup');
+  await writeAudit('admin', '2fa:disable', 'admin', '管理员关闭二次验证');
+  res.json({ success: true });
+});
+
+app.post('/api/admin/2fa/recovery', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const code = String((req.body && req.body.code) || '').trim();
+  const tfa = await kvGet('admin_2fa');
+  if (!tfa || !tfa.enabled || !tfa.secret) return res.status(400).json({ error: '二次验证未开启' });
+  if (!verifyTotp(tfa.secret, code)) return res.status(401).json({ error: '验证码错误' });
+  const recoveryCodes = generateRecoveryCodes(10);
+  await kvUpdate('admin_2fa', current => {
+    if (current) current.recoveryCodes = recoveryCodes.map(hashRecoveryCode);
+    return current;
+  }, {});
+  await writeAudit('admin', '2fa:recovery', 'admin', '重新生成恢复码');
+  res.json({ success: true, recoveryCodes });
+});
+
+app.get('/api/admin/users/:username/sessions', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const session = await getSession(getBearerToken(req));
+  res.json(await listSessions(String(req.params.username || ''), session ? getBearerToken(req) : ''));
+});
+
+app.post('/api/admin/users/:username/sessions/:sid/revoke', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const username = String(req.params.username || '');
+  const ok = await revokeSessionBySid(username, String(req.params.sid || ''));
+  if (!ok) return res.status(404).json({ error: '设备不存在' });
+  await writeAudit('admin', 'session:revoke', username, `撤销设备 ${req.params.sid}`);
+  res.json({ success: true });
 });
 
 app.get('/api/verify', async (req, res) => {
@@ -451,7 +767,11 @@ app.get('/api/verify', async (req, res) => {
 
 app.post('/api/logout', async (req, res) => {
   const token = getBearerToken(req);
-  if (token) await kvDelete(`session:${token}`);
+  if (token) {
+    const session = await getSession(token);
+    if (session) await revokeSessionToken(session.username, token);
+    else await kvDelete(`session:${token}`);
+  }
   res.json({ success: true });
 });
 
@@ -472,6 +792,10 @@ app.post('/api/change-my-password', async (req, res) => {
     if (current && current[session.username]) current[session.username] = newRecord;
     return current;
   }, {});
+  const otherSessions = await listSessions(session.username, token);
+  for (const s of otherSessions) {
+    if (!s.current && s.sid) await revokeSessionBySid(session.username, s.sid);
+  }
   res.json({ success: true });
 });
 
@@ -486,6 +810,11 @@ app.post('/api/delete-account', async (req, res) => {
     if (current && current[session.username]) delete current[session.username];
     return current;
   }, {});
+  const oldSessions = (await kvGet(`user_sessions:${session.username}`)) || [];
+  for (const entry of oldSessions) {
+    if (entry && entry.token) await kvDelete(`session:${entry.token}`);
+  }
+  await kvDelete(`user_sessions:${session.username}`);
   await kvDelete(`session:${token}`);
   await kvDelete(`user_profile:${session.username}`);
   await kvDelete(`user_avatar:${session.username}`);

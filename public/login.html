@@ -30,6 +30,10 @@
       <button type="button" class="password-toggle" id="togglePassword" aria-label="显示或隐藏密码"><svg class="ico" aria-hidden="true"><use href="/icons.svg#eye"/></svg></button>
     </div>
   </div>
+  <div class="form-group" id="twofaGroup" style="display:none;">
+    <label for="twofaCode">二次验证码</label>
+    <input type="text" id="twofaCode" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码或恢复码">
+  </div>
   <button class="btn-primary" id="loginBtn">登录</button>
   <div id="loginError" class="error-msg" style="display:none;"></div>
   <div class="auth-link">
@@ -46,27 +50,52 @@
     passwordInput.setAttribute('type', type);
     toggleBtn.innerHTML = type === 'password' ? '<svg class="ico" aria-hidden="true"><use href="/icons.svg#eye"/></svg>' : '<svg class="ico" aria-hidden="true"><use href="/icons.svg#eye-off"/></svg>';
   });
+  let pendingChallenge = '';
+  function finishLogin(data) {
+    localStorage.setItem('greenbox_token', data.token);
+    localStorage.setItem('greenbox_user', JSON.stringify({ username: data.username, role: data.role }));
+    const redirect = new URLSearchParams(window.location.search).get('redirect') || '/';
+    window.location.href = redirect;
+  }
   document.getElementById('loginBtn').addEventListener('click', async () => {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
     const errorEl = document.getElementById('loginError');
-    if (!username || !password) {
+    const twofaGroup = document.getElementById('twofaGroup');
+    const twofaCode = document.getElementById('twofaCode');
+    if (!pendingChallenge && (!username || !password)) {
       errorEl.style.display = 'block';
       errorEl.textContent = '请填写用户名和密码';
       return;
     }
+    if (pendingChallenge && !twofaCode.value.trim()) {
+      errorEl.style.display = 'block';
+      errorEl.textContent = '请输入二次验证码';
+      twofaCode.focus();
+      return;
+    }
     try {
-      const res = await fetch(`${API_BASE}/api/login`, {
+      const endpoint = pendingChallenge ? `${API_BASE}/api/login/2fa` : `${API_BASE}/api/login`;
+      const body = pendingChallenge
+        ? { challengeId: pendingChallenge, code: twofaCode.value.trim() }
+        : { username, password };
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
+      if (data.twoFactorRequired) {
+        pendingChallenge = data.challengeId;
+        twofaGroup.style.display = 'block';
+        document.getElementById('loginBtn').textContent = '验证并登录';
+        errorEl.style.display = 'block';
+        errorEl.textContent = '请输入身份验证器中的 6 位验证码';
+        twofaCode.focus();
+        return;
+      }
       if (data.success) {
-        localStorage.setItem('greenbox_token', data.token);
-        localStorage.setItem('greenbox_user', JSON.stringify({ username: data.username, role: data.role }));
-        const redirect = new URLSearchParams(window.location.search).get('redirect') || '/';
-        window.location.href = redirect;
+        finishLogin(data);
       } else {
         errorEl.style.display = 'block';
         errorEl.textContent = data.error || '登录失败';
@@ -75,6 +104,9 @@
       errorEl.style.display = 'block';
       errorEl.textContent = '网络错误，请稍后重试';
     }
+  });
+  document.getElementById('twofaCode').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) document.getElementById('loginBtn').click();
   });
   const token = localStorage.getItem('greenbox_token');
   if (token) {
