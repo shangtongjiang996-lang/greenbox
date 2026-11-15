@@ -1985,15 +1985,21 @@ app.delete('/api/resource/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+function resourceSourcePath(item) {
+  if (!item) return '';
+  if (item.type === 'link' || item.objectKey === 'external') return String(item.playUrl || '');
+  return String(item.objectKey || item.playUrl || '');
+}
+
 function resourceKind(item) {
   if (!item) return 'other';
-  const path = String(item.objectKey || item.playUrl || '').split('?')[0];
+  const path = resourceSourcePath(item).split('?')[0];
   const ext = (path.split('.').pop() || '').toLowerCase();
   const mediaKind = ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'm3u8', 'avi'].includes(ext) ? 'video'
     : ['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext) ? 'audio'
       : ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext) ? 'image'
         : '';
-  if (item.type === 'link') return mediaKind || 'link';
+  if (item.type === 'link' || item.objectKey === 'external') return mediaKind || 'link';
   if (mediaKind) return mediaKind;
   if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md'].includes(ext)) return 'document';
   if (['zip', 'rar', '7z', 'tar', 'gz', 'apk', 'exe', 'msi', 'dmg'].includes(ext)) return 'archive';
@@ -2002,8 +2008,7 @@ function resourceKind(item) {
 
 function resourceExt(item) {
   if (!item) return '';
-  if (item.type === 'link') return 'link';
-  const path = String(item.objectKey || item.playUrl || '').split('?')[0];
+  const path = resourceSourcePath(item).split('?')[0];
   return (path.split('.').pop() || '').toLowerCase();
 }
 
