@@ -582,6 +582,53 @@ const THEME_ICON = {
     else right.appendChild(link);
   }
 
+  function setupNavActions() {
+    var right = document.querySelector('.navbar-right');
+    if (!right) return;
+
+    if (!document.getElementById('nav-notification-link') && !document.getElementById('notifBtn') && !right.querySelector('a[href*="notifications.html"]')) {
+      var bell = document.createElement('a');
+      bell.id = 'nav-notification-link';
+      bell.className = 'nav-icon-link';
+      bell.href = '/notifications.html';
+      bell.title = '通知中心';
+      bell.setAttribute('aria-label', '通知中心');
+      bell.innerHTML = '<svg class="ico" aria-hidden="true"><use href="/icons.svg#bell"/></svg>';
+      var anchor = document.getElementById('gb-feedback-link') || document.getElementById('settings-link') || document.getElementById('theme-toggle');
+      if (anchor && anchor.parentNode === right) right.insertBefore(bell, anchor);
+      else right.appendChild(bell);
+    }
+
+    if (document.getElementById('nav-auth-actions')) return;
+    var hasUserArea = right.querySelector('.user-area') || right.querySelector('a[href*="profile.html"]');
+    var hasLogin = right.querySelector('a[href*="login.html"]');
+    if (hasUserArea || hasLogin) return;
+
+    var box = document.createElement('span');
+    box.id = 'nav-auth-actions';
+    box.className = 'nav-auth-actions';
+    var token = getToken();
+    if (token) {
+      var profile = document.createElement('a');
+      profile.href = '/profile.html';
+      profile.className = 'login';
+      profile.textContent = '个人中心';
+      box.appendChild(profile);
+    } else {
+      var login = document.createElement('a');
+      login.href = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
+      login.className = 'login';
+      login.textContent = '登录';
+      var register = document.createElement('a');
+      register.href = '/register.html';
+      register.className = 'register';
+      register.textContent = '注册';
+      box.appendChild(login);
+      box.appendChild(register);
+    }
+    right.appendChild(box);
+  }
+
   function setupFeedbackEntry() {
     if (location.pathname === '/feedback.html') return;
     if (document.getElementById('gb-feedback-link')) return;
@@ -636,6 +683,7 @@ const THEME_ICON = {
     setupInstallPrompt();
     setupSettingsLink();
     setupFeedbackEntry();
+    setupNavActions();
     setupScrollLock();
     setupAppIcon();
   }

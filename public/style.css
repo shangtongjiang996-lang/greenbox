@@ -204,6 +204,20 @@ main h2 { font-size: 1.3rem; font-weight: 700; margin: 2.4rem 0 0.8rem; }
 }
 .nav-icon-link:hover { background: var(--bg-alt); border-color: var(--muted); }
 .nav-icon-link .ico { width: 18px; height: 18px; }
+.nav-auth-actions { display: inline-flex; align-items: center; gap: 0.4rem; }
+.nav-auth-actions a {
+  display: inline-block;
+  padding: 0.32rem 0.85rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  line-height: 1.45;
+}
+.nav-auth-actions .login { background: var(--primary); border: 1px solid var(--primary); color: #fff; }
+.nav-auth-actions .login:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+.nav-auth-actions .register { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.nav-auth-actions .register:hover { border-color: var(--primary); color: var(--primary); }
 .game-label { display: inline-block; font-size: 10px; font-weight: 800; color: var(--primary-dark); background: var(--primary-light); border-radius: 999px; padding: 1px 7px; vertical-align: middle; }
 .gb-feedback-btn {
   position: fixed;
