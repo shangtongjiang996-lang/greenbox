@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>游戏中心 - GreenBox</title>
+<meta name="description" content="GreenBox 游戏中心：在线小游戏、联机游戏与用户制作的游戏工具。">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#22c55e">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.setAttribute('data-accent', localStorage.getItem('accent') || 'green');
+  })();
+</script>
+<style>
+  .games-wrap { max-width: 1050px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+  .games-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .games-head h1 { font-size: 2rem; margin: 0 0 0.25rem; }
+  .games-head p { color: var(--muted); font-size: 0.9rem; margin: 0; }
+  .game-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .game-tab { border: 1px solid var(--border); background: var(--card-bg); color: var(--muted); border-radius: 999px; padding: 6px 14px; font-family: inherit; font-size: 0.82rem; cursor: pointer; }
+  .game-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 700; }
+  .games-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+  .game-card { position: relative; display: flex; flex-direction: column; background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; text-decoration: none; color: var(--text); box-shadow: var(--shadow); transition: all .2s; }
+  .game-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: var(--primary); }
+  .game-icon { width: 48px; height: 48px; border-radius: 12px; background: var(--primary-light); color: var(--primary-dark); display: grid; place-items: center; font-size: 1.5rem; margin-bottom: 0.7rem; overflow: hidden; }
+  .game-icon img { width: 100%; height: 100%; object-fit: cover; }
+  .game-card h3 { font-size: 1rem; margin: 0 0 0.25rem; padding-right: 3rem; }
+  .game-card p { color: var(--muted); font-size: 0.82rem; line-height: 1.6; margin: 0; }
+  .game-badge { position: absolute; top: 10px; right: 10px; font-size: 10px; font-weight: 800; color: var(--primary-dark); background: var(--primary-light); border-radius: 999px; padding: 2px 7px; }
+  .games-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 3rem 1rem; }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/games.html">游戏中心</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<main class="games-wrap">
+  <div class="games-head">
+    <div>
+      <h1>游戏中心</h1>
+      <p>在线小游戏、联机对局和社区成员制作的游戏工具。</p>
+    </div>
+    <a class="btn btn-outline" href="/tools.html">查看全部工具</a>
+  </div>
+  <div class="game-tabs" id="gameTabs">
+    <button class="game-tab active" data-filter="all">全部游戏</button>
+    <button class="game-tab" data-filter="official">管理员上传</button>
+    <button class="game-tab" data-filter="community">用户投稿</button>
+  </div>
+  <div class="games-grid" id="gamesGrid"><div class="games-empty">加载中...</div></div>
+</main>
+
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var all = [];
+  var filter = 'all';
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function iconHtml(t) {
+    var icon = t.icon || '';
+    if (/^https?:\/\//.test(icon) || /^data:image\//.test(icon)) return '<img src="' + esc(icon) + '" alt="">';
+    if (icon) return '<span>' + esc(icon) + '</span>';
+    return '<svg class="ico" aria-hidden="true"><use href="/icons.svg#spark"/></svg>';
+  }
+  function render() {
+    var list = all.filter(function (t) {
+      if (filter === 'official') return !t.submittedBy;
+      if (filter === 'community') return !!t.submittedBy;
+      return true;
+    });
+    var grid = document.getElementById('gamesGrid');
+    if (!list.length) {
+      grid.innerHTML = '<div class="games-empty">还没有游戏，管理员可以在工具管理里把工具标记为游戏。</div>';
+      return;
+    }
+    grid.innerHTML = list.map(function (t) {
+      return '<a class="game-card" href="' + esc(t.url || '#') + '" target="_blank" rel="noopener">' +
+        '<span class="game-badge">游戏</span>' +
+        '<span class="game-icon">' + iconHtml(t) + '</span>' +
+        '<h3>' + esc(t.name || '未命名游戏') + '</h3>' +
+        '<p>' + esc(t.description || '') + '</p>' +
+        '</a>';
+    }).join('');
+  }
+  document.getElementById('gameTabs').addEventListener('click', function (e) {
+    var btn = e.target.closest('.game-tab');
+    if (!btn) return;
+    filter = btn.dataset.filter;
+    document.querySelectorAll('.game-tab').forEach(function (b) { b.classList.toggle('active', b === btn); });
+    render();
+  });
+  fetch('/api/data').then(function (r) { return r.json(); }).then(function (data) {
+    all = (data.tools || []).filter(function (t) { return t && t.isGame; });
+    render();
+  }).catch(function () {
+    document.getElementById('gamesGrid').innerHTML = '<div class="games-empty">游戏加载失败，请稍后重试。</div>';
+  });
+})();
+</script>
+</body>
+</html>

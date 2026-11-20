@@ -204,6 +204,7 @@ main h2 { font-size: 1.3rem; font-weight: 700; margin: 2.4rem 0 0.8rem; }
 }
 .nav-icon-link:hover { background: var(--bg-alt); border-color: var(--muted); }
 .nav-icon-link .ico { width: 18px; height: 18px; }
+.game-label { display: inline-block; font-size: 10px; font-weight: 800; color: var(--primary-dark); background: var(--primary-light); border-radius: 999px; padding: 1px 7px; vertical-align: middle; }
 .gb-feedback-btn {
   position: fixed;
   right: 18px;
@@ -228,6 +229,47 @@ main h2 { font-size: 1.3rem; font-weight: 700; margin: 2.4rem 0 0.8rem; }
 @media (max-width: 640px) {
   .gb-feedback-btn { right: 10px; bottom: 86px; padding: 0.38rem 0.68rem; }
 }
+
+/* ===== 私聊在线提示 ===== */
+.gb-dm-toasts {
+  position: fixed;
+  right: 18px;
+  bottom: 146px;
+  z-index: 10040;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(320px, calc(100vw - 24px));
+}
+.gb-dm-toast {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  padding: 0.65rem 1.9rem 0.65rem 0.7rem;
+  text-decoration: none;
+  animation: gb-dm-in 0.22s ease;
+}
+@keyframes gb-dm-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.gb-dm-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-light); color: var(--primary-dark); display: grid; place-items: center; font-weight: 800; flex-shrink: 0; }
+.gb-dm-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gb-dm-body b { font-size: 0.8rem; }
+.gb-dm-body span { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gb-dm-close { position: absolute; top: 4px; right: 5px; border: 0; background: transparent; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; padding: 2px 4px; }
+.gb-dm-close:hover { color: var(--text); }
+@media (max-width: 640px) {
+  .gb-dm-toasts { right: 10px; bottom: 138px; }
+}
+
+/* 弹窗打开时锁定背景滚动 */
+html.gb-scroll-locked { overflow: hidden !important; }
+body.gb-scroll-locked { overflow: hidden !important; }
 
 .user-area { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .user-area .user-name { font-weight: 600; color: var(--text); font-size: 0.92rem; }

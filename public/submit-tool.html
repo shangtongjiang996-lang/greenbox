@@ -112,6 +112,9 @@
         <div class="st-grid">
           <div class="st-field"><label>工具名称 *</label><input id="stName" maxlength="60" placeholder="例如 我的计算器" required></div>
           <div class="st-field"><label>分类</label><select id="stCategory"><option value="other">其他</option><option value="game">游戏</option><option value="tool">工具</option></select></div>
+      <label style="display:flex;align-items:center;gap:0.45rem;font-size:0.86rem;color:var(--muted);margin-bottom:0.7rem;">
+        <input type="checkbox" id="stIsGame"> 这是游戏，上线后也显示在游戏中心
+      </label>
         </div>
         <div class="st-field"><label>简短描述</label><input id="stDesc" maxlength="200" placeholder="一句话介绍这个工具"></div>
         <div class="st-field"><label>图标（可选）</label><input id="stIcon" maxlength="200" placeholder="可以填 emoji 或图片地址"></div>
@@ -284,6 +287,7 @@
             document.getElementById('stDesc').value = item.description || '';
             document.getElementById('stIcon').value = item.icon || '';
             document.getElementById('stCategory').value = item.category || 'other';
+      document.getElementById('stIsGame').checked = !!item.isGame || item.category === 'game';
             window.scrollTo({ top: 0, behavior: 'smooth' });
             document.getElementById('stFile').focus();
           });
@@ -310,6 +314,7 @@
     fd.append('description', document.getElementById('stDesc').value.trim());
     fd.append('icon', document.getElementById('stIcon').value.trim());
     fd.append('category', document.getElementById('stCategory').value);
+    fd.append('isGame', (document.getElementById('stIsGame').checked || document.getElementById('stCategory').value === 'game') ? '1' : '0');
     if (wasUpdate) fd.append('toolId', updateToolId);
     submitBtn.disabled = true;
     statusEl.textContent = wasUpdate ? '更新内容 AI 初审中，请稍候...' : 'AI 初审中，通常需要几秒到二十秒，请稍候...';

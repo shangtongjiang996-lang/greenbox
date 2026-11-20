@@ -170,6 +170,16 @@ const THEME_ICON = {
       });
     }
 
+    if (!document.getElementById('games-nav') && !document.querySelector('.nav-links a[href="/games.html"], .nav-links a[href="games.html"]')) {
+      var gamesLi = document.createElement('li');
+      gamesLi.id = 'games-nav';
+      var gamesA = document.createElement('a');
+      gamesA.href = '/games.html';
+      gamesA.textContent = '游戏中心';
+      gamesLi.appendChild(gamesA);
+      pn.parentNode.insertBefore(gamesLi, pn.nextSibling);
+    }
+
     if (!document.getElementById('other-nav')) {
       var li = document.createElement('li');
       li.id = 'other-nav';
@@ -410,17 +420,93 @@ const THEME_ICON = {
   }
 
   // ===== 全站在线状态 + 跨设备通知同步 =====
+  function showDmToast(msg) {
+    if (!msg || !msg.from || !msg.to) return;
+    var me = '';
+    try {
+      var u = JSON.parse(localStorage.getItem('greenbox_user') || 'null');
+      me = u && u.username ? u.username : '';
+    } catch (e) {}
+    if (!me || msg.to !== me || msg.from === me) return;
+
+    var holder = document.getElementById('gb-dm-toasts');
+    if (!holder) {
+      holder = document.createElement('div');
+      holder.id = 'gb-dm-toasts';
+      holder.className = 'gb-dm-toasts';
+      document.body.appendChild(holder);
+    }
+    while (holder.children.length >= 3) holder.removeChild(holder.firstChild);
+
+    var toast = document.createElement('a');
+    toast.className = 'gb-dm-toast';
+    toast.href = '/messages.html?peer=' + encodeURIComponent(msg.from);
+    var preview = String(msg.content || (msg.attachment ? '[附件]' : '')).slice(0, 90);
+    toast.innerHTML =
+      '<span class="gb-dm-avatar">' + escHtml(String(msg.from).slice(0, 1).toUpperCase()) + '</span>' +
+      '<span class="gb-dm-body"><b>' + escHtml(msg.from) + '</b><span>' + escHtml(preview) + '</span></span>' +
+      '<button type="button" class="gb-dm-close" aria-label="关闭">×</button>';
+    var timer = setTimeout(function () { toast.remove(); }, 6500);
+    toast.querySelector('.gb-dm-close').addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      clearTimeout(timer);
+      toast.remove();
+    });
+    toast.addEventListener('click', function () { clearTimeout(timer); });
+    holder.appendChild(toast);
+  }
+
+  function setupScrollLock() {
+    var selectors = '.modal, .modal-overlay, .modal-backdrop, .gb-modal-overlay, [role="dialog"], .lightbox, .image-viewer';
+    var ignore = '.gb-tour, .gb-invite-banner, .gb-dm-toast, .gb-major-overlay';
+    var locked = false;
+    function visible(el) {
+      if (el.closest(ignore)) return false;
+      var cs = window.getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return false;
+      var r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    }
+    function sync() {
+      var open = Array.prototype.some.call(document.querySelectorAll(selectors), visible);
+      if (open === locked) return;
+      locked = open;
+      document.body.classList.toggle('gb-scroll-locked', open);
+      document.documentElement.classList.toggle('gb-scroll-locked', open);
+    }
+    var observer = new MutationObserver(function () {
+      window.requestAnimationFrame(sync);
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'] });
+    sync();
+  }
+
   function setupPresence() {
     if (!getToken() || window.__gbPresenceSocket) return;
 
     function connect() {
-      if (!window.io || window.__gbPresenceSocket) return;
+      if (!window.io) {
+        if (document.querySelector('script[data-gb-presence]')) return;
+        var loader = document.createElement('script');
+        loader.src = '/socket.io/socket.io.js';
+        loader.async = true;
+        loader.setAttribute('data-gb-presence', '1');
+        loader.onload = connect;
+        loader.onerror = function () {};
+        document.head.appendChild(loader);
+        return;
+      }
+      if (window.__gbPresenceSocket) return;
       try {
         var socket = io({ transports: ['websocket', 'polling'] });
         window.__gbPresenceSocket = socket;
         socket.on('connect', function () {
           var token = getToken();
           if (token) socket.emit('dm:auth', { token: token });
+        });
+        socket.on('dm:message', function (msg) {
+          showDmToast(msg);
         });
         socket.on('notification:read', function (data) {
           if (!data || !Array.isArray(data.ids)) return;
@@ -543,6 +629,7 @@ const THEME_ICON = {
     setupInstallPrompt();
     setupSettingsLink();
     setupFeedbackEntry();
+    setupScrollLock();
   }
 
   if (document.readyState === 'loading') {

@@ -621,6 +621,7 @@
       <button class="tab-btn" data-tab="changelog">更新日志</button>
       <button class="tab-btn" data-tab="users">用户管理</button>
       <button class="tab-btn" data-tab="files">文件管理</button>
+      <button class="tab-btn" data-tab="storage">存储</button>
       <button class="tab-btn" data-tab="rooms">房间管理</button>
       <button class="tab-btn" data-tab="chat">AI 助手</button>
       <button class="tab-btn" data-tab="notify">通知管理</button>
@@ -629,6 +630,7 @@
       <button class="tab-btn" data-tab="moderation">治理</button>
       <button class="tab-btn" data-tab="backup">备份</button>
       <button class="tab-btn" data-tab="security">安全</button>
+      <button class="tab-btn" data-tab="admins" id="admins-tab-btn">管理组</button>
       <button class="tab-btn" data-tab="settings">设置</button>
     </div>
 
@@ -667,6 +669,9 @@
             <input type="text" id="tool-name" placeholder="工具名称" required style="flex:1;min-width:120px;">
             <input type="text" id="tool-desc" placeholder="简短描述" style="flex:1.5;min-width:150px;">
           </div>
+          <label style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.86rem;margin-bottom:0.6rem;">
+            <input type="checkbox" id="tool-is-game"> 标记为游戏（显示在游戏中心）
+          </label>
           <div style="margin:0.8rem 0;">
             <div class="file-input-wrapper">
               <span class="file-input-btn">选择 HTML 文件</span>
@@ -734,6 +739,31 @@
     </div>
 
     <!-- 房间管理 -->
+    <div id="tab-storage" class="tab-content">
+      <div class="card">
+        <h2>存储账号</h2>
+        <p style="color:#64748b;font-size:0.86rem;line-height:1.7;">可以添加多个 Backblaze B2 或 S3 兼容账号。资源中心上传时用户可选择存储分区；默认存储来自环境变量。</p>
+        <div id="storageAccountList" style="margin-top:0.8rem;color:#94a3b8;font-size:0.84rem;">加载中...</div>
+        <button class="btn btn-primary" style="margin-top:0.8rem;" type="button" onclick="showStorageForm()">+ 添加存储账号</button>
+      </div>
+      <div class="card" id="storageFormCard" style="display:none;">
+        <h2>添加存储账号</h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.6rem;">
+          <input id="storageName" placeholder="名称，如 西美分区">
+          <input id="storageRegion" placeholder="区域，如 us-west-004">
+          <input id="storageEndpoint" placeholder="Endpoint 域名，不含 https://">
+          <input id="storageBucket" placeholder="Bucket 名称">
+          <input id="storageKeyId" placeholder="Key ID">
+          <input id="storageAppKey" type="password" placeholder="Application Key">
+        </div>
+        <div style="display:flex;gap:0.6rem;margin-top:0.7rem;flex-wrap:wrap;">
+          <button class="btn btn-primary" type="button" onclick="saveStorageAccount()">保存</button>
+          <button class="btn btn-outline" type="button" onclick="document.getElementById('storageFormCard').style.display='none'">取消</button>
+        </div>
+        <div id="storageFormStatus" style="font-size:0.82rem;color:#64748b;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
     <div id="tab-rooms" class="tab-content">
       <div class="card">
         <h2>房间管理</h2>
@@ -987,6 +1017,23 @@
       </div>
     </div>
 
+    <div id="tab-admins" class="tab-content">
+      <div class="card">
+        <h2>管理组权限</h2>
+        <p style="color:#64748b;font-size:0.88rem;line-height:1.7;">主管理员 admin 拥有最高权限。其他管理员只能进入被勾选的管理分区，未勾选的分区 API 会直接拒绝。</p>
+        <div id="adminGroupList" style="margin-top:0.8rem;color:#94a3b8;font-size:0.84rem;">加载中...</div>
+      </div>
+      <div class="card">
+        <h2>添加管理员</h2>
+        <p style="color:#64748b;font-size:0.84rem;">把已有用户设为管理员。新管理员默认获得全部分区权限，可在上方按需收紧。</p>
+        <div class="form-group" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.6rem;">
+          <input id="promoteAdminName" placeholder="输入用户名" style="flex:1;min-width:180px;">
+          <button class="btn btn-primary" type="button" onclick="promoteAdmin()">设为管理员</button>
+        </div>
+        <div id="adminGroupStatus" style="font-size:0.82rem;color:#64748b;margin-top:0.5rem;"></div>
+      </div>
+    </div>
+
     <div id="tab-settings" class="tab-content">
       <div class="card">
         <h2>修改管理员密码</h2>
@@ -1116,6 +1163,8 @@ let allUsers = [];
     loadAdminReports();
     loadAuditLogs();
     loadSecurity();
+    loadAdminGroups();
+    loadStorageAccounts();
     setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
     setupNotifyForm();
     setupQuickUpload();
@@ -1337,6 +1386,9 @@ function renderTools() {
           <button class="btn-icon" onclick="moveTool(${i}, -1)" title="上移">↑</button>
           <button class="btn-icon" onclick="moveTool(${i}, 1)" title="下移">↓</button>
           <button class="btn-icon" onclick="previewTool('${t.url || ''}')" title="预览链接"><svg class="ico" aria-hidden="true"><use href="/icons.svg#link"/></svg></button>
+          <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.8rem;color:#64748b;white-space:nowrap;">
+            <input type="checkbox" ${t.isGame ? 'checked' : ''} onchange="updateTool(${i}, 'isGame', this.checked)"> 游戏
+          </label>
           <button class="btn btn-danger btn-sm" onclick="removeTool(${i})">删除</button>
         </div>
       </div>
@@ -1370,7 +1422,7 @@ function renderChangelogs() {
 window.updateTool = (idx, key, val) => { currentData.tools[idx][key] = val; };
 window.updateChangelog = (idx, key, val) => { currentData.changelogs[idx][key] = val; };
 window.updateChangelogText = (idx, val) => { currentData.changelogs[idx].changes = val.split('\n').filter(s => s.trim()); };
-window.addTool = () => { currentData.tools.push({ name: '新工具', description: '', url: '#', icon: '' }); renderTools(); updateStats(); };
+window.addTool = () => { currentData.tools.push({ name: '新工具', description: '', url: '#', icon: '', isGame: false }); renderTools(); updateStats(); };
 window.removeTool = (idx) => { if (confirm('确定删除该工具吗？')) { currentData.tools.splice(idx, 1); renderTools(); updateStats(); } };
 window.addChangelog = () => { const today = new Date().toISOString().slice(0,10); currentData.changelogs.unshift({ version: 'v1.0.0', date: today, changes: ['新增功能'] }); renderChangelogs(); updateStats(); };
 window.removeChangelog = (idx) => { if (confirm('确定删除该更新日志吗？')) { currentData.changelogs.splice(idx, 1); renderChangelogs(); updateStats(); } };
@@ -1429,6 +1481,7 @@ document.getElementById('upload-form').addEventListener('submit', async function
   formData.append('name', name);
   formData.append('icon', icon);
   formData.append('description', description);
+  formData.append('isGame', document.getElementById('tool-is-game').checked ? '1' : '0');
 
   const fileInput = document.getElementById('tool-file');
   if (fileInput.files.length === 0) { status.textContent = '请选择 HTML 文件'; status.style.color = '#ef4444'; return; }
@@ -2290,6 +2343,173 @@ async function revokeAdminSession(sid, isCurrent) {
     loadSecurity();
   } catch (e) {
     showToast('下线失败：' + e.message, 'error');
+  }
+}
+
+async function loadAdminGroups() {
+  const listEl = document.getElementById('adminGroupList');
+  if (!listEl) return;
+  try {
+    const res = await fetch('/api/admin/permissions', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) {
+      const tab = document.getElementById('admins-tab-btn');
+      if (tab) tab.style.display = 'none';
+      listEl.innerHTML = '<p style="color:#94a3b8;">只有主管理员可以配置管理组。</p>';
+      return;
+    }
+    const data = await res.json();
+    const catalog = data.catalog || [];
+    const admins = data.admins || [];
+    listEl.innerHTML = admins.map(a => {
+      const isSuper = a.super || a.username === 'admin';
+      const perms = Array.isArray(a.permissions) ? a.permissions : [];
+      const all = isSuper || perms.includes('*');
+      return `<div class="admin-group-item" data-username="${escapeHtmlAdmin(a.username)}" style="border:1px solid var(--border);border-radius:10px;padding:0.8rem;margin-bottom:0.7rem;">
+        <div style="display:flex;justify-content:space-between;gap:0.6rem;align-items:center;flex-wrap:wrap;margin-bottom:0.55rem;">
+          <strong>${escapeHtmlAdmin(a.username)}</strong>
+          <span class="role-badge ${isSuper ? 'admin' : 'user'}">${isSuper ? '主管理员' : (a.unconfigured ? '未配置（默认全部）' : '管理员')}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:0.35rem 0.7rem;">
+          ${catalog.map(p => `<label style="font-size:0.82rem;color:var(--text);display:flex;align-items:center;gap:0.35rem;">
+            <input type="checkbox" data-perm="${p.key}" ${all || perms.includes(p.key) ? 'checked' : ''} ${isSuper ? 'disabled' : ''}>
+            ${escapeHtmlAdmin(p.label)}
+          </label>`).join('')}
+        </div>
+        ${isSuper ? '' : `<button class="btn btn-primary btn-sm" style="margin-top:0.6rem;" type="button" onclick="saveAdminPermissions('${escapeHtmlAdmin(a.username)}')">保存权限</button>`}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = '<p style="color:#ef4444;">管理组加载失败：' + escapeHtmlAdmin(e.message) + '</p>';
+  }
+}
+
+async function saveAdminPermissions(username) {
+  const card = Array.from(document.querySelectorAll('.admin-group-item')).find(el => el.dataset.username === username);
+  if (!card) return;
+  const permissions = Array.from(card.querySelectorAll('input[data-perm]:checked')).map(el => el.dataset.perm);
+  try {
+    const res = await fetch('/api/admin/users/' + encodeURIComponent(username) + '/permissions', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ permissions })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存失败');
+    showToast('权限已保存', 'success');
+    loadAdminGroups();
+  } catch (e) {
+    showToast('保存失败：' + e.message, 'error');
+  }
+}
+
+async function promoteAdmin() {
+  const input = document.getElementById('promoteAdminName');
+  const status = document.getElementById('adminGroupStatus');
+  const username = input.value.trim();
+  if (!username) { status.textContent = '请输入用户名'; return; }
+  status.textContent = '正在设置...';
+  try {
+    const res = await fetch('/api/admin/users/role', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ username, role: 'admin' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '设置失败');
+    status.textContent = '已设为管理员，可在上方调整权限。';
+    input.value = '';
+    loadAdminGroups();
+  } catch (e) {
+    status.textContent = '设置失败：' + e.message;
+  }
+}
+
+async function loadStorageAccounts() {
+  const listEl = document.getElementById('storageAccountList');
+  if (!listEl) return;
+  try {
+    const res = await fetch('/api/admin/storage-accounts', { headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '加载失败');
+    listEl.innerHTML = (data || []).map(a => `<div class="notif-item" style="margin-bottom:0.55rem;padding:0.65rem 0.75rem;">
+      <div class="notif-item-head">
+        <div class="notif-item-title">${escapeHtmlAdmin(a.name)} <span class="notif-type-badge ${a.enabled ? 'success' : 'warning'}">${a.enabled ? '启用' : '停用'}</span>${a.builtin ? ' <span class="notif-type-badge info">默认</span>' : ''}</div>
+        <div class="notif-item-meta"><span>${escapeHtmlAdmin(a.region)}</span></div>
+      </div>
+      <div class="notif-item-content">Bucket: ${escapeHtmlAdmin(a.bucket)}<br>Key: ${escapeHtmlAdmin(a.keyId || '')}</div>
+      <div class="notif-item-actions">
+        <button class="btn btn-outline btn-sm" type="button" onclick="testStorageAccount('${escapeHtmlAdmin(a.id)}')">测试连接</button>
+        ${a.builtin ? '' : `<button class="btn btn-danger-outline btn-sm" type="button" onclick="deleteStorageAccount('${escapeHtmlAdmin(a.id)}')">删除</button>`}
+      </div>
+    </div>`).join('');
+  } catch (e) {
+    listEl.innerHTML = '<p style="color:#ef4444;">存储账号加载失败：' + escapeHtmlAdmin(e.message) + '</p>';
+  }
+}
+
+function showStorageForm() {
+  document.getElementById('storageFormCard').style.display = 'block';
+  document.getElementById('storageFormStatus').textContent = '';
+}
+
+async function saveStorageAccount() {
+  const status = document.getElementById('storageFormStatus');
+  const body = {
+    name: document.getElementById('storageName').value.trim(),
+    region: document.getElementById('storageRegion').value.trim(),
+    endpoint: document.getElementById('storageEndpoint').value.trim(),
+    bucket: document.getElementById('storageBucket').value.trim(),
+    keyId: document.getElementById('storageKeyId').value.trim(),
+    appKey: document.getElementById('storageAppKey').value.trim(),
+  };
+  if (!body.name || !body.region || !body.endpoint || !body.bucket || !body.keyId || !body.appKey) {
+    status.textContent = '请填写全部字段';
+    return;
+  }
+  status.textContent = '正在保存...';
+  try {
+    const res = await fetch('/api/admin/storage-accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存失败');
+    status.textContent = '已添加';
+    ['storageName', 'storageRegion', 'storageEndpoint', 'storageBucket', 'storageKeyId', 'storageAppKey'].forEach(id => document.getElementById(id).value = '');
+    loadStorageAccounts();
+  } catch (e) {
+    status.textContent = '保存失败：' + e.message;
+  }
+}
+
+async function testStorageAccount(id) {
+  try {
+    const res = await fetch('/api/admin/storage-accounts/' + encodeURIComponent(id) + '/test', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '连接失败');
+    showToast('存储连接正常', 'success');
+  } catch (e) {
+    showToast('连接失败：' + e.message, 'error');
+  }
+}
+
+async function deleteStorageAccount(id) {
+  if (!confirm('确定删除这个存储账号？已有资源不会自动迁移。')) return;
+  try {
+    const res = await fetch('/api/admin/storage-accounts/' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '删除失败');
+    showToast('已删除', 'success');
+    loadStorageAccounts();
+  } catch (e) {
+    showToast('删除失败：' + e.message, 'error');
   }
 }
 

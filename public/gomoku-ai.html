@@ -272,7 +272,8 @@
     undosLeft: 3,
     hint: null,
     anims: [],
-    animRAF: 0
+    animRAF: 0,
+    resultReported: false
   };
   var chatHistory = [];
   var chatBusy = false;
@@ -436,6 +437,7 @@
     state.hover = null;
     state.undosLeft = 3;
     state.hint = null;
+    state.resultReported = false;
     clearHint();
     stopStoneAnims();
     setThinking(false);
@@ -491,6 +493,24 @@
     updateUndoBtn();
     hintBtn.disabled = true;
     draw();
+
+    if (!state.resultReported && token && state.history.length >= 5) {
+      state.resultReported = true;
+      var result = winner === state.playerColor ? 'win' : (winner === state.aiColor ? 'loss' : 'draw');
+      fetch('/api/gomoku/ai/result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          result: result,
+          playerColor: state.playerColor,
+          moves: state.history.map(function (m) { return { x: m.x, y: m.y, color: m.color }; })
+        })
+      }).then(function (r) { return r.json(); }).then(function (data) {
+        if (data && data.success) {
+          addChat('sys', '排行榜积分已更新：' + (data.delta >= 0 ? '+' : '') + data.delta + '，当前 ' + data.rating + ' 分');
+        }
+      }).catch(function () {});
+    }
   }
 
   function place(x, y, color) {

@@ -21,7 +21,7 @@ const { registerSocialRoutes, registerSocialSocket, emitToUser } = require('./so
 const {
   S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand,
   CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand,
-  AbortMultipartUploadCommand, ListPartsCommand
+  AbortMultipartUploadCommand, ListPartsCommand, HeadBucketCommand
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
@@ -68,6 +68,26 @@ app.use(compression({
 }));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(express.static('public'));
+
+// 管理组权限闸门：所有 /api/admin 路由先经过分区权限检查
+app.use('/api/admin', async (req, res, next) => {
+  if (req.method === 'OPTIONS') return next();
+  const session = await getSession(getBearerToken(req));
+  if (!session || session.role !== 'admin') {
+    return res.status(403).json({ error: '需要管理员权限' });
+  }
+  const entry = await getAdminPermissionEntry(session.username);
+  req.adminSession = session;
+  req.adminPermissions = entry;
+  if (session.username === 'admin' || entry.permissions.includes('*')) return next();
+  const adminPath = (req.originalUrl.split('?')[0].replace(/^\/api\/admin/, '') || '/');
+  const needed = adminPermissionForPath(adminPath);
+  if (!needed) return next();
+  if (!entry.permissions.includes(needed)) {
+    return res.status(403).json({ error: '没有该分区的管理权限' });
+  }
+  next();
+});
 // ===== SEO: 允许搜索引擎抓取所有页面 =====
 app.get('/robots.txt', (req, res) => {
   res.type('text/plain');
@@ -391,6 +411,76 @@ async function checkAdmin(req) {
   return !!(session && session.role === 'admin');
 }
 
+// ===== 管理组细粒度权限 =====
+const ADMIN_PERMISSION_CATALOG = [
+  { key: 'tools', label: '工具管理' },
+  { key: 'review', label: '工具审核' },
+  { key: 'changelog', label: '更新日志' },
+  { key: 'users', label: '用户管理' },
+  { key: 'files', label: '文件管理' },
+  { key: 'rooms', label: '房间管理' },
+  { key: 'chat', label: 'AI 助手' },
+  { key: 'notify', label: '通知管理' },
+  { key: 'feedback', label: '反馈处理' },
+  { key: 'moderation', label: '举报与处罚' },
+  { key: 'audit', label: '审计日志' },
+  { key: 'backup', label: '备份恢复' },
+  { key: 'security', label: '安全设置' },
+  { key: 'storage', label: '存储账号' },
+  { key: 'settings', label: '站点设置' }
+];
+const ADMIN_PERMISSION_KEYS = ADMIN_PERMISSION_CATALOG.map(x => x.key);
+
+async function getAdminPermissionEntry(username) {
+  if (username === 'admin') return { super: true, permissions: ['*'] };
+  const map = (await kvGet('admin_permissions')) || {};
+  const entry = map[username];
+  if (!entry) return { super: false, permissions: ['*'], unconfigured: true };
+  return {
+    super: false,
+    permissions: Array.isArray(entry.permissions) ? entry.permissions.filter(p => ADMIN_PERMISSION_KEYS.includes(p)) : [],
+    updatedAt: entry.updatedAt || null,
+  };
+}
+
+function adminPermissionForPath(path) {
+  if (path === '/permissions/me') return null;
+  if (path.startsWith('/permissions')) return 'security';
+  if (path.startsWith('/users/role') || /^\/users\/[^/]+\/permissions/.test(path)) return 'security';
+  if (/^\/users\/[^/]+\/sessions/.test(path)) return 'security';
+  if (path.startsWith('/users/') && path.includes('/moderate')) return 'moderation';
+  if (path.startsWith('/users')) return 'users';
+  if (path.startsWith('/tool-submissions')) return 'review';
+  if (path.startsWith('/tools') || path.startsWith('/tool/')) return 'tools';
+  if (path.startsWith('/changelog') || path.startsWith('/site-data')) return 'changelog';
+  if (path.startsWith('/files')) return 'files';
+  if (path.startsWith('/rooms')) return 'rooms';
+  if (path.startsWith('/chat')) return 'chat';
+  if (path.startsWith('/notifications')) return 'notify';
+  if (path.startsWith('/feedback')) return 'feedback';
+  if (path.startsWith('/reports') || path.startsWith('/moderation') || path.startsWith('/moderate')) return 'moderation';
+  if (path.startsWith('/audit-logs')) return 'audit';
+  if (path.startsWith('/backup')) return 'backup';
+  if (path.startsWith('/2fa') || path.startsWith('/security')) return 'security';
+  if (path.startsWith('/storage')) return 'storage';
+  if (path.startsWith('/settings')) return 'settings';
+  if (path.startsWith('/resource')) return 'tools';
+  return null;
+}
+
+async function requireSuperAdmin(req, res) {
+  const session = await getSession(getBearerToken(req));
+  if (!session || session.role !== 'admin') {
+    res.status(403).json({ error: '需要管理员权限' });
+    return null;
+  }
+  if (session.username !== 'admin') {
+    res.status(403).json({ error: '只有主管理员可以执行此操作' });
+    return null;
+  }
+  return session;
+}
+
 // ===== 快捷工具上传接口 =====
 const TOOL_UPLOAD_KEY_TTL_SECONDS = 7 * 24 * 60 * 60;
 const TOOL_UPLOAD_MAX_HTML = 2 * 1024 * 1024;
@@ -493,6 +583,88 @@ const b2Client = new S3Client({
   },
 });
 
+// ===== 多 B2 / S3 存储账号 =====
+const DEFAULT_STORAGE_ID = 'default';
+const storageClientCache = new Map();
+
+function defaultStorageAccount() {
+  return {
+    id: DEFAULT_STORAGE_ID,
+    name: '默认存储',
+    region: process.env.B2_REGION || 'us-east-005',
+    endpoint: process.env.B2_ENDPOINT || '',
+    bucket: process.env.B2_BUCKET_NAME || '',
+    keyId: process.env.B2_KEY_ID || '',
+    appKey: process.env.B2_APP_KEY || '',
+    enabled: true,
+    builtin: true,
+  };
+}
+
+function normalizeStorageAccount(raw) {
+  const item = raw && typeof raw === 'object' ? raw : {};
+  return {
+    id: String(item.id || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40),
+    name: String(item.name || '').replace(/[<>]/g, '').trim().slice(0, 40),
+    region: String(item.region || '').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 40),
+    endpoint: String(item.endpoint || '').replace(/^https?:\/\//, '').replace(/\/+$/, '').slice(0, 200),
+    bucket: String(item.bucket || '').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 80),
+    keyId: String(item.keyId || '').slice(0, 200),
+    appKey: String(item.appKey || '').slice(0, 300),
+    enabled: item.enabled !== false,
+    builtin: !!item.builtin,
+    createdAt: item.createdAt || Date.now(),
+  };
+}
+
+async function getStorageAccounts(includeSecrets) {
+  const customRaw = (await kvGet('storage_accounts')) || [];
+  const custom = Array.isArray(customRaw) ? customRaw.map(normalizeStorageAccount) : [];
+  const all = [defaultStorageAccount()].concat(custom);
+  if (includeSecrets) return all;
+  return all.map(a => ({
+    id: a.id,
+    name: a.name,
+    region: a.region,
+    bucket: a.bucket,
+    enabled: a.enabled,
+    builtin: a.builtin,
+    keyId: a.keyId ? (a.keyId.slice(0, 6) + '...' + a.keyId.slice(-4)) : '',
+  }));
+}
+
+async function getStorageAccount(storageId) {
+  const id = String(storageId || DEFAULT_STORAGE_ID);
+  if (id === DEFAULT_STORAGE_ID) return defaultStorageAccount();
+  const all = await getStorageAccounts(true);
+  return all.find(a => a.id === id && a.enabled) || null;
+}
+
+function getStorageClient(account) {
+  if (!account) return null;
+  if (account.id === DEFAULT_STORAGE_ID) return b2Client;
+  const cacheKey = [account.id, account.endpoint, account.region, account.keyId, account.appKey].join('|');
+  if (storageClientCache.has(cacheKey)) return storageClientCache.get(cacheKey);
+  const client = new S3Client({
+    region: account.region || 'auto',
+    endpoint: `https://${account.endpoint}`,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: account.keyId,
+      secretAccessKey: account.appKey,
+    },
+  });
+  storageClientCache.set(cacheKey, client);
+  return client;
+}
+
+async function getStorageForRecord(record) {
+  const account = await getStorageAccount(record && record.storageId);
+  if (account) return { account, client: getStorageClient(account) };
+  const fallback = defaultStorageAccount();
+  return { account: fallback, client: b2Client };
+}
+
 const USER_TOTAL_LIMIT = 50 * 1024 * 1024; // 普通用户总容量 50 MB
 
 // 资源中心分片上传（支持断点续传）
@@ -509,12 +681,12 @@ function isOwnResourceKey(key, username) {
     && key.startsWith(`${RES_MULTIPART_PREFIX}${username}/`)
     && !key.includes('..');
 }
-async function listAllParts(key, uploadId) {
+async function listAllParts(key, uploadId, client, bucket) {
   const all = [];
   let marker;
   do {
-    const res = await b2Client.send(new ListPartsCommand({
-      Bucket: process.env.B2_BUCKET_NAME,
+    const res = await (client || b2Client).send(new ListPartsCommand({
+      Bucket: bucket || process.env.B2_BUCKET_NAME,
       Key: key,
       UploadId: uploadId,
       MaxParts: 1000,
@@ -1056,6 +1228,7 @@ app.post('/api/update', async (req, res) => {
 app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { name, icon, description, category } = req.body;
+  const isGame = ['1', 'true', 'on'].includes(String((req.body && req.body.isGame) || '').toLowerCase());
   const file = req.file;
   if (!file || !file.originalname.toLowerCase().endsWith('.html')) {
     return res.status(400).json({ error: '请上传 .html 文件' });
@@ -1065,7 +1238,7 @@ app.post('/api/tool/upload', upload.single('file'), async (req, res) => {
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   await kvPut(`tool_content:${id}`, htmlContent);
   await mutateSiteData(data => {
-    data.tools.push({ name, icon, description, category, url: `/tool/${id}` });
+    data.tools.push({ name, icon, description, category, isGame, url: `/tool/${id}` });
   });
   res.json({ success: true, id, url: `/tool/${id}` });
 });
@@ -1133,6 +1306,7 @@ app.post('/api/tools/submit', upload.single('file'), async (req, res) => {
   const description = String((req.body && req.body.description) || '').replace(/[<>]/g, '').trim().slice(0, 200);
   const icon = String((req.body && req.body.icon) || '').replace(/[<>]/g, '').trim().slice(0, 200);
   const category = String((req.body && req.body.category) || 'other').replace(/[<>]/g, '').trim().slice(0, 30) || 'other';
+  const isGame = ['1', 'true', 'on'].includes(String((req.body && req.body.isGame) || '').toLowerCase());
   if (!name) return res.status(400).json({ error: '请填写工具名称' });
   if (!html.trim()) return res.status(400).json({ error: 'HTML 内容为空' });
 
@@ -1170,6 +1344,7 @@ app.post('/api/tools/submit', upload.single('file'), async (req, res) => {
     description,
     icon,
     category,
+    isGame,
     status,
     kind,
     version: kind === 'update' ? baseVersion + 1 : 1,
@@ -1286,6 +1461,7 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
         description: target.description,
         icon: target.icon,
         category: target.category,
+        isGame: !!target.isGame,
         version: Number(target.version) || 1,
       });
     }
@@ -1296,6 +1472,7 @@ app.post('/api/admin/tool-submissions/:id/review', async (req, res) => {
       icon: item.icon,
       description: item.description,
       category: item.category,
+      isGame: !!item.isGame,
       url: targetUrl,
       submittedBy: item.username,
       version: item.version,
@@ -1417,6 +1594,7 @@ app.post('/api/admin/tools/:id/rollback', async (req, res) => {
     icon: prevMeta.icon || target.icon,
     description: prevMeta.description || target.description,
     category: prevMeta.category || target.category,
+    isGame: !!prevMeta.isGame,
     url: targetUrl,
     submittedBy: target.username,
     version: prevMeta.version || 1,
@@ -1837,11 +2015,13 @@ app.post('/api/tool/quick-upload', async (req, res) => {
     await kvPut(`tool_content:${updateId}`, htmlContent);
     await mutateSiteData(siteData => {
       const index = siteData.tools.findIndex(t => t && t.url === `/tool/${updateId}`);
+      const existing = index >= 0 ? siteData.tools[index] : null;
       const entry = {
         name: cleanName,
         icon: cleanIcon,
         description: cleanDesc,
         category: cleanCategory,
+        isGame: !!(existing && existing.isGame),
         url: `/tool/${updateId}`,
       };
       if (index >= 0) siteData.tools[index] = entry;
@@ -1885,12 +2065,100 @@ app.get('/tool/:id', async (req, res) => {
 
 // ======== 资源中心 (B2 上传与配额) ========
 // 生成预签名上传链接（前端直传 B2）
+app.get('/api/admin/storage-accounts', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  res.json(await getStorageAccounts(false));
+});
+
+app.post('/api/admin/storage-accounts', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const body = req.body || {};
+  const account = normalizeStorageAccount({
+    id: 'st_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'),
+    name: body.name,
+    region: body.region,
+    endpoint: body.endpoint,
+    bucket: body.bucket,
+    keyId: body.keyId,
+    appKey: body.appKey,
+    enabled: body.enabled !== false,
+  });
+  if (!account.name || !account.region || !account.endpoint || !account.bucket || !account.keyId || !account.appKey) {
+    return res.status(400).json({ error: '名称、区域、Endpoint、Bucket、Key 都不能为空' });
+  }
+  const list = (await kvGet('storage_accounts')) || [];
+  list.push(account);
+  await kvPut('storage_accounts', list.slice(0, 50));
+  storageClientCache.clear();
+  await writeAudit('admin', 'storage:add', account.id, `${account.name} ${account.region} ${account.bucket}`);
+  res.json({ success: true, account: (await getStorageAccounts(false)).find(a => a.id === account.id) });
+});
+
+app.put('/api/admin/storage-accounts/:id', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const id = String(req.params.id || '');
+  if (id === DEFAULT_STORAGE_ID) return res.status(400).json({ error: '默认存储由环境变量管理，不能在这里修改' });
+  const list = (await kvGet('storage_accounts')) || [];
+  const idx = list.findIndex(a => a.id === id);
+  if (idx < 0) return res.status(404).json({ error: '存储账号不存在' });
+  const body = req.body || {};
+  const updated = normalizeStorageAccount(Object.assign({}, list[idx], {
+    name: body.name !== undefined ? body.name : list[idx].name,
+    region: body.region !== undefined ? body.region : list[idx].region,
+    endpoint: body.endpoint !== undefined ? body.endpoint : list[idx].endpoint,
+    bucket: body.bucket !== undefined ? body.bucket : list[idx].bucket,
+    keyId: body.keyId ? body.keyId : list[idx].keyId,
+    appKey: body.appKey ? body.appKey : list[idx].appKey,
+    enabled: body.enabled !== undefined ? body.enabled : list[idx].enabled,
+    id,
+  }));
+  list[idx] = updated;
+  await kvPut('storage_accounts', list);
+  storageClientCache.clear();
+  await writeAudit('admin', 'storage:update', id, updated.name);
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/storage-accounts/:id', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const id = String(req.params.id || '');
+  if (id === DEFAULT_STORAGE_ID) return res.status(400).json({ error: '默认存储不能删除' });
+  const list = (await kvGet('storage_accounts')) || [];
+  const next = list.filter(a => a.id !== id);
+  if (next.length === list.length) return res.status(404).json({ error: '存储账号不存在' });
+  await kvPut('storage_accounts', next);
+  storageClientCache.clear();
+  await writeAudit('admin', 'storage:delete', id, '');
+  res.json({ success: true });
+});
+
+app.post('/api/admin/storage-accounts/:id/test', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const account = await getStorageAccount(req.params.id);
+  if (!account) return res.status(404).json({ error: '存储账号不存在' });
+  try {
+    await getStorageClient(account).send(new HeadBucketCommand({ Bucket: account.bucket }));
+    res.json({ success: true });
+  } catch (e) {
+    res.status(400).json({ error: '连接失败：' + (e.message || e.name) });
+  }
+});
+
+app.get('/api/storage/accounts', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const accounts = await getStorageAccounts(false);
+  res.json(accounts.filter(a => a.enabled));
+});
+
 app.post('/api/resource/upload-url', async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
 
   const { filename, contentType, fileSize } = req.body;
   if (!filename || !contentType || !fileSize) return res.status(400).json({ error: '缺少文件信息' });
+  const storage = await getStorageAccount(req.body.storageId);
+  if (!storage || !storage.bucket || !storage.endpoint) return res.status(400).json({ error: '存储分区不存在或未启用' });
 
   // 配额检查（管理员无限，普通用户上限 50MB）
   if (session.role !== 'admin') {
@@ -1902,12 +2170,12 @@ app.post('/api/resource/upload-url', async (req, res) => {
     }
   }
 
-  const ext = filename.split('.').pop();
+  const ext = String(filename.split('.').pop() || 'bin').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
   const objectKey = `resources/${session.username}/${crypto.randomUUID()}.${ext}`;
-  const command = new PutObjectCommand({ Bucket: process.env.B2_BUCKET_NAME, Key: objectKey, ContentType: contentType });
-  const uploadUrl = await getSignedUrl(b2Client, command, { expiresIn: 3600 });
+  const command = new PutObjectCommand({ Bucket: storage.bucket, Key: objectKey, ContentType: contentType });
+  const uploadUrl = await getSignedUrl(getStorageClient(storage), command, { expiresIn: 3600 });
   
-  res.json({ uploadUrl, objectKey });
+  res.json({ uploadUrl, objectKey, storageId: storage.id, storageName: storage.name });
 });
 app.post('/api/resource/confirm', async (req, res) => {
   const session = await getSession(getBearerToken(req));
@@ -1915,6 +2183,8 @@ app.post('/api/resource/confirm', async (req, res) => {
 
   const { objectKey, fileSize, title, category } = req.body;
   if (!objectKey || !fileSize) return res.status(400).json({ error: '参数缺失' });
+  const storage = await getStorageAccount(req.body.storageId);
+  if (!storage || !storage.bucket) return res.status(400).json({ error: '存储分区不存在' });
 
   // 扣除配额
   if (session.role !== 'admin') {
@@ -1925,10 +2195,10 @@ app.post('/api/resource/confirm', async (req, res) => {
 
   // 生成播放链接（7天有效）
   const getCommand = new GetObjectCommand({
-    Bucket: process.env.B2_BUCKET_NAME,
+    Bucket: storage.bucket,
     Key: objectKey,
   });
-  const playUrl = await getSignedUrl(b2Client, getCommand, { expiresIn: 7 * 24 * 3600 });
+  const playUrl = await getSignedUrl(getStorageClient(storage), getCommand, { expiresIn: 7 * 24 * 3600 });
 
   const resourceId = 'res_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
   const record = {
@@ -1940,6 +2210,8 @@ app.post('/api/resource/confirm', async (req, res) => {
     fileSize,
     uploader: session.username,
     type: 'file', // 新增标记：文件类型
+    storageId: storage.id,
+    storageName: storage.name,
     createdAt: Date.now(),
   };
   
@@ -2009,7 +2281,8 @@ app.delete('/api/resource/:id', async (req, res) => {
   if (record.type === 'file' && record.objectKey) {
     try {
       const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
-      await b2Client.send(new DeleteObjectCommand({ Bucket: process.env.B2_BUCKET_NAME, Key: record.objectKey }));
+      const storage = await getStorageForRecord(record);
+      await storage.client.send(new DeleteObjectCommand({ Bucket: storage.account.bucket, Key: record.objectKey }));
     } catch (e) { console.error('B2 删除失败:', e); }
 
     // 退配额（仅普通用户）
@@ -2099,11 +2372,13 @@ app.get('/api/resource/list/:category', async (req, res) => {
     const copy = Object.assign({}, item);
     if (copy.objectKey && copy.objectKey !== 'external' && copy.type !== 'link') {
       try {
+        const storage = await getStorageForRecord(copy);
         const cmd = new GetObjectCommand({
-          Bucket: process.env.B2_BUCKET_NAME,
+          Bucket: storage.account.bucket,
           Key: copy.objectKey,
         });
-        copy.playUrl = await getSignedUrl(b2Client, cmd, { expiresIn: 7 * 24 * 3600 });
+        copy.playUrl = await getSignedUrl(storage.client, cmd, { expiresIn: 7 * 24 * 3600 });
+        copy.storageName = storage.account.name;
       } catch (e) {
         console.error('资源重新签名失败:', copy.objectKey, e.message);
       }
@@ -2148,8 +2423,10 @@ app.post('/api/resource/multipart/create', async (req, res) => {
     }
     const ext = String(filename).split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'bin';
     const key = `${RES_MULTIPART_PREFIX}${session.username}/${crypto.randomUUID()}.${ext}`;
-    const created = await b2Client.send(new CreateMultipartUploadCommand({
-      Bucket: process.env.B2_BUCKET_NAME,
+    const storage = await getStorageAccount(req.body && req.body.storageId);
+    if (!storage || !storage.bucket || !storage.endpoint) return res.status(400).json({ error: '存储分区不存在或未启用' });
+    const created = await getStorageClient(storage).send(new CreateMultipartUploadCommand({
+      Bucket: storage.bucket,
       Key: key,
       ContentType: String(contentType).slice(0, 120),
     }));
@@ -2160,6 +2437,8 @@ app.post('/api/resource/multipart/create', async (req, res) => {
       partSize: RES_MULTIPART_PART_SIZE,
       fileSize: size,
       maxSize: RES_MULTIPART_MAX,
+      storageId: storage.id,
+      storageName: storage.name,
     });
   } catch (err) {
     console.error('分片上传初始化失败:', err);
@@ -2175,13 +2454,15 @@ app.post('/api/resource/multipart/part-url', async (req, res) => {
     if (!isOwnResourceKey(key, session.username)) return res.status(403).json({ error: '无权访问' });
     const n = Number(partNumber);
     if (!Number.isInteger(n) || n < 1 || n > 10000) return res.status(400).json({ error: '分片编号无效' });
+    const storage = await getStorageAccount(req.body.storageId);
+    if (!storage || !storage.bucket) return res.status(400).json({ error: '存储分区不存在' });
     const cmd = new UploadPartCommand({
-      Bucket: process.env.B2_BUCKET_NAME,
+      Bucket: storage.bucket,
       Key: key,
       UploadId: uploadId,
       PartNumber: n,
     });
-    const url = await getSignedUrl(b2Client, cmd, { expiresIn: 3600 });
+    const url = await getSignedUrl(getStorageClient(storage), cmd, { expiresIn: 3600 });
     res.json({ url });
   } catch (err) {
     console.error('分片签名失败:', err);
@@ -2196,7 +2477,9 @@ app.get('/api/resource/multipart/status', async (req, res) => {
     const key = req.query.key;
     const uploadId = req.query.uploadId;
     if (!isOwnResourceKey(key, session.username)) return res.status(403).json({ error: '无权访问' });
-    const parts = await listAllParts(key, uploadId);
+    const storage = await getStorageAccount(req.query.storageId);
+    if (!storage || !storage.bucket) return res.status(400).json({ error: '存储分区不存在' });
+    const parts = await listAllParts(key, uploadId, getStorageClient(storage), storage.bucket);
     res.json({
       parts: parts.map(p => p.PartNumber),
       uploadedBytes: parts.reduce((s, p) => s + (Number(p.Size) || 0), 0),
@@ -2213,23 +2496,26 @@ app.post('/api/resource/multipart/complete', async (req, res) => {
     if (!session) return res.status(401).json({ error: '请先登录' });
     const { key, uploadId, title, category } = req.body || {};
     if (!isOwnResourceKey(key, session.username)) return res.status(403).json({ error: '无权访问' });
-    const parts = await listAllParts(key, uploadId);
+    const storage = await getStorageAccount(req.body.storageId);
+    if (!storage || !storage.bucket) return res.status(400).json({ error: '存储分区不存在' });
+    const client = getStorageClient(storage);
+    const parts = await listAllParts(key, uploadId, client, storage.bucket);
     if (!parts.length) return res.status(400).json({ error: '没有已上传的分片' });
     const total = parts.reduce((s, p) => s + (Number(p.Size) || 0), 0);
     if (session.role !== 'admin') {
       const used = await usedQuota(session.username);
       if (used + total > USER_TOTAL_LIMIT) {
         try {
-          await b2Client.send(new AbortMultipartUploadCommand({
-            Bucket: process.env.B2_BUCKET_NAME, Key: key, UploadId: uploadId,
+          await client.send(new AbortMultipartUploadCommand({
+            Bucket: storage.bucket, Key: key, UploadId: uploadId,
           }));
         } catch (e) {}
         return res.status(429).json({ error: '空间不足，上传已取消' });
       }
     }
     try {
-      await b2Client.send(new CompleteMultipartUploadCommand({
-        Bucket: process.env.B2_BUCKET_NAME,
+      await client.send(new CompleteMultipartUploadCommand({
+        Bucket: storage.bucket,
         Key: key,
         UploadId: uploadId,
         MultipartUpload: {
@@ -2243,8 +2529,8 @@ app.post('/api/resource/multipart/complete', async (req, res) => {
       throw e;
     }
 
-    const getCommand = new GetObjectCommand({ Bucket: process.env.B2_BUCKET_NAME, Key: key });
-    const playUrl = await getSignedUrl(b2Client, getCommand, { expiresIn: 7 * 24 * 3600 });
+    const getCommand = new GetObjectCommand({ Bucket: storage.bucket, Key: key });
+    const playUrl = await getSignedUrl(client, getCommand, { expiresIn: 7 * 24 * 3600 });
     const resourceId = 'res_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
     const record = {
       id: resourceId,
@@ -2255,6 +2541,8 @@ app.post('/api/resource/multipart/complete', async (req, res) => {
       fileSize: total,
       uploader: session.username,
       type: 'file',
+      storageId: storage.id,
+      storageName: storage.name,
       createdAt: Date.now(),
     };
     await kvPut(`resource:${resourceId}`, record);
@@ -2279,9 +2567,11 @@ app.post('/api/resource/multipart/abort', async (req, res) => {
     if (!session) return res.status(401).json({ error: '请先登录' });
     const { key, uploadId } = req.body || {};
     if (!isOwnResourceKey(key, session.username)) return res.status(403).json({ error: '无权访问' });
+    const storage = await getStorageAccount(req.body.storageId);
+    if (!storage || !storage.bucket) return res.status(400).json({ error: '存储分区不存在' });
     try {
-      await b2Client.send(new AbortMultipartUploadCommand({
-        Bucket: process.env.B2_BUCKET_NAME, Key: key, UploadId: uploadId,
+      await getStorageClient(storage).send(new AbortMultipartUploadCommand({
+        Bucket: storage.bucket, Key: key, UploadId: uploadId,
       }));
     } catch (e) { /* 已经完成或已取消 */ }
     res.json({ success: true });
@@ -3835,6 +4125,69 @@ app.get('/api/admin/users', async (req, res) => {
   res.json(list);
 });
 
+app.get('/api/admin/permissions/me', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session || session.role !== 'admin') return res.status(403).json({ error: '需要管理员权限' });
+  const entry = await getAdminPermissionEntry(session.username);
+  res.json({
+    username: session.username,
+    super: session.username === 'admin',
+    permissions: entry.permissions,
+    catalog: ADMIN_PERMISSION_CATALOG,
+  });
+});
+
+app.get('/api/admin/permissions', async (req, res) => {
+  if (!(await requireSuperAdmin(req, res))) return;
+  const users = (await kvGet('users')) || {};
+  const map = (await kvGet('admin_permissions')) || {};
+  const admins = Object.entries(users)
+    .filter(([username, data]) => username === 'admin' || (data && data.role === 'admin'))
+    .map(([username, data]) => {
+      const entry = map[username];
+      return {
+        username,
+        displayName: username,
+        super: username === 'admin',
+        permissions: username === 'admin'
+          ? ['*']
+          : (entry && Array.isArray(entry.permissions) ? entry.permissions : ['*']),
+        unconfigured: username !== 'admin' && !entry,
+        updatedAt: entry && entry.updatedAt ? entry.updatedAt : null,
+      };
+    });
+  if (!admins.some(a => a.username === 'admin')) {
+    admins.unshift({
+      username: 'admin',
+      displayName: 'admin',
+      super: true,
+      permissions: ['*'],
+      unconfigured: false,
+      updatedAt: null,
+    });
+  }
+  res.json({ admins, catalog: ADMIN_PERMISSION_CATALOG });
+});
+
+app.put('/api/admin/users/:username/permissions', async (req, res) => {
+  const actor = await requireSuperAdmin(req, res);
+  if (!actor) return;
+  const username = String(req.params.username || '');
+  if (!username || username === 'admin') return res.status(400).json({ error: '不能修改主管理员' });
+  const users = (await kvGet('users')) || {};
+  if (!users[username]) return res.status(404).json({ error: '用户不存在' });
+  if (users[username].role !== 'admin') return res.status(400).json({ error: '该用户不是管理员' });
+  const raw = Array.isArray(req.body && req.body.permissions) ? req.body.permissions : [];
+  const permissions = Array.from(new Set(raw.filter(p => ADMIN_PERMISSION_KEYS.includes(p))));
+  await kvUpdate('admin_permissions', current => {
+    const next = current && typeof current === 'object' ? current : {};
+    next[username] = { permissions, updatedAt: Date.now(), updatedBy: actor.username };
+    return next;
+  }, {});
+  await writeAudit(actor.username, 'admin:permissions', username, permissions.join(',') || '无权限');
+  res.json({ success: true, permissions });
+});
+
 app.delete('/api/admin/users', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const { username } = req.body;
@@ -3865,7 +4218,8 @@ app.delete('/api/admin/users', async (req, res) => {
 });
 
 app.put('/api/admin/users/role', async (req, res) => {
-  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const actor = await requireSuperAdmin(req, res);
+  if (!actor) return;
   const { username, role } = req.body;
   if (!username || !role) return res.status(400).json({ error: '缺少参数' });
   if (role !== 'user' && role !== 'admin') return res.status(400).json({ error: '无效角色' });
@@ -3874,6 +4228,16 @@ app.put('/api/admin/users/role', async (req, res) => {
   if (!users[username]) return res.status(404).json({ error: '用户不存在' });
   users[username].role = role;
   await kvPut('users', users);
+  await kvUpdate('admin_permissions', current => {
+    const next = current && typeof current === 'object' ? current : {};
+    if (role === 'admin') {
+      if (!next[username]) next[username] = { permissions: ADMIN_PERMISSION_KEYS.slice(), updatedAt: Date.now(), updatedBy: actor.username };
+    } else {
+      delete next[username];
+    }
+    return next;
+  }, {});
+  await writeAudit(actor.username, 'admin:role', username, role);
   res.json({ success: true });
 });
 
@@ -4973,6 +5337,68 @@ async function recordGomokuMatch(room, roomId) {
   return record;
 }
 
+async function recordAiGomokuMatch(username, result, moves, playerColor) {
+  const aiColor = playerColor === 1 ? 2 : 1;
+  const scores = { win: 1, draw: 0.5, loss: 0 };
+  const score = scores[result];
+  const aiRating = 1200;
+  let before = 1000;
+  let after = 1000;
+  await kvUpdate('gomoku_ratings', current => {
+    const next = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+    const old = next[username] && typeof next[username] === 'object' ? next[username] : {};
+    before = Number(old.rating) || 1000;
+    const expected = gomokuExpectedScore(before, aiRating);
+    after = Math.max(100, Math.round(before + 24 * (score - expected)));
+    next[username] = {
+      rating: after,
+      games: (Number(old.games) || 0) + 1,
+      wins: (Number(old.wins) || 0) + (result === 'win' ? 1 : 0),
+      losses: (Number(old.losses) || 0) + (result === 'loss' ? 1 : 0),
+      draws: (Number(old.draws) || 0) + (result === 'draw' ? 1 : 0),
+      aiGames: (Number(old.aiGames) || 0) + 1,
+      aiWins: (Number(old.aiWins) || 0) + (result === 'win' ? 1 : 0),
+      lastPlayed: Date.now(),
+    };
+    return next;
+  }, {});
+  const id = genGomokuMatchId();
+  const endedAt = Date.now();
+  const winner = result === 'win' ? username : result === 'loss' ? 'AI' : '';
+  const record = {
+    id,
+    roomId: 'ai-' + endedAt.toString(36),
+    roomName: 'AI 对局',
+    mode: 'ai',
+    players: [
+      { username, color: playerColor, ratingBefore: before, ratingAfter: after },
+      { username: 'AI', color: aiColor, ratingBefore: aiRating, ratingAfter: aiRating },
+    ],
+    winner,
+    winnerColor: result === 'win' ? playerColor : result === 'loss' ? aiColor : 0,
+    result,
+    reason: 'ai',
+    moves,
+    moveCount: moves.length,
+    startedAt: endedAt,
+    endedAt,
+  };
+  await kvPut(`gomoku_match:${id}`, record, { expirationTtl: 180 * 24 * 3600 });
+  await kvAppend('gomoku_matches', {
+    id,
+    roomId: record.roomId,
+    roomName: record.roomName,
+    mode: 'ai',
+    players: record.players,
+    winner,
+    result,
+    reason: 'ai',
+    moveCount: moves.length,
+    endedAt,
+  }, 500);
+  return { record, before, after, delta: after - before };
+}
+
 // ======== 五子棋 REST 辅助接口 ========
 app.post('/api/room/create', async (req, res) => {
   const token = getBearerToken(req);
@@ -5549,6 +5975,54 @@ app.post('/api/gomoku/ai/chat', async (req, res) => {
     console.error('gomoku AI chat error:', e.message);
     res.status(502).json({ error: 'AI 暂时没有回应，稍后再试' });
   }
+});
+
+app.post('/api/gomoku/ai/result', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const result = String((req.body && req.body.result) || '');
+  if (!['win', 'loss', 'draw'].includes(result)) return res.status(400).json({ error: '对局结果无效' });
+  const playerColor = Number(req.body && req.body.playerColor) === 2 ? 2 : 1;
+  const rawMoves = Array.isArray(req.body && req.body.moves) ? req.body.moves.slice(0, 225) : [];
+  if (rawMoves.length < 5) return res.status(400).json({ error: '对局步数不足' });
+  const board = Array(15).fill().map(() => Array(15).fill(0));
+  const moves = [];
+  for (let i = 0; i < rawMoves.length; i++) {
+    const m = rawMoves[i] || {};
+    const x = Number(m.x != null ? m.x : m.col);
+    const y = Number(m.y != null ? m.y : m.row);
+    const color = Number(m.color) === 2 ? 2 : 1;
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x > 14 || y < 0 || y > 14) {
+      return res.status(400).json({ error: '棋谱坐标无效' });
+    }
+    if (board[y][x] !== 0 || color !== (i % 2 === 0 ? 1 : 2)) {
+      return res.status(400).json({ error: '棋谱顺序无效' });
+    }
+    board[y][x] = color;
+    moves.push({ row: y, col: x, color });
+  }
+  const last = moves[moves.length - 1];
+  if (result === 'win' && (last.color !== playerColor || !gomokuHasFive(board, last.col, last.row, playerColor))) {
+    return res.status(400).json({ error: '棋谱与胜利结果不一致' });
+  }
+  if (result === 'loss') {
+    const aiColor = playerColor === 1 ? 2 : 1;
+    if (last.color !== aiColor || !gomokuHasFive(board, last.col, last.row, aiColor)) {
+      return res.status(400).json({ error: '棋谱与失败结果不一致' });
+    }
+  }
+  const rateKey = `gomoku_ai_result:${session.username}:${todayKey()}`;
+  const count = await kvIncr(rateKey, 48 * 3600);
+  if (count > 60) return res.status(429).json({ error: '今天的 AI 对局计分次数已用完' });
+
+  const scored = await recordAiGomokuMatch(session.username, result, moves, playerColor);
+  res.json({
+    success: true,
+    matchId: scored.record.id,
+    rating: scored.after,
+    before: scored.before,
+    delta: scored.delta,
+  });
 });
 
 app.get('/api/gomoku/leaderboard', async (req, res) => {

@@ -136,6 +136,7 @@
         <option value="software">软件</option>
         <option value="other">其他</option>
       </select>
+      <select id="resStorage" title="上传到哪个存储分区"><option value="default">默认存储</option></select>
       <label class="btn-upload" id="selectFileBtn">选择文件 <input type="file" id="resFile"></label>
     </div>
     <div class="drop-zone" id="dropZone">也可以把文件拖到这里上传</div>
@@ -213,6 +214,7 @@
   let selectedFile = null;
   let currentCategory = 'movie';
   let currentUser = null;
+  let storageAccounts = [];
   let resPage = 1;
   let resTotalPages = 1;
   let resLoading = false;
@@ -280,6 +282,7 @@
           document.getElementById('adminLinkPanel').style.display = 'block';
         }
         loadQuota();
+        loadStorages();
         restoreUploadState();
       }
     } catch (e) {}
@@ -301,6 +304,21 @@
       }
     } catch (e) {
       document.getElementById('quotaDisplay').textContent = '配额加载失败';
+    }
+  }
+
+  async function loadStorages() {
+    const select = document.getElementById('resStorage');
+    if (!select) return;
+    try {
+      const list = await api('/api/storage/accounts');
+      storageAccounts = Array.isArray(list) ? list : [];
+      select.innerHTML = storageAccounts.map(a =>
+        `<option value="${esc(a.id)}">${esc(a.name)}${a.region ? ' · ' + esc(a.region) : ''}</option>`
+      ).join('') || '<option value="default">默认存储</option>';
+      if (uploadState && uploadState.storageId) select.value = uploadState.storageId;
+    } catch (e) {
+      select.innerHTML = '<option value="default">默认存储</option>';
     }
   }
 
@@ -358,7 +376,7 @@
     try {
       await api('/api/resource/multipart/abort', {
         method: 'POST',
-        body: { key: uploadState.key, uploadId: uploadState.uploadId },
+        body: { key: uploadState.key, uploadId: uploadState.uploadId, storageId: uploadState.storageId || 'default' },
       });
     } catch (e) {}
   }
@@ -414,7 +432,7 @@
 
     try {
       setUploadStatus('正在查询已上传的分片...');
-      const st = await api(`/api/resource/multipart/status?key=${encodeURIComponent(uploadState.key)}&uploadId=${encodeURIComponent(uploadState.uploadId)}`);
+      const st = await api(`/api/resource/multipart/status?key=${encodeURIComponent(uploadState.key)}&uploadId=${encodeURIComponent(uploadState.uploadId)}&storageId=${encodeURIComponent(uploadState.storageId || 'default')}`);
       const done = new Set(st.parts || []);
       uploadState.uploaded = Array.from(done);
       saveUploadState();
@@ -433,7 +451,7 @@
             setUploadStatus(`上传第 ${i}/${totalParts} 片（第 ${attempt} 次尝试）`);
             const { url } = await api('/api/resource/multipart/part-url', {
               method: 'POST',
-              body: { key: uploadState.key, uploadId: uploadState.uploadId, partNumber: i },
+              body: { key: uploadState.key, uploadId: uploadState.uploadId, partNumber: i, storageId: uploadState.storageId || 'default' },
             });
             await uploadPart(url, i, partSize, doneBytes);
             ok = true;
@@ -467,6 +485,7 @@
           uploadId: uploadState.uploadId,
           title: uploadState.title,
           category: uploadState.category,
+          storageId: uploadState.storageId || 'default',
         },
       });
       setUploadStatus('上传成功');
@@ -575,6 +594,7 @@
     if (!selectedFile) return alert('请选择文件');
     const title = document.getElementById('resTitle').value.trim();
     const category = document.getElementById('resCategory').value;
+    const storageId = document.getElementById('resStorage').value || 'default';
     if (!title) return alert('请输入资源标题');
 
     if (uploadState && (uploadState.name !== selectedFile.name || uploadState.size !== selectedFile.size)) {
@@ -592,12 +612,14 @@
             filename: selectedFile.name,
             contentType: selectedFile.type || 'application/octet-stream',
             fileSize: selectedFile.size,
+            storageId: storageId,
           },
         });
         uploadState = {
           key: meta.key,
           uploadId: meta.uploadId,
           partSize: meta.partSize || MP_PART_SIZE,
+          storageId: meta.storageId || storageId,
           username: currentUser ? currentUser.username : '',
           name: selectedFile.name,
           size: selectedFile.size,
