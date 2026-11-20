@@ -128,6 +128,7 @@
       <div class="nt-push-actions">
         <button class="primary" id="ntPushEnable" type="button">开启推送</button>
         <button id="ntPushDisable" type="button">关闭推送</button>
+        <button id="ntPushReset" type="button">重置订阅</button>
         <button id="ntPushTest" type="button">发送测试</button>
       </div>
       <div class="nt-status" id="ntPushResult"></div>
@@ -358,6 +359,7 @@
   var pushResultEl = document.getElementById('ntPushResult');
   var pushEnableBtn = document.getElementById('ntPushEnable');
   var pushDisableBtn = document.getElementById('ntPushDisable');
+  var pushResetBtn = document.getElementById('ntPushReset');
   var pushTestBtn = document.getElementById('ntPushTest');
 
   function setPushStatus(text) { pushStatusEl.textContent = text; }
@@ -387,26 +389,44 @@
       setPushStatus('当前浏览器不支持 Web Push。可以继续使用站内通知和在线提示。');
       pushEnableBtn.disabled = true;
       pushDisableBtn.disabled = true;
+      pushResetBtn.disabled = true;
       pushTestBtn.disabled = true;
       return;
     }
     if (Notification.permission === 'denied') {
       setPushStatus('浏览器已禁止通知，请到浏览器设置里允许 GreenBox 的通知。');
       pushEnableBtn.disabled = true;
+      pushDisableBtn.disabled = true;
+      pushResetBtn.disabled = false;
+      pushTestBtn.disabled = true;
+      return;
     }
     try {
       var reg = await getRegistration();
       var sub = await reg.pushManager.getSubscription();
+      var serverStatus = null;
+      try { serverStatus = await api('/api/push/status'); } catch (e) {}
+      var serverSubs = serverStatus ? Number(serverStatus.subscriptions) || 0 : 0;
       if (sub) {
-        setPushStatus('推送已开启，当前浏览器会接收通知。');
-        pushEnableBtn.disabled = true;
         pushDisableBtn.disabled = false;
-        pushTestBtn.disabled = false;
+        pushResetBtn.disabled = false;
+        if (serverStatus && serverSubs === 0) {
+          setPushStatus('通知权限已允许，本地也有订阅，但服务器没有记录。请点“开启推送”重新绑定，或点“重置订阅”后重试。');
+          pushEnableBtn.disabled = false;
+          pushTestBtn.disabled = true;
+        } else {
+          setPushStatus('推送已开启，当前浏览器会接收通知。');
+          pushEnableBtn.disabled = true;
+          pushTestBtn.disabled = false;
+        }
       } else {
-        setPushStatus(Notification.permission === 'denied' ? '浏览器通知权限被拒绝。' : '推送未开启。');
         pushEnableBtn.disabled = false;
         pushDisableBtn.disabled = true;
+        pushResetBtn.disabled = true;
         pushTestBtn.disabled = true;
+        setPushStatus(Notification.permission === 'granted'
+          ? '通知权限已允许，但还没有订阅推送。点“开启推送”完成绑定。'
+          : '推送未开启。');
       }
     } catch (e) {
       setPushStatus('推送状态检测失败：' + e.message);
@@ -435,6 +455,7 @@
       setPushResult('推送已开启');
       await refreshPushState();
     } catch (e) {
+      setPushStatus('开启推送失败：' + e.message);
       setPushResult('开启失败：' + e.message);
     }
   });
@@ -460,11 +481,32 @@
     }
   });
 
+  pushResetBtn.addEventListener('click', async function () {
+    setPushResult('');
+    try {
+      var reg = await getRegistration();
+      var sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        var endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        await api('/api/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: endpoint })
+        });
+      }
+      setPushResult('订阅已重置，请重新点“开启推送”');
+      await refreshPushState();
+    } catch (e) {
+      setPushResult('重置失败：' + e.message);
+    }
+  });
+
   pushTestBtn.addEventListener('click', async function () {
     setPushResult('');
     try {
       var data = await api('/api/push/test', { method: 'POST' });
-      setPushResult(data.sent > 0 ? '测试通知已发送，请查看浏览器通知。' : '没有可用的推送订阅，请先开启推送。');
+      setPushResult(data.sent > 0 ? '测试通知已发送，请查看浏览器通知。' : (data.hint || '没有可用的推送订阅，请先开启推送。'));
     } catch (e) {
       setPushResult('发送失败：' + e.message);
     }

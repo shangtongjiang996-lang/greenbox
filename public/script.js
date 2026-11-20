@@ -462,7 +462,7 @@ const THEME_ICON = {
   }
 
   function setupScrollLock() {
-    var selectors = '.modal, .modal-overlay, .dm-modal-overlay, .modal-backdrop, .gb-modal-overlay, [role="dialog"], .lightbox, .image-viewer, .confirm-overlay, .action-sheet';
+    var selectors = '.modal, .modal-overlay, .dm-modal-overlay, .modal-backdrop, .gb-modal-overlay, [role="dialog"], .lightbox, .image-viewer, .confirm-overlay, .action-sheet, .notif-panel-overlay.show, .notif-panel.show';
     var ignore = '.gb-tour, .gb-invite-banner, .gb-dm-toast, .gb-major-overlay';
     var locked = false;
     function visible(el) {
@@ -569,6 +569,14 @@ const THEME_ICON = {
     }).catch(function () {});
   }
 
+  function setupAppIcon() {
+    if (document.querySelector('link[rel="apple-touch-icon"]')) return;
+    var link = document.createElement('link');
+    link.rel = 'apple-touch-icon';
+    link.href = '/icon-192.png';
+    document.head.appendChild(link);
+  }
+
   function setupSettingsLink() {
     var right = document.querySelector('.navbar-right');
     if (!right || document.getElementById('settings-link')) return;
@@ -634,6 +642,7 @@ const THEME_ICON = {
     setupSettingsLink();
     setupFeedbackEntry();
     setupScrollLock();
+    setupAppIcon();
   }
 
   if (document.readyState === 'loading') {

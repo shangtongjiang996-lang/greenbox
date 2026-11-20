@@ -3487,6 +3487,19 @@ app.get('/api/push/public-key', async (req, res) => {
   }
 });
 
+app.get('/api/push/status', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  const push = getWebPush();
+  const subs = await getPushSubs(session.username);
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    supported: !!push,
+    subscriptions: subs.length,
+    vapid: !!(push && await getVapidKeys())
+  });
+});
+
 app.post('/api/push/subscribe', async (req, res) => {
   const session = await getSession(getBearerToken(req));
   if (!session) return res.status(401).json({ error: '请先登录' });
@@ -3526,7 +3539,13 @@ app.post('/api/push/test', async (req, res) => {
     link: '/notifications.html',
     category: 'system',
   }, { force: true });
-  res.json({ success: true, sent });
+  const subscriptions = (await getPushSubs(session.username)).length;
+  res.json({
+    success: true,
+    sent,
+    subscriptions,
+    hint: sent > 0 ? '' : (subscriptions > 0 ? '服务器有订阅，但推送服务拒绝了请求；请关闭推送后重新开启。' : '服务器没有收到这个浏览器的订阅，请重新开启推送。')
+  });
 });
 
 // 用户给指定用户发送“一起下五子棋”通知

@@ -1,5 +1,5 @@
 /* GreenBox service worker: PWA shell, offline fallback and Web Push */
-const CACHE_NAME = 'greenbox-v2';
+const CACHE_NAME = 'greenbox-v3';
 const PRECACHE = [
   '/offline.html',
   '/icon-192.png',
