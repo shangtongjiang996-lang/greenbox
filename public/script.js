@@ -600,14 +600,15 @@ const THEME_ICON = {
     }
 
     if (document.getElementById('nav-auth-actions')) return;
-    var hasUserArea = right.querySelector('.user-area') || right.querySelector('a[href*="profile.html"]');
+    var token = getToken();
+    var userArea = right.querySelector('.user-area');
+    var hasUserArea = (userArea && userArea.children.length > 0) || (userArea && token) || right.querySelector('a[href^="/profile.html"]');
     var hasLogin = right.querySelector('a[href*="login.html"]');
     if (hasUserArea || hasLogin) return;
 
     var box = document.createElement('span');
     box.id = 'nav-auth-actions';
     box.className = 'nav-auth-actions';
-    var token = getToken();
     if (token) {
       var profile = document.createElement('a');
       profile.href = '/profile.html';
