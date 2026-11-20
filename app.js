@@ -1230,6 +1230,43 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+// 运行状态页通过本站同源代理读取 Cloudflare Worker，避免浏览器无法直连 workers.dev
+const uptimeProxyCache = new Map();
+app.get('/api/uptime', async (req, res) => {
+  const range = ['24h', '7d', '30d'].includes(req.query.range) ? req.query.range : '24h';
+  const cached = uptimeProxyCache.get(range);
+  if (cached && cached.expires > Date.now()) {
+    res.set('Cache-Control', 'no-store');
+    return res.json(cached.data);
+  }
+  const base = String(process.env.UPTIME_WORKER_URL || 'https://greenbox.shangtongjiang996.workers.dev').replace(/\/+$/, '');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const upstream = await fetch(`${base}/api/uptime?range=${encodeURIComponent(range)}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json', 'User-Agent': 'GreenBox-Uptime-Proxy/1.0' },
+    });
+    const text = await upstream.text();
+    let data;
+    try { data = JSON.parse(text); } catch (e) { throw new Error('监控返回格式错误'); }
+    if (!upstream.ok || !data || data.ok === false) {
+      throw new Error((data && data.error) || `监控接口 HTTP ${upstream.status}`);
+    }
+    uptimeProxyCache.set(range, { data, expires: Date.now() + 60 * 1000 });
+    res.set('Cache-Control', 'no-store');
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({
+      ok: false,
+      error: e && e.name === 'AbortError' ? '监控 Worker 请求超时' : (e.message || '监控 Worker 不可用'),
+      upstream: base,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+});
+
 app.post('/api/update', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const clean = req.body;

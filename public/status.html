@@ -171,7 +171,7 @@
     var controller = new AbortController();
     var timer = setTimeout(function () { controller.abort(); }, 12000);
     try {
-      var res = await fetch(WORKER + '/api/uptime?range=' + encodeURIComponent(which), {
+      var res = await fetch('/api/uptime?range=' + encodeURIComponent(which), {
         cache: 'no-store',
         signal: controller.signal
       });
