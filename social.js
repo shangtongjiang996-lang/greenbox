@@ -57,6 +57,7 @@ async function getUserSettings(username) {
   const s = await kvGet(`user_settings:${username}`);
   if (!s || typeof s !== 'object') return { ...DEFAULT_SETTINGS };
   return {
+    ...s,
     allowStrangerMsg: s.allowStrangerMsg !== false,
     friendPolicy: ['direct', 'confirm', 'closed'].includes(s.friendPolicy) ? s.friendPolicy : 'confirm',
     showOnline: s.showOnline !== false,

@@ -452,7 +452,8 @@ function adminPermissionForPath(path) {
   if (path.startsWith('/users')) return 'users';
   if (path.startsWith('/tool-submissions')) return 'review';
   if (path.startsWith('/tools') || path.startsWith('/tool/')) return 'tools';
-  if (path.startsWith('/changelog') || path.startsWith('/site-data')) return 'changelog';
+  if (path.startsWith('/changelog')) return 'changelog';
+  if (path.startsWith('/site-data')) return 'tools';
   if (path.startsWith('/files')) return 'files';
   if (path.startsWith('/rooms')) return 'rooms';
   if (path.startsWith('/chat')) return 'chat';
@@ -957,13 +958,14 @@ app.put('/api/user/settings', async (req, res) => {
   }
   const key = `user_settings:${session.username}`;
   const next = await kvUpdate(key, current => {
-    const settings = normalizeUserSettings(current);
+    const settings = current && typeof current === 'object' && !Array.isArray(current) ? Object.assign({}, current) : {};
     if (body.themeMode !== undefined) settings.themeMode = body.themeMode;
     if (body.accent !== undefined) settings.accent = body.accent;
     settings.updatedAt = Date.now();
     return settings;
   }, Object.assign({}, DEFAULT_USER_SETTINGS));
-  res.json(normalizeUserSettings(next));
+  const normalized = normalizeUserSettings(next);
+  res.json(normalized);
 });
 
 app.get('/api/verify', async (req, res) => {
