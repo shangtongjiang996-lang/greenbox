@@ -1986,6 +1986,7 @@ app.post('/api/tool/quick-upload', async (req, res) => {
   const cleanDesc = String(description || '').replace(/[<>]/g, '').trim().slice(0, 200);
   const cleanIcon = String(icon || '').replace(/[<>]/g, '').trim().slice(0, 300);
   const cleanCategory = String(category || 'other').replace(/[<>]/g, '').trim().slice(0, 30) || 'other';
+  const isGame = ['1', 'true', 'on'].includes(String((req.body && req.body.isGame) || '').toLowerCase()) || cleanCategory === 'game';
 
   // 传入 id 时更新已有工具，否则新建
   const updateId = req.body && typeof req.body.id === 'string' ? req.body.id.trim() : '';
@@ -2023,7 +2024,7 @@ app.post('/api/tool/quick-upload', async (req, res) => {
         icon: cleanIcon,
         description: cleanDesc,
         category: cleanCategory,
-        isGame: !!(existing && existing.isGame),
+        isGame: !!(existing && existing.isGame) || isGame,
         url: `/tool/${updateId}`,
       };
       if (index >= 0) siteData.tools[index] = entry;
@@ -2041,6 +2042,7 @@ app.post('/api/tool/quick-upload', async (req, res) => {
       icon: cleanIcon,
       description: cleanDesc,
       category: cleanCategory,
+      isGame,
       url: `/tool/${id}`,
     });
     if (siteData.tools.length > 500) siteData.tools = siteData.tools.slice(-500);
@@ -2620,10 +2622,18 @@ app.get('/api/dm/attachment/:convId/:msgId', async (req, res) => {
     const session = await getSession(getBearerToken(req));
     if (!session) return res.status(401).json({ error: '请先登录' });
     const convId = req.params.convId;
-    if (!convId.startsWith('p_')) return res.status(400).json({ error: '会话无效' });
-    const parts = convId.slice(2).split('__');
-    if (parts.length !== 2 || !parts.includes(session.username)) {
-      return res.status(403).json({ error: '无权访问' });
+    if (convId.startsWith('g_')) {
+      const group = await kvGet(`dm_group:${convId}`);
+      if (!group || !Array.isArray(group.members) || !group.members.includes(session.username)) {
+        return res.status(403).json({ error: '无权访问' });
+      }
+    } else if (convId.startsWith('p_')) {
+      const parts = convId.slice(2).split('__');
+      if (parts.length !== 2 || !parts.includes(session.username)) {
+        return res.status(403).json({ error: '无权访问' });
+      }
+    } else {
+      return res.status(400).json({ error: '会话无效' });
     }
     const msgs = (await kvGet(`dm_msgs:${convId}`)) || [];
     const msg = msgs.find(m => m.id === req.params.msgId);

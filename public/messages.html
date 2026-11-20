@@ -555,6 +555,7 @@
     border-bottom-right-radius: 6px;
   }
   .dm-msg-row.peer .dm-bubble { border-bottom-left-radius: 6px; }
+  .dm-msg-sender { font-size: 11px; color: var(--muted); margin: 0 0 3px 4px; }
   .dm-bubble .msg-text { white-space: pre-wrap; }
   .dm-bubble.recalled {
     font-style: italic;
@@ -945,6 +946,7 @@
         <button class="dm-tab-btn" data-tab="finder">找人</button>
       </div>
       <input class="dm-search" id="dmSearch" placeholder="搜索会话 / 好友…" style="display:none;">
+      <button class="dm-btn dm-btn-confirm" id="dmCreateGroupBtn" type="button" style="font-size:12px;">创建群聊</button>
     </div>
 
     <div class="dm-list" id="dmList">
@@ -1067,6 +1069,22 @@
   </div>
 </div>
 
+<!-- ============ 创建群聊弹窗 ============ -->
+<div class="dm-modal-overlay" id="dmGroupModal">
+  <div class="dm-modal">
+    <h3>创建群聊</h3>
+    <label>群聊名称</label>
+    <input type="text" id="dmGroupName" placeholder="例如：工具交流群" maxlength="30">
+    <label>选择成员 <span class="hint">至少一位好友</span></label>
+    <div id="dmGroupMembers" style="max-height:240px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px 10px;"></div>
+    <div class="modal-actions">
+      <button class="dm-btn dm-btn-cancel" type="button" onclick="closeGroupModal()">取消</button>
+      <button class="dm-btn dm-btn-confirm" type="button" onclick="createGroupChat()">创建</button>
+    </div>
+    <div id="dmGroupError" style="color:#ef4444;font-size:12px;margin-top:6px;"></div>
+  </div>
+</div>
+
 <!-- ============ 更多操作弹窗 ============ -->
 <div class="dm-modal-overlay" id="dmMoreModal">
   <div class="dm-modal" style="max-width:360px;">
@@ -1106,6 +1124,7 @@
   let pendingAttachment = null;
   const attachmentUrls = new Map();
   let uploading = false;
+  let pendingShareText = '';
   const sentReadSet = new Set();
 
   // ============================================================
@@ -1299,16 +1318,20 @@
     });
 
     socket.on('dm:message', (msg) => {
-      const cid = convIdOf(msg.from, msg.to);
+      const cid = msg.groupId || convIdOf(msg.from, msg.to);
       if (currentConvo && currentConvo.id === cid) {
         if (!currentMessages.some(m => m.id === msg.id)) {
           currentMessages.push(msg);
           appendMessage(msg, true);
         }
-        if (msg.to === me.username && msg.from !== me.username) {
+        if (msg.groupId || (msg.to === me.username && msg.from !== me.username)) {
           socket.emit('dm:read', { convId: cid });
         }
       }
+      refreshConvos();
+    });
+
+    socket.on('dm:group-new', () => {
       refreshConvos();
     });
 
@@ -1445,14 +1468,16 @@
     }
     el.innerHTML = arr.map(c => {
       const active = currentConvo && currentConvo.id === c.id ? 'active' : '';
-      const av = avatarHtml(c.peer, c.peerAvatar, { online: c.online });
+      const av = c.type === 'group'
+        ? '<div class="user-avatar-mini" style="width:38px;height:38px;font-size:14px;">群</div>'
+        : avatarHtml(c.peer, c.peerAvatar, { online: c.online });
       return `
-        <div class="dm-convo-item ${active} ${c.pinned?'pinned':''}" data-cid="${esc(c.id)}" data-peer="${esc(c.peer)}">
+        <div class="dm-convo-item ${active} ${c.pinned?'pinned':''}" data-cid="${esc(c.id)}" data-peer="${esc(c.peer || '')}" data-group="${c.type === 'group' ? '1' : '0'}">
           ${av}
           <div class="dm-convo-body">
             <div class="dm-convo-name">
-              <span style="overflow:hidden;text-overflow:ellipsis;">${esc(c.peerName || c.peer)}</span>
-              ${c.peerRole === 'admin' ? '<span class="tag-admin">管理员</span>' : ''}
+              <span style="overflow:hidden;text-overflow:ellipsis;">${esc(c.peerName || c.name || c.peer)}</span>
+              ${c.type === 'group' ? '<span class="tag-admin">群聊</span>' : (c.peerRole === 'admin' ? '<span class="tag-admin">管理员</span>' : '')}
             </div>
             <div class="dm-convo-preview">${esc(c.lastMsg || '（暂无消息）')}</div>
           </div>
@@ -1463,7 +1488,10 @@
         </div>`;
     }).join('');
     el.querySelectorAll('.dm-convo-item').forEach(node => {
-      node.addEventListener('click', () => openConvo(node.dataset.peer));
+      node.addEventListener('click', () => {
+        if (node.dataset.group === '1') openGroupConvo(node.dataset.cid);
+        else openConvo(node.dataset.peer);
+      });
     });
   }
 
@@ -1729,6 +1757,54 @@
 
     renderMessages();
     markConvoRead();
+    applyPendingShare();
+    if (!isMobile()) document.getElementById('dmInput').focus();
+    renderList();
+  }
+
+  function applyPendingShare() {
+    if (!pendingShareText) return;
+    const input = document.getElementById('dmInput');
+    if (input && !input.value.trim()) {
+      input.value = pendingShareText;
+      input.style.height = 'auto';
+      pendingShareText = '';
+      setTimeout(function () { input.focus(); }, 100);
+    }
+  }
+
+  async function openGroupConvo(groupId) {
+    if (!groupId || !me) return;
+    let conv = convos.find(c => c.id === groupId);
+    if (!conv) {
+      try {
+        const group = await api('/api/social/dm/groups/' + encodeURIComponent(groupId));
+        conv = { id: group.id, type: 'group', peer: '', name: group.name, peerName: group.name, members: group.members, unread: 0, pinned: false, muted: false };
+        convos.unshift(conv);
+      } catch (e) { showToast(e.message, 'error'); return; }
+    }
+    currentConvo = conv;
+    currentMessages = [];
+    attachmentUrls.clear();
+    clearPendingAttachment();
+    replyTo = null;
+    sentReadSet.clear();
+    document.getElementById('dmPlaceholder').style.display = 'none';
+    document.getElementById('dmChatView').style.display = 'flex';
+    document.getElementById('dmMain').classList.add('show');
+    document.getElementById('dmSidebar').classList.add('hide');
+    updateChatHeader();
+    document.getElementById('dmMessages').innerHTML = '<div class="dm-date-divider">加载中…</div>';
+    try {
+      const msgs = await api('/api/social/dm/messages/' + encodeURIComponent(groupId));
+      currentMessages = Array.isArray(msgs) ? msgs : [];
+    } catch (e) {
+      currentMessages = [];
+      document.getElementById('dmMessages').innerHTML = '<div class="dm-date-divider">加载失败</div>';
+    }
+    renderMessages();
+    markConvoRead();
+    applyPendingShare();
     if (!isMobile()) document.getElementById('dmInput').focus();
     renderList();
   }
@@ -1737,6 +1813,17 @@
     if (!currentConvo) return;
     const c = currentConvo;
     const avEl = document.getElementById('dmChatAvatar');
+    if (c.type === 'group') {
+      avEl.innerHTML = '群';
+      avEl.style.display = 'flex';
+      document.getElementById('dmChatName').textContent = c.name || c.peerName || '群聊';
+      const subEl = document.getElementById('dmChatSub');
+      subEl.textContent = `${(c.members || []).length} 位成员`;
+      subEl.className = 'sub online';
+      document.getElementById('dmPinBtn').classList.toggle('active', !!c.pinned);
+      document.getElementById('dmMuteBtn').classList.toggle('active', !!c.muted);
+      return;
+    }
     const initial = (c.peer || '?').slice(0,1).toUpperCase();
     avEl.innerHTML = c.peerAvatar
       ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" onerror="this.style.display='none'"><span style="position:absolute;pointer-events:none;">${c.peer==='admin'?'管':initial}</span>`
@@ -1794,9 +1881,9 @@
 
   function renderMessageHtml(m) {
     const isSelf = m.from === me.username;
-    
-    const peer = isSelf ? me.username : (currentConvo ? currentConvo.peer : m.from);
-    const hasAv = isSelf ? me.hasAvatar : (currentConvo ? currentConvo.peerAvatar : false);
+    const isGroup = !!(currentConvo && currentConvo.type === 'group');
+    const peer = isSelf ? me.username : (isGroup ? m.from : (currentConvo ? currentConvo.peer : m.from));
+    const hasAv = isSelf ? me.hasAvatar : (isGroup ? false : (currentConvo ? currentConvo.peerAvatar : false));
     const av = avatarHtml(peer, hasAv, { cls: 'dm-msg-avatar', withDot: false });
     
     const timeStr = fmtTime(m.time);
@@ -1831,6 +1918,7 @@
       <div class="dm-msg-row ${isSelf?'self':'peer'}" data-mid="${esc(m.id)}">
         ${av}
         <div class="dm-bubble-wrap">
+          ${(isGroup && !isSelf) ? `<div class="dm-msg-sender">${esc(m.from)}</div>` : ''}
           <div class="dm-bubble">
             ${quoteHtml}
             ${attachHtml}
@@ -2002,7 +2090,8 @@
       }
 
       const payload = {
-        to: currentConvo.peer,
+        to: currentConvo.type === 'group' ? undefined : currentConvo.peer,
+        groupId: currentConvo.type === 'group' ? currentConvo.id : undefined,
         content: text,
         replyTo: replyTo || undefined,
         attachment: attachmentPayload || undefined,
@@ -2054,7 +2143,9 @@
   function sendTyping() {
     if (!socket || !currentConvo) return;
     if (typingTimer) return;
-    socket.emit('dm:typing', { to: currentConvo.peer });
+    socket.emit('dm:typing', currentConvo.type === 'group'
+      ? { groupId: currentConvo.id }
+      : { to: currentConvo.peer });
     typingTimer = setTimeout(() => { typingTimer = null; }, 2000);
   }
 
@@ -2115,6 +2206,35 @@
     } catch (e) { showToast(e.message, 'error'); }
     finally { btn.disabled = false; }
   }
+
+  function openGroupModal() {
+    const box = document.getElementById('dmGroupMembers');
+    const list = Array.isArray(friends) ? friends : [];
+    document.getElementById('dmGroupName').value = '';
+    document.getElementById('dmGroupError').textContent = '';
+    box.innerHTML = list.length
+      ? list.map(f => `<label style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;font-size:0.86rem;"><input type="checkbox" value="${esc(f.username)}"> ${esc(f.displayName || f.username)} <span style="color:var(--muted);font-size:0.78rem;">@${esc(f.username)}</span></label>`).join('')
+      : '<div style="color:var(--muted);font-size:0.84rem;padding:0.5rem;">还没有好友，先去添加好友。</div>';
+    document.getElementById('dmGroupModal').classList.add('show');
+  }
+  window.closeGroupModal = function () {
+    document.getElementById('dmGroupModal').classList.remove('show');
+  };
+  window.createGroupChat = async function () {
+    const name = document.getElementById('dmGroupName').value.trim();
+    const members = Array.from(document.querySelectorAll('#dmGroupMembers input[type="checkbox"]:checked')).map(el => el.value);
+    const err = document.getElementById('dmGroupError');
+    if (name.length < 2) { err.textContent = '群聊名称至少 2 个字'; return; }
+    if (!members.length) { err.textContent = '至少选择一位好友'; return; }
+    err.textContent = '正在创建...';
+    try {
+      const r = await api('/api/social/dm/groups', { method: 'POST', body: { name, members } });
+      window.closeGroupModal();
+      await refreshConvos();
+      await openGroupConvo(r.group.id);
+      showToast('群聊已创建', 'success');
+    } catch (e) { err.textContent = e.message || '创建失败'; }
+  };
 
   // ============================================================
   //  更多菜单
@@ -2256,6 +2376,7 @@
       document.getElementById('dmAddFriendModal').classList.remove('show');
     });
     document.getElementById('addFriendSend').addEventListener('click', submitAddFriend);
+  document.getElementById('dmCreateGroupBtn').addEventListener('click', openGroupModal);
     document.getElementById('addFriendUsername').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') submitAddFriend();
     });
@@ -2343,7 +2464,20 @@
     await init();
     const params = new URLSearchParams(location.search);
     const peerParam = params.get('c') || params.get('peer');
-    if (peerParam) {
+    const groupParam = params.get('group');
+    const shareResource = params.get('shareResource');
+    if (shareResource) {
+      const shareTitle = params.get('shareTitle') || '资源分享';
+      pendingShareText = '分享一个资源中心的资源：\nhttps://greenboxhweb.com/resources.html?resource=' + encodeURIComponent(shareResource) + '\n\n' + shareTitle;
+      history.replaceState(null, '', location.pathname);
+      setTimeout(function () { showToast('选择一个会话，分享内容已准备好', 'info'); }, 550);
+    }
+    if (groupParam) {
+      setTimeout(() => {
+        openGroupConvo(groupParam);
+        history.replaceState(null, '', location.pathname);
+      }, 400);
+    } else if (peerParam) {
       setTimeout(() => {
         openConvo(peerParam);
         history.replaceState(null, '', location.pathname);

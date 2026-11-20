@@ -272,6 +272,84 @@ async function deliverMessage(from, to, content, replyTo, io, attachment) {
   }
   return { message: msg };
 }
+
+async function getDmGroup(id) {
+  const g = await kvGet(`dm_group:${id}`);
+  return g && typeof g === 'object' ? g : null;
+}
+async function saveDmGroup(group) {
+  await kvPut(`dm_group:${group.id}`, group);
+}
+async function ensureGroupConvo(username, group, preview) {
+  const convos = await getConvos(username);
+  let idx = convos.findIndex(c => c.id === group.id);
+  if (idx < 0) {
+    convos.unshift({
+      id: group.id,
+      type: 'group',
+      peer: '',
+      name: group.name,
+      members: group.members,
+      lastMsg: preview || '群聊已创建',
+      lastTime: Date.now(),
+      unread: 0,
+      pinned: false,
+      muted: false,
+      createdAt: Date.now(),
+    });
+  } else {
+    convos[idx].name = group.name;
+    convos[idx].members = group.members;
+    if (preview) {
+      convos[idx].lastMsg = preview;
+      convos[idx].lastTime = Date.now();
+    }
+  }
+  await saveConvos(username, convos);
+}
+
+async function deliverGroupMessage(from, groupId, content, replyTo, io, attachment) {
+  const group = await getDmGroup(groupId);
+  if (!group) return { error: '群聊不存在', code: 404 };
+  if (!Array.isArray(group.members) || !group.members.includes(from)) return { error: '你不在这个群聊里', code: 403 };
+  const moderationBlock = await checkModeration(from, 'dm');
+  if (moderationBlock) return { error: moderationBlock, code: 403 };
+  const att = normalizeAttachment(attachment, from);
+  if (att && att.error) return { error: att.error, code: 400 };
+  content = String(content || '').trim();
+  if (!content && !att) return { error: '消息不能为空', code: 400 };
+  const msgs = await getMessages(groupId);
+  const msg = {
+    id: 'M' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    from,
+    to: groupId,
+    groupId,
+    groupName: group.name,
+    content: content.slice(0, 2000),
+    attachment: att || undefined,
+    time: Date.now(),
+    readBy: [from],
+    recalled: false,
+    replyTo: replyTo ? String(replyTo).slice(0, 50) : undefined,
+  };
+  msgs.push(msg);
+  await saveMessages(groupId, msgs);
+  const kindLabel = att ? (att.kind === 'image' ? '图片' : att.kind === 'video' ? '视频' : att.kind === 'audio' ? '语音' : '文件') : '';
+  const preview = att ? `[${kindLabel}] ${att.name}`.slice(0, 40) : msg.content.slice(0, 40);
+  for (const member of group.members) {
+    await ensureGroupConvo(member, group, from + '：' + preview);
+    if (member !== from) {
+      const convos = await getConvos(member);
+      const c = convos.find(x => x.id === groupId);
+      if (c) {
+        c.unread = (c.unread || 0) + 1;
+        await saveConvos(member, convos);
+      }
+    }
+    if (io) emitToUser(io, member, 'dm:message', msg);
+  }
+  return { message: msg };
+}
 // ============================================================
 //  REST 路由
 // ============================================================
@@ -528,6 +606,35 @@ function registerSocialRoutes(app, deps) {
     res.json({ success: true });
   });
 
+  // ---------- 创建群聊 ----------
+  app.post('/api/social/dm/groups', async (req, res) => {
+    const s = await auth(req);
+    if (!s) return res.status(401).json({ error: '请先登录' });
+    const name = String((req.body && req.body.name) || '').replace(/[<>]/g, '').trim().slice(0, 30);
+    const rawMembers = Array.isArray(req.body && req.body.members) ? req.body.members : [];
+    if (name.length < 2) return res.status(400).json({ error: '群聊名称至少 2 个字' });
+    const users = (await kvGet('users')) || {};
+    const members = Array.from(new Set([s.username].concat(rawMembers.map(x => String(x))))).filter(x => x === 'admin' || users[x]);
+    if (members.length < 2) return res.status(400).json({ error: '至少选择一位群成员' });
+    if (members.length > 30) return res.status(400).json({ error: '群成员不能超过 30 人' });
+    const id = 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const group = { id, name, owner: s.username, members, createdAt: Date.now() };
+    await saveDmGroup(group);
+    for (const member of members) await ensureGroupConvo(member, group, '群聊已创建');
+    if (io) {
+      for (const member of members) emitToUser(io, member, 'dm:group-new', group);
+    }
+    res.json({ success: true, group });
+  });
+
+  app.get('/api/social/dm/groups/:id', async (req, res) => {
+    const s = await auth(req);
+    if (!s) return res.status(401).json({ error: '请先登录' });
+    const group = await getDmGroup(String(req.params.id || ''));
+    if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
+    res.json(group);
+  });
+
   // ---------- 会话列表 ----------
   app.get('/api/social/dm/convos', async (req, res) => {
     const s = await auth(req);
@@ -535,6 +642,10 @@ function registerSocialRoutes(app, deps) {
     const convos = await getConvos(s.username);
     const out = [];
     for (const c of convos) {
+      if (c.type === 'group') {
+        out.push({ ...c, peerName: c.name || '群聊', peerAvatar: false, peerRole: 'group', online: true });
+        continue;
+      }
       const prof = await publicProfile(c.peer);
       const st = await getUserSettings(c.peer);
       out.push({
@@ -577,6 +688,12 @@ function registerSocialRoutes(app, deps) {
     const s = await auth(req);
     if (!s) return res.status(401).json({ error: '请先登录' });
     const convId = req.params.convId;
+    if (convId.startsWith('g_')) {
+      const group = await getDmGroup(convId);
+      if (!group || !group.members.includes(s.username)) return res.status(403).json({ error: '无权访问' });
+      const msgs = await getMessages(convId);
+      return res.json(msgs.slice(-200));
+    }
     if (!convId.startsWith('p_')) return res.status(400).json({ error: '非法会话' });
     const parts = convId.slice(2).split('__');
     if (parts.length !== 2 || !parts.includes(s.username)) return res.status(403).json({ error: '无权访问' });
@@ -588,8 +705,10 @@ function registerSocialRoutes(app, deps) {
   app.post('/api/social/dm/messages', async (req, res) => {
     const s = await auth(req);
     if (!s) return res.status(401).json({ error: '请先登录' });
-    const { to, content, replyTo, attachment } = req.body || {};
-    const result = await deliverMessage(s.username, to, content, replyTo, io, attachment);
+    const { to, groupId, content, replyTo, attachment } = req.body || {};
+    const result = groupId
+      ? await deliverGroupMessage(s.username, String(groupId), content, replyTo, io, attachment)
+      : await deliverMessage(s.username, to, content, replyTo, io, attachment);
     if (result.error) return res.status(result.code || 400).json({ error: result.error });
     res.json({ success: true, message: result.message });
   });
@@ -604,7 +723,14 @@ function registerSocialRoutes(app, deps) {
     if (idx >= 0) { convos[idx].unread = 0; await saveConvos(s.username, convos); }
     const msgs = await getMessages(convId);
     let changed = false;
-    for (const m of msgs) { if (m.to === s.username && !m.read) { m.read = true; changed = true; } }
+    if (convId.startsWith('g_')) {
+      for (const m of msgs) {
+        if (!Array.isArray(m.readBy)) m.readBy = [];
+        if (!m.readBy.includes(s.username)) { m.readBy.push(s.username); changed = true; }
+      }
+    } else {
+      for (const m of msgs) { if (m.to === s.username && !m.read) { m.read = true; changed = true; } }
+    }
     if (changed) await saveMessages(convId, msgs);
     res.json({ success: true });
   });
@@ -741,13 +867,24 @@ function registerSocialSocket(io, deps) {
     socket.on('dm:send', async (payload, cb) => {
       const from = socketUsers.get(socket.id);
       if (!from) return cb && cb({ error: '请先登录' });
-      const result = await deliverMessage(from, payload?.to, payload?.content, payload?.replyTo, io, payload?.attachment);
+      const result = payload?.groupId
+        ? await deliverGroupMessage(from, String(payload.groupId), payload?.content, payload?.replyTo, io, payload?.attachment)
+        : await deliverMessage(from, payload?.to, payload?.content, payload?.replyTo, io, payload?.attachment);
       cb && cb(result);
     });
 
-    socket.on('dm:typing', async ({ to } = {}) => {
+    socket.on('dm:typing', async ({ to, groupId } = {}) => {
       const from = socketUsers.get(socket.id);
-      if (!from || !to) return;
+      if (!from) return;
+      if (groupId) {
+        const group = await getDmGroup(String(groupId));
+        if (!group || !group.members.includes(from)) return;
+        for (const member of group.members) {
+          if (member !== from) emitToUser(io, member, 'dm:typing', { from, groupId });
+        }
+        return;
+      }
+      if (!to) return;
       emitToUser(io, to, 'dm:typing', { from });
     });
 
@@ -767,8 +904,15 @@ function registerSocialSocket(io, deps) {
       const msgs = await getMessages(convId);
       let changed = false;
       const peers = new Set();
-      for (const m of msgs) {
-        if (m.to === me && !m.read) { m.read = true; changed = true; peers.add(m.from); }
+      if (convId.startsWith('g_')) {
+        for (const m of msgs) {
+          if (!Array.isArray(m.readBy)) m.readBy = [];
+          if (!m.readBy.includes(me)) { m.readBy.push(me); changed = true; }
+        }
+      } else {
+        for (const m of msgs) {
+          if (m.to === me && !m.read) { m.read = true; changed = true; peers.add(m.from); }
+        }
       }
       if (changed) {
         await saveMessages(convId, msgs);

@@ -833,11 +833,13 @@
           <div class="res-title">${title}</div>
           <span class="res-kind">${kindLabels[kind] || '文件'}</span>
           <div class="res-meta">
-            <span>${uploader} · ${new Date(item.createdAt || Date.now()).toLocaleDateString('zh-CN')}</span>
+            <span>${uploader} · ${new Date(item.createdAt || Date.now()).toLocaleDateString('zh-CN')}${item.storageName ? ' · ' + esc(item.storageName) : ''}</span>
             <span>${item.type === 'link' ? '外链' : formatSize(item.fileSize)}</span>
           </div>
           <div class="res-actions">
             <button class="res-action" type="button" onclick="copyResourceLink('${rid}')">复制链接</button>
+            <button class="res-action" type="button" onclick="shareResourceToForum('${rid}')">分享到论坛</button>
+            <button class="res-action" type="button" onclick="shareResourceToDM('${rid}')">分享到私聊</button>
             <a class="res-action" href="${playUrl}" target="_blank" rel="noopener" ${item.type === 'link' ? '' : 'download'}>${item.type === 'link' ? '打开' : '下载'}</a>
             ${canDelete ? `<button class="res-action res-action-danger" type="button" onclick="deleteResource('${rid}')">删除</button>` : ''}
           </div>
@@ -871,6 +873,18 @@
     } else {
       prompt('复制链接', item.playUrl);
     }
+  }
+
+  function shareResourceToForum(id) {
+    const item = resItemMap.get(id);
+    if (!item) return;
+    location.href = '/forum.html?shareResource=' + encodeURIComponent(id) + '&shareTitle=' + encodeURIComponent(item.title || '资源分享');
+  }
+
+  function shareResourceToDM(id) {
+    const item = resItemMap.get(id);
+    if (!item) return;
+    location.href = '/messages.html?shareResource=' + encodeURIComponent(id) + '&shareTitle=' + encodeURIComponent(item.title || '资源分享');
   }
 
   async function loadResources(category, append) {

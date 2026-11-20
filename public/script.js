@@ -421,13 +421,14 @@ const THEME_ICON = {
 
   // ===== 全站在线状态 + 跨设备通知同步 =====
   function showDmToast(msg) {
-    if (!msg || !msg.from || !msg.to) return;
+    if (!msg || !msg.from || (!msg.to && !msg.groupId)) return;
     var me = '';
     try {
       var u = JSON.parse(localStorage.getItem('greenbox_user') || 'null');
       me = u && u.username ? u.username : '';
     } catch (e) {}
-    if (!me || msg.to !== me || msg.from === me) return;
+    if (!me || msg.from === me) return;
+    if (!msg.groupId && msg.to !== me) return;
 
     var holder = document.getElementById('gb-dm-toasts');
     if (!holder) {
@@ -440,11 +441,14 @@ const THEME_ICON = {
 
     var toast = document.createElement('a');
     toast.className = 'gb-dm-toast';
-    toast.href = '/messages.html?peer=' + encodeURIComponent(msg.from);
+    toast.href = msg.groupId
+      ? '/messages.html?group=' + encodeURIComponent(msg.groupId)
+      : '/messages.html?peer=' + encodeURIComponent(msg.from);
     var preview = String(msg.content || (msg.attachment ? '[附件]' : '')).slice(0, 90);
+    var title = msg.groupId ? (msg.groupName || '群聊') + ' · ' + msg.from : msg.from;
     toast.innerHTML =
       '<span class="gb-dm-avatar">' + escHtml(String(msg.from).slice(0, 1).toUpperCase()) + '</span>' +
-      '<span class="gb-dm-body"><b>' + escHtml(msg.from) + '</b><span>' + escHtml(preview) + '</span></span>' +
+      '<span class="gb-dm-body"><b>' + escHtml(title) + '</b><span>' + escHtml(preview) + '</span></span>' +
       '<button type="button" class="gb-dm-close" aria-label="关闭">×</button>';
     var timer = setTimeout(function () { toast.remove(); }, 6500);
     toast.querySelector('.gb-dm-close').addEventListener('click', function (e) {

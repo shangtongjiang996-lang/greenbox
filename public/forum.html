@@ -1923,6 +1923,16 @@
       if (postParam) {
         setTimeout(() => openPostDetail(postParam), 300);
       }
+      const shareResource = params.get('shareResource');
+      if (shareResource) {
+        setTimeout(function () {
+          openNewPost();
+          var title = params.get('shareTitle') || '资源分享';
+          document.getElementById('newPostTitle').value = '分享资源：' + title.slice(0, 70);
+          document.getElementById('newPostContent').value = '分享一个资源中心的资源：\nhttps://greenboxhweb.com/resources.html?resource=' + encodeURIComponent(shareResource) + '\n\n' + title;
+          history.replaceState(null, '', location.pathname);
+        }, 450);
+      }
     })();
   })();
   </script>
