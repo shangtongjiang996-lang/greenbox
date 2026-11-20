@@ -1393,11 +1393,15 @@
       function openPanel() {
         panel.classList.add('show');
         overlay.classList.add('show');
+        document.body.classList.add('gb-scroll-locked');
+        document.documentElement.classList.add('gb-scroll-locked');
         loadNotifications();
       }
       function closePanel() {
         panel.classList.remove('show');
         overlay.classList.remove('show');
+        document.body.classList.remove('gb-scroll-locked');
+        document.documentElement.classList.remove('gb-scroll-locked');
       }
 
       notifBtn.addEventListener('click', (e) => {
