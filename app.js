@@ -3426,7 +3426,7 @@ app.get('/api/notifications/major', async (req, res) => {
   const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
   res.json(list.filter(n =>
     n.major &&
-    !(n.kind === 'gomoku' && n.read) &&
+    !n.read &&
     n.createdAt > cutoff &&
     notifCategoryEnabled(prefs, n.category)
   ).slice(0, 20));

@@ -170,16 +170,6 @@ const THEME_ICON = {
       });
     }
 
-    if (!document.getElementById('games-nav') && !document.querySelector('.nav-links a[href="/games.html"], .nav-links a[href="games.html"]')) {
-      var gamesLi = document.createElement('li');
-      gamesLi.id = 'games-nav';
-      var gamesA = document.createElement('a');
-      gamesA.href = '/games.html';
-      gamesA.textContent = '游戏中心';
-      gamesLi.appendChild(gamesA);
-      pn.parentNode.insertBefore(gamesLi, pn.nextSibling);
-    }
-
     if (!document.getElementById('other-nav')) {
       var li = document.createElement('li');
       li.id = 'other-nav';
@@ -594,14 +584,19 @@ const THEME_ICON = {
 
   function setupFeedbackEntry() {
     if (location.pathname === '/feedback.html') return;
-    if (document.getElementById('gb-feedback-btn')) return;
+    if (document.getElementById('gb-feedback-link')) return;
+    var right = document.querySelector('.navbar-right');
+    if (!right) return;
     var link = document.createElement('a');
-    link.id = 'gb-feedback-btn';
-    link.className = 'gb-feedback-btn';
+    link.id = 'gb-feedback-link';
+    link.className = 'nav-icon-link';
     link.href = '/feedback.html?from=' + encodeURIComponent(location.pathname + location.search);
     link.title = '意见反馈';
-    link.innerHTML = '<svg class="ico" aria-hidden="true"><use href="/icons.svg#chat"/></svg><span>反馈</span>';
-    document.body.appendChild(link);
+    link.setAttribute('aria-label', '意见反馈');
+    link.innerHTML = '<svg class="ico" aria-hidden="true"><use href="/icons.svg#chat"/></svg>';
+    var anchor = document.getElementById('settings-link') || document.getElementById('theme-toggle');
+    if (anchor && anchor.parentNode === right) right.insertBefore(link, anchor);
+    else right.appendChild(link);
   }
 
   function setupInstallPrompt() {

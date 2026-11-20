@@ -994,7 +994,7 @@
   </div>
 
   <!-- AI 助手更新提示弹窗 -->
-  <div id="aiUpdateModal" class="ai-update-modal">
+  <div id="aiUpdateModal" class="ai-update-modal" style="display:none;">
     <div class="ai-update-backdrop" id="aiUpdateBackdrop"></div>
     <div class="ai-update-card">
       <div class="ai-update-glow"></div>
@@ -2190,6 +2190,12 @@
       const noShowCheckbox = document.getElementById('aiUpdateNoShow');
 
       if (!modal) return;
+
+      // 不再展示 AI 助手更新大弹窗；保留首次访问的轻量引导窗口。
+      modal.classList.remove('show');
+      modal.style.display = 'none';
+      try { localStorage.setItem(STORAGE_KEY, '1'); } catch (e) {}
+      return;
 
       const seen = localStorage.getItem(STORAGE_KEY);
       if (seen === '1') return;

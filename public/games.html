@@ -33,6 +33,30 @@
   .game-card p { color: var(--muted); font-size: 0.82rem; line-height: 1.6; margin: 0; }
   .game-badge { position: absolute; top: 10px; right: 10px; font-size: 10px; font-weight: 800; color: var(--primary-dark); background: var(--primary-light); border-radius: 999px; padding: 2px 7px; }
   .games-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 3rem 1rem; }
+  .games-guide-overlay {
+    position: fixed; inset: 0; z-index: 9999; display: none;
+    align-items: center; justify-content: center; padding: 1rem;
+    background: rgba(2, 8, 20, 0.58);
+  }
+  .games-guide-overlay.show { display: flex; }
+  .games-guide-card {
+    position: relative; width: min(440px, 100%);
+    background: var(--card-bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 16px;
+    padding: 1.4rem 1.3rem 1.2rem; box-shadow: var(--shadow-lg);
+    text-align: center;
+  }
+  .games-guide-icon {
+    width: 54px; height: 54px; margin: 0 auto 0.7rem; border-radius: 15px;
+    background: var(--primary-light); color: var(--primary-dark);
+    display: grid; place-items: center;
+  }
+  .games-guide-card h2 { font-size: 1.25rem; margin: 0 0 0.4rem; }
+  .games-guide-card p { color: var(--muted); font-size: 0.86rem; line-height: 1.8; margin: 0 0 1rem; }
+  .games-guide-card button {
+    border: 0; border-radius: 9px; background: var(--primary); color: #fff;
+    padding: 0.55rem 1.5rem; font-family: inherit; font-weight: 700; cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -70,6 +94,15 @@
   </div>
   <div class="games-grid" id="gamesGrid"><div class="games-empty">加载中...</div></div>
 </main>
+
+<div class="games-guide-overlay" id="gamesGuide" role="dialog" aria-modal="true" aria-labelledby="gamesGuideTitle">
+  <div class="games-guide-card">
+    <div class="games-guide-icon"><svg class="ico" aria-hidden="true"><use href="/icons.svg#spark"/></svg></div>
+    <h2 id="gamesGuideTitle">欢迎来到游戏中心</h2>
+    <p>这里收录管理员标记为游戏的工具，以及用户投稿时标记为游戏的工具。全部工具仍然可以在工具页找到，可以按官方或社区筛选。</p>
+    <button type="button" id="gamesGuideClose">开始探索</button>
+  </div>
+</div>
 
 <script src="/script.js"></script>
 <script>
@@ -121,6 +154,23 @@
   }).catch(function () {
     document.getElementById('gamesGrid').innerHTML = '<div class="games-empty">游戏加载失败，请稍后重试。</div>';
   });
+
+  (function () {
+    var guide = document.getElementById('gamesGuide');
+    if (!guide) return;
+    var key = 'gb_games_guide_v1';
+    var seen = false;
+    try { seen = localStorage.getItem(key) === '1'; } catch (e) {}
+    if (!seen) setTimeout(function () { guide.classList.add('show'); }, 500);
+    function closeGuide() {
+      guide.classList.remove('show');
+      try { localStorage.setItem(key, '1'); } catch (e) {}
+    }
+    document.getElementById('gamesGuideClose').addEventListener('click', closeGuide);
+    guide.addEventListener('click', function (e) {
+      if (e.target === guide) closeGuide();
+    });
+  })();
 })();
 </script>
 </body>
