@@ -586,7 +586,7 @@ const THEME_ICON = {
     var right = document.querySelector('.navbar-right');
     if (!right) return;
 
-    if (!document.getElementById('nav-notification-link') && !document.getElementById('notifBtn') && !right.querySelector('a[href*="notifications.html"]')) {
+    if (!document.getElementById('nav-notification-link') && !document.getElementById('notifBtn') && !right.querySelector('a[href^="/notifications.html"]')) {
       var bell = document.createElement('a');
       bell.id = 'nav-notification-link';
       bell.className = 'nav-icon-link';
@@ -684,6 +684,7 @@ const THEME_ICON = {
     setupSettingsLink();
     setupFeedbackEntry();
     setupNavActions();
+    setTimeout(setupNavActions, 700);
     setupScrollLock();
     setupAppIcon();
   }
