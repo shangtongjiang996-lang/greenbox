@@ -1165,6 +1165,7 @@ let allUsers = [];
     loadSecurity();
     loadAdminGroups();
     loadStorageAccounts();
+    applyAdminTabPermissions();
     setupTabs(); setupUploadIconSelector(); setupModalIconSelector(); setupFileInputs();
     setupNotifyForm();
     setupQuickUpload();
@@ -2344,6 +2345,31 @@ async function revokeAdminSession(sid, isCurrent) {
   } catch (e) {
     showToast('下线失败：' + e.message, 'error');
   }
+}
+
+async function applyAdminTabPermissions() {
+  try {
+    const res = await fetch('/api/admin/permissions/me', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.super || (data.permissions || []).includes('*')) return;
+    const map = {
+      tools: 'tools', review: 'review', changelog: 'changelog', users: 'users',
+      files: 'files', storage: 'storage', rooms: 'rooms', chat: 'chat',
+      notify: 'notify', feedback: 'feedback', moderation: 'moderation',
+      backup: 'backup', security: 'security', settings: 'settings', admins: 'security'
+    };
+    const allowed = new Set(data.permissions || []);
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+      const need = map[btn.getAttribute('data-tab')];
+      if (need && !allowed.has(need)) btn.style.display = 'none';
+    });
+    const active = document.querySelector('.tab-btn.active[data-tab]');
+    if (active && active.style.display === 'none') {
+      const first = Array.from(document.querySelectorAll('.tab-btn[data-tab]')).find(b => b.style.display !== 'none');
+      if (first) first.click();
+    }
+  } catch (e) {}
 }
 
 async function loadAdminGroups() {
