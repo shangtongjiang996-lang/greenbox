@@ -462,7 +462,7 @@ const THEME_ICON = {
   }
 
   function setupScrollLock() {
-    var selectors = '.modal, .modal-overlay, .modal-backdrop, .gb-modal-overlay, [role="dialog"], .lightbox, .image-viewer';
+    var selectors = '.modal, .modal-overlay, .dm-modal-overlay, .modal-backdrop, .gb-modal-overlay, [role="dialog"], .lightbox, .image-viewer, .confirm-overlay, .action-sheet';
     var ignore = '.gb-tour, .gb-invite-banner, .gb-dm-toast, .gb-major-overlay';
     var locked = false;
     function visible(el) {

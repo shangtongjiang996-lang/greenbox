@@ -76,6 +76,12 @@ app.use('/api/admin', async (req, res, next) => {
   if (!session || session.role !== 'admin') {
     return res.status(403).json({ error: '需要管理员权限' });
   }
+  if (session.username !== 'admin') {
+    const users = (await kvGet('users')) || {};
+    if (!users[session.username] || users[session.username].role !== 'admin') {
+      return res.status(403).json({ error: '需要管理员权限' });
+    }
+  }
   const entry = await getAdminPermissionEntry(session.username);
   req.adminSession = session;
   req.adminPermissions = entry;
@@ -408,7 +414,10 @@ function getBearerToken(req) {
 async function checkAdmin(req) {
   const token = getBearerToken(req);
   const session = await getSession(token);
-  return !!(session && session.role === 'admin');
+  if (!session || session.role !== 'admin') return false;
+  if (session.username === 'admin') return true;
+  const users = (await kvGet('users')) || {};
+  return !!(users[session.username] && users[session.username].role === 'admin');
 }
 
 // ===== 管理组细粒度权限 =====
@@ -4249,6 +4258,11 @@ app.put('/api/admin/users/role', async (req, res) => {
     }
     return next;
   }, {});
+  // 角色变化后让旧会话立即失效，避免被降级的管理员继续使用旧 token
+  const targetSessions = await listSessions(username, '');
+  for (const s of targetSessions) {
+    if (s.sid) await revokeSessionBySid(username, s.sid);
+  }
   await writeAudit(actor.username, 'admin:role', username, role);
   res.json({ success: true });
 });
