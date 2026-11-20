@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>运行状态 - GreenBox</title>
+<meta name="description" content="GreenBox 网站运行状态、可用率与最近检查记录。">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#22c55e">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.setAttribute('data-accent', localStorage.getItem('accent') || 'green');
+  })();
+</script>
+<style>
+  .st-wrap { max-width: 1000px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+  .st-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .st-head h1 { font-size: 1.9rem; margin: 0 0 0.25rem; }
+  .st-head p { color: var(--muted); font-size: 0.9rem; margin: 0; }
+  .st-actions { display: flex; gap: 8px; }
+  .st-actions button { border: 1px solid var(--border); background: var(--card-bg); color: var(--text); border-radius: 8px; padding: 0.42rem 0.9rem; font-family: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
+  .st-actions button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .st-banner { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; border: 1px solid var(--border); background: var(--card-bg); border-radius: var(--radius); padding: 0.95rem 1.1rem; margin-bottom: 1rem; box-shadow: var(--shadow); }
+  .st-dot { width: 12px; height: 12px; border-radius: 50%; background: #94a3b8; box-shadow: 0 0 0 4px rgba(148,163,184,.15); }
+  .st-dot.up { background: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,.15); }
+  .st-dot.down { background: #dc2626; box-shadow: 0 0 0 4px rgba(220,38,38,.15); }
+  .st-banner-main { flex: 1; min-width: 200px; }
+  .st-banner-main b { font-size: 1rem; }
+  .st-banner-main small { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 0.15rem; }
+  .st-badge { font-size: 0.72rem; font-weight: 800; border-radius: 999px; padding: 3px 9px; }
+  .st-badge.up { background: #dcfce7; color: #166534; }
+  .st-badge.down { background: #fee2e2; color: #991b1b; }
+  .st-badge.unknown { background: var(--bg-alt); color: var(--muted); }
+  .st-kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 1rem; }
+  .st-kpi { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 0.9rem; }
+  .st-kpi .label { color: var(--muted); font-size: 0.74rem; }
+  .st-kpi .value { font-size: 1.25rem; font-weight: 800; margin-top: 0.15rem; }
+  .st-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem 1.1rem; margin-bottom: 1rem; }
+  .st-card h2 { font-size: 1rem; margin: 0 0 0.25rem; }
+  .st-card .hint { color: var(--muted); font-size: 0.78rem; margin-bottom: 0.7rem; }
+  .st-chart-wrap { position: relative; width: 100%; overflow: hidden; }
+  #stChart { display: block; width: 100%; height: 190px; }
+  .st-legend { display: flex; gap: 1rem; color: var(--muted); font-size: 0.74rem; flex-wrap: wrap; margin-top: 0.45rem; }
+  .st-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .st-days { display: grid; gap: 7px; }
+  .st-day { display: flex; align-items: center; gap: 0.6rem; font-size: 0.8rem; }
+  .st-day .date { width: 82px; color: var(--muted); flex-shrink: 0; }
+  .st-day .bar { flex: 1; height: 10px; background: var(--bg-alt); border-radius: 999px; overflow: hidden; }
+  .st-day .bar span { display: block; height: 100%; background: #16a34a; border-radius: 999px; }
+  .st-day .num { width: 58px; text-align: right; color: var(--muted); }
+  .st-list { display: grid; gap: 0.4rem; max-height: 420px; overflow: auto; }
+  .st-row { display: flex; align-items: center; gap: 0.6rem; border-bottom: 1px solid var(--border); padding: 0.45rem 0; font-size: 0.8rem; }
+  .st-row:last-child { border-bottom: 0; }
+  .st-row .time { width: 145px; color: var(--muted); flex-shrink: 0; }
+  .st-row .state { width: 62px; font-weight: 700; }
+  .st-row .state.up { color: #16a34a; }
+  .st-row .state.down { color: #dc2626; }
+  .st-row .latency { margin-left: auto; color: var(--muted); }
+  .st-error { border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; border-radius: 9px; padding: 0.8rem 0.9rem; font-size: 0.84rem; margin-bottom: 1rem; display: none; }
+  .st-empty { color: var(--muted); text-align: center; padding: 1.4rem 0; font-size: 0.84rem; }
+  @media (max-width: 720px) { .st-kpis { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<main class="st-wrap">
+  <div class="st-head">
+    <div>
+      <h1>运行状态</h1>
+      <p>每 5 分钟检查一次。夜间 23:00–06:00 暂停检查，不计入可用率。</p>
+    </div>
+    <div class="st-actions">
+      <button type="button" id="stRefresh">刷新</button>
+      <button type="button" class="primary" id="stRefresh7">查看 7 天</button>
+    </div>
+  </div>
+
+  <div class="st-error" id="stError"></div>
+
+  <div class="st-banner">
+    <span class="st-dot" id="stDot"></span>
+    <div class="st-banner-main">
+      <b id="stCurrent">正在读取监控数据...</b>
+      <small id="stCurrentSub">数据来自 Cloudflare Worker</small>
+    </div>
+    <span class="st-badge unknown" id="stBadge">未知</span>
+  </div>
+
+  <div class="st-kpis">
+    <div class="st-kpi"><div class="label">24 小时可用率</div><div class="value" id="stUptime24">-</div></div>
+    <div class="st-kpi"><div class="label">7 天可用率</div><div class="value" id="stUptime7">-</div></div>
+    <div class="st-kpi"><div class="label">平均延迟</div><div class="value" id="stLatency">-</div></div>
+    <div class="st-kpi"><div class="label">检查次数</div><div class="value" id="stTotal">-</div></div>
+  </div>
+
+  <section class="st-card">
+    <h2>最近 24 小时</h2>
+    <div class="hint" id="stRangeHint">每个格子代表一次检查，灰色区域表示夜间暂停或暂无数据。</div>
+    <div class="st-chart-wrap"><canvas id="stChart"></canvas></div>
+    <div class="st-legend">
+      <span><i style="background:#16a34a"></i>正常</span>
+      <span><i style="background:#dc2626"></i>异常</span>
+      <span><i style="background:#e2e8f0"></i>夜间/无数据</span>
+    </div>
+  </section>
+
+  <section class="st-card">
+    <h2>最近 7 天</h2>
+    <div class="hint">每天的可用率，夜间时段已排除。</div>
+    <div class="st-days" id="stDays"><div class="st-empty">加载中...</div></div>
+  </section>
+
+  <section class="st-card">
+    <h2>最近检查</h2>
+    <div class="hint">显示最近 24 小时内的检查记录。</div>
+    <div class="st-list" id="stList"><div class="st-empty">加载中...</div></div>
+  </section>
+</main>
+
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var WORKER = 'https://greenbox.shangtongjiang996.workers.dev';
+  var chart = document.getElementById('stChart');
+  var errorEl = document.getElementById('stError');
+  var lastData = null;
+  var range = '24h';
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' });
+  }
+  function fmtPercent(v) {
+    return v == null ? '-' : (Math.round(v * 100) / 100).toFixed(2) + '%';
+  }
+  function fmtLatency(v) {
+    return v == null ? '-' : Math.round(v) + ' ms';
+  }
+  function setText(id, text) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  async function fetchData(which) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 12000);
+    try {
+      var res = await fetch(WORKER + '/api/uptime?range=' + encodeURIComponent(which), {
+        cache: 'no-store',
+        signal: controller.signal
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return await res.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function render(data) {
+    lastData = data;
+    errorEl.style.display = 'none';
+    var latest = data.latest;
+    var current = data.current || 'unknown';
+    var dot = document.getElementById('stDot');
+    dot.className = 'st-dot ' + current;
+    setText('stCurrent', current === 'up' ? '网站运行正常' : current === 'down' ? '网站当前异常' : '暂无检查数据');
+    setText('stCurrentSub', latest ? ('最近检查：' + fmtTime(latest.ts) + ' · ' + fmtLatency(latest.latency)) : '监控 Worker 已连接，但还没有记录');
+    var badge = document.getElementById('stBadge');
+    badge.className = 'st-badge ' + current;
+    badge.textContent = current === 'up' ? '正常' : current === 'down' ? '异常' : '未知';
+
+    setText('stUptime24', fmtPercent(data.uptime && data.uptime.percent));
+    setText('stLatency', fmtLatency(data.uptime && data.uptime.avgLatency));
+    setText('stTotal', data.uptime && data.uptime.total != null ? data.uptime.total + ' 次' : '-');
+
+    var today = (data.days || [])[0];
+    var seven = data.days && data.days.length ? data.days.reduce(function (s, d) {
+      s.up += d.up; s.down += d.down; return s;
+    }, { up: 0, down: 0 }) : { up: 0, down: 0 };
+    var sevenPercent = (seven.up + seven.down) ? seven.up / (seven.up + seven.down) * 100 : null;
+    setText('stUptime7', fmtPercent(sevenPercent));
+
+    drawChart(data.checks || []);
+    renderDays(data.days || []);
+    renderList(data.checks || []);
+  }
+
+  function drawChart(checks) {
+    var rect = chart.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    var w = Math.max(320, Math.floor(rect.width || 900));
+    var h = 190;
+    chart.width = Math.floor(w * dpr);
+    chart.height = Math.floor(h * dpr);
+    var ctx = chart.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var style = getComputedStyle(document.documentElement);
+    var bgAlt = style.getPropertyValue('--bg-alt').trim() || '#eef2ee';
+    var muted = style.getPropertyValue('--muted').trim() || '#64748b';
+    var upColor = '#16a34a';
+    var downColor = '#dc2626';
+
+    var now = Date.now();
+    var start = now - 24 * 60 * 60 * 1000;
+    var left = 8, right = w - 8, top = 8, bottom = h - 22;
+    var plotW = right - left, plotH = bottom - top;
+
+    ctx.fillStyle = bgAlt;
+    ctx.fillRect(left, top, plotW, plotH);
+
+    ctx.strokeStyle = 'rgba(100,116,139,.18)';
+    ctx.lineWidth = 1;
+    for (var i = 0; i <= 4; i++) {
+      var y = top + plotH * i / 4;
+      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    }
+
+    var slot = plotW / (24 * 12);
+    var visible = checks.filter(function (c) { return c && c.ts >= start && c.ts <= now; });
+    visible.forEach(function (c) {
+      var x = left + ((c.ts - start) / (24 * 60 * 60 * 1000)) * plotW;
+      var bw = Math.max(2, slot - 0.5);
+      ctx.fillStyle = c.ok ? upColor : downColor;
+      ctx.fillRect(x, top + 4, bw, plotH - 8);
+    });
+
+    ctx.fillStyle = muted;
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    for (var hh = 0; hh <= 24; hh += 6) {
+      var x2 = left + plotW * hh / 24;
+      var t = new Date(start + hh * 60 * 60 * 1000);
+      var label = new Intl.DateTimeFormat('zh-CN', {
+        timeZone: 'Asia/Shanghai', hour: '2-digit', hour12: false
+      }).format(t) + ':00';
+      ctx.fillText(label, Math.max(left + 12, Math.min(right - 12, x2)), h - 6);
+    }
+    ctx.textAlign = 'left';
+    if (!visible.length) {
+      ctx.fillStyle = muted;
+      ctx.textAlign = 'center';
+      ctx.fillText('暂无检查记录', w / 2, top + plotH / 2);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  function renderDays(days) {
+    var el = document.getElementById('stDays');
+    if (!days.length) { el.innerHTML = '<div class="st-empty">暂无每日数据</div>'; return; }
+    el.innerHTML = days.slice().reverse().map(function (d) {
+      var pct = d.percent == null ? 0 : Math.max(0, Math.min(100, d.percent));
+      return '<div class="st-day"><span class="date">' + esc(d.date) + '</span>' +
+        '<span class="bar"><span style="width:' + pct + '%"></span></span>' +
+        '<span class="num">' + (d.percent == null ? '无数据' : d.percent.toFixed(1) + '%') + '</span></div>';
+    }).join('');
+  }
+
+  function renderList(checks) {
+    var el = document.getElementById('stList');
+    var list = checks.slice().sort(function (a, b) { return b.ts - a.ts; }).slice(0, 36);
+    if (!list.length) { el.innerHTML = '<div class="st-empty">暂无检查记录</div>'; return; }
+    el.innerHTML = list.map(function (c) {
+      return '<div class="st-row"><span class="time">' + esc(fmtTime(c.ts)) + '</span>' +
+        '<span class="state ' + (c.ok ? 'up' : 'down') + '">' + (c.ok ? '正常' : '异常') + '</span>' +
+        '<span>' + (c.status ? 'HTTP ' + c.status : esc(c.error || '-')) + '</span>' +
+        '<span class="latency">' + fmtLatency(c.latency) + '</span></div>';
+    }).join('');
+  }
+
+  async function load(which) {
+    range = which || range;
+    try {
+      var data = await fetchData(range);
+      if (!data || data.ok === false) throw new Error(data && data.error ? data.error : '数据格式错误');
+      render(data);
+    } catch (e) {
+      errorEl.textContent = '监控 Worker 暂时无法访问：' + e.message + '。如果你还没有部署 Worker，请先按说明部署。';
+      errorEl.style.display = 'block';
+      setText('stCurrent', '监控服务未连接');
+      setText('stCurrentSub', '网站本身不一定异常，只是监控数据源不可用');
+      document.getElementById('stBadge').textContent = '未知';
+      document.getElementById('stBadge').className = 'st-badge unknown';
+      document.getElementById('stDot').className = 'st-dot';
+    }
+  }
+
+  document.getElementById('stRefresh').addEventListener('click', function () { load(range); });
+  document.getElementById('stRefresh7').addEventListener('click', function () { load('7d'); });
+  window.addEventListener('resize', function () { if (lastData) drawChart(lastData.checks || []); });
+
+  load('24h');
+  setInterval(function () { load(range); }, 5 * 60 * 1000);
+})();
+</script>
+</body>
+</html>

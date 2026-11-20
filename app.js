@@ -129,6 +129,7 @@ app.get('/sitemap.xml', async (req, res) => {
     '/other.html',
     '/feedback.html',
     '/submit-tool.html',
+    '/status.html',
     '/login.html',
     '/register.html'
   ];
