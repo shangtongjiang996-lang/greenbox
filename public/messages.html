@@ -1969,6 +1969,7 @@
       document.getElementById('dmChatName').textContent = c.name || c.peerName || '群聊';
       document.getElementById('dmChatTitle').title = '查看群聊成员';
       document.getElementById('dmProfileBtn').title = '查看群聊成员';
+      document.getElementById('dmReportBtn').style.display = 'none';
       const subEl = document.getElementById('dmChatSub');
       subEl.textContent = `${(c.members || []).length} 位成员`;
       subEl.className = 'sub online';
@@ -1979,6 +1980,7 @@
     const initial = (c.peer || '?').slice(0,1).toUpperCase();
     document.getElementById('dmChatTitle').title = '查看对方主页';
     document.getElementById('dmProfileBtn').title = '查看对方主页';
+    document.getElementById('dmReportBtn').style.display = '';
     avEl.innerHTML = c.peerAvatar
       ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${c.peer === 'admin' ? '管' : initial}'">`
       : (c.peer === 'admin' ? '管' : initial);
