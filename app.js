@@ -2379,6 +2379,47 @@ function resourceExt(item) {
   return (path.split('.').pop() || '').toLowerCase();
 }
 
+async function getResourceSnapshot(resourceId) {
+  if (!resourceId || !/^res_[a-zA-Z0-9]+$/.test(String(resourceId))) return null;
+  const record = await kvGet(`resource:${resourceId}`);
+  if (!record) return null;
+  return {
+    id: record.id,
+    title: record.title || '未命名资源',
+    type: record.type || 'file',
+    kind: resourceKind(record),
+    ext: resourceExt(record),
+    fileSize: Number(record.fileSize) || 0,
+    uploader: record.uploader || '',
+    storageName: record.storageName || '',
+    createdAt: record.createdAt || 0,
+    url: `/resource.html?id=${encodeURIComponent(record.id)}`,
+  };
+}
+
+app.get('/api/resource/:id', async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^res_[a-zA-Z0-9]+$/.test(id)) return res.status(400).json({ error: '资源 ID 无效' });
+  const record = await kvGet(`resource:${id}`);
+  if (!record) return res.status(404).json({ error: '资源不存在' });
+  const copy = Object.assign({}, record);
+  if (copy.objectKey && copy.objectKey !== 'external' && copy.type !== 'link') {
+    try {
+      const storage = await getStorageForRecord(copy);
+      const cmd = new GetObjectCommand({ Bucket: storage.account.bucket, Key: copy.objectKey });
+      copy.playUrl = await getSignedUrl(storage.client, cmd, { expiresIn: 7 * 24 * 3600 });
+      copy.storageName = storage.account.name;
+    } catch (e) {
+      console.error('资源详情签名失败:', copy.objectKey, e.message);
+    }
+  }
+  copy.kind = resourceKind(copy);
+  copy.ext = resourceExt(copy);
+  copy.shareUrl = `/resource.html?id=${encodeURIComponent(copy.id)}`;
+  res.set('Cache-Control', 'no-store');
+  res.json(copy);
+});
+
 app.get('/api/resource/list/:category', async (req, res) => {
   const category = req.params.category;
   const indexKey = `resource_index:${category}`;
@@ -4829,12 +4870,14 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
   const moderationBlock = await checkModeration(session.username, 'post');
   if (moderationBlock) return res.status(403).json({ error: moderationBlock });
 
-  const { title, content, category = 'general', tags = '' } = req.body;
+  const { title, content, category = 'general', tags = '', resourceId } = req.body;
   if (!title || !String(title).trim()) return res.status(400).json({ error: '标题不能为空' });
-  if (!content || !String(content).trim()) return res.status(400).json({ error: '内容不能为空' });
+  const resource = await getResourceSnapshot(resourceId);
+  if (resourceId && !resource) return res.status(404).json({ error: '分享的资源不存在' });
+  if ((!content || !String(content).trim()) && !resource) return res.status(400).json({ error: '内容不能为空' });
 
   const cleanTitle = String(title).trim().slice(0, 100);
-  const cleanContent = String(content).trim().slice(0, 10000);
+  const cleanContent = String(content || '').trim().slice(0, 10000);
   const cleanCategory = FORUM_CATEGORIES.find(c => c.id === category) ? category : 'general';
   const cleanTags = String(tags).split(/[,\s，]+/).map(t => t.trim()).filter(Boolean).slice(0, 5);
 
@@ -4870,7 +4913,7 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
     id: postId,
     title: cleanTitle,
     content: cleanContent,
-    excerpt: cleanContent.replace(/https?:\/\/\S+/g, '[链接]').slice(0, 150),
+    excerpt: (resource ? `分享了资源：${resource.title}` : cleanContent.replace(/https?:\/\/\S+/g, '[链接]')).slice(0, 150),
     author: session.username,
     authorDisplay: profile.displayName || session.username,
     authorAvatar: avatar ? `/api/user/avatar/${encodeURIComponent(session.username)}` : null,
@@ -4878,6 +4921,7 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
     tags: cleanTags,
     images: imageUrls,
     links,
+    resource: resource || null,
     likes: [],
     views: 0,
     commentCount: 0,
@@ -4899,6 +4943,7 @@ app.post('/api/forum/posts', upload.array('images', 3), async (req, res) => {
     tags: post.tags,
     hasImages: imageUrls.length > 0,
     hasLinks: links.length > 0,
+    resource: resource || null,
     coverImage: imageUrls.length ? `/api/forum/posts/${post.id}/cover` : null,
     likes: 0,
     views: 0,

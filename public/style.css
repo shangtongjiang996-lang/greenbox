@@ -219,6 +219,31 @@ main h2 { font-size: 1.3rem; font-weight: 700; margin: 2.4rem 0 0.8rem; }
 .nav-auth-actions .register { background: transparent; border: 1px solid var(--border); color: var(--text); }
 .nav-auth-actions .register:hover { border-color: var(--primary); color: var(--primary); }
 .game-label { display: inline-block; font-size: 10px; font-weight: 800; color: var(--primary-dark); background: var(--primary-light); border-radius: 999px; padding: 1px 7px; vertical-align: middle; }
+.resource-share-card {
+  display: flex; align-items: center; gap: 0.7rem;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-alt); padding: 0.65rem 0.75rem;
+  text-decoration: none; color: var(--text); margin: 0.55rem 0;
+  transition: border-color var(--transition), transform var(--transition);
+}
+.resource-share-card:hover { border-color: var(--primary); transform: translateY(-1px); }
+.resource-share-icon {
+  width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center; background: var(--primary-light); color: var(--primary-dark);
+  font-size: 0.78rem; font-weight: 800;
+}
+.resource-share-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.resource-share-body b { font-size: 0.86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resource-share-body small { color: var(--muted); font-size: 0.74rem; }
+.resource-share-arrow { margin-left: auto; color: var(--muted); flex-shrink: 0; }
+.post-resource-preview {
+  display: flex; align-items: center; gap: 0.6rem;
+  border: 1px dashed var(--border); border-radius: 9px;
+  padding: 0.55rem 0.65rem; margin: 0 0 0.8rem;
+  color: var(--muted); font-size: 0.8rem;
+}
+.post-resource-preview b { color: var(--text); }
+.post-resource-preview button { margin-left: auto; border: 0; background: transparent; color: #ef4444; cursor: pointer; font-family: inherit; font-size: 0.76rem; }
 .gb-feedback-btn {
   position: fixed;
   right: 18px;

@@ -18,8 +18,9 @@
   .rp2-head h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
   .rp2-head p { color: var(--muted); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.2rem; }
   .rp2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1rem; align-items: start; }
-  .rp2-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; }
-  .rp2-board canvas { display: block; width: 100%; height: auto; border-radius: 10px; }
+  .rp2-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; min-width: 0; }
+  .rp2-board { min-width: 0; width: 100%; overflow: hidden; }
+  .rp2-board canvas { display: block; width: 100%; height: auto; max-width: 100%; aspect-ratio: 1 / 1; border-radius: 10px; }
   .rp2-side h2 { font-size: 1rem; margin: 0 0 0.6rem; }
   .rp2-info { font-size: 0.84rem; line-height: 1.8; color: var(--muted); }
   .rp2-info b { color: var(--text); }
@@ -95,15 +96,22 @@
   var step = 0;
   var timer = null;
 
-  function boardSize() { return Math.min(620, canvas.parentElement.clientWidth - 2); }
+  function boardSize() {
+    var parent = canvas.parentElement;
+    var style = window.getComputedStyle(parent);
+    var padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    var width = parent.getBoundingClientRect().width - padding - 2;
+    return Math.max(220, Math.min(620, Math.floor(width)));
+  }
 
   function draw() {
     var logical = boardSize();
     var dpr = window.devicePixelRatio || 1;
     canvas.width = logical * dpr;
     canvas.height = logical * dpr;
-    canvas.style.width = logical + 'px';
-    canvas.style.height = logical + 'px';
+    // 尺寸完全交给 CSS 的 width:100%/aspect-ratio，避免内联像素宽度反复撑大容器
+    canvas.style.width = '';
+    canvas.style.height = '';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, logical, logical);
 

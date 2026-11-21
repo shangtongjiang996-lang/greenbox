@@ -32,6 +32,28 @@ function normalizeAttachment(att, from) {
   return { key, name, size, mime, kind, expiresAt: Date.now() + DM_FILE_TTL_MS };
 }
 
+async function getResourceSnapshot(resourceId) {
+  if (!resourceId || !/^res_[a-zA-Z0-9]+$/.test(String(resourceId))) return null;
+  const record = await kvGet(`resource:${resourceId}`);
+  if (!record) return null;
+  const path = String(record.objectKey || record.playUrl || '').split('?')[0];
+  const ext = record.type === 'link' ? (path.split('.').pop() || 'link').toLowerCase() : (path.split('.').pop() || '').toLowerCase();
+  const kind = ['mp4', 'webm', 'ogg', 'mov', 'mkv', 'm3u8'].includes(ext) ? 'video'
+    : ['mp3', 'wav', 'flac', 'aac', 'm4a'].includes(ext) ? 'audio'
+      : ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext) ? 'image'
+        : record.type === 'link' ? 'link' : 'file';
+  return {
+    id: record.id,
+    title: record.title || '未命名资源',
+    kind,
+    ext,
+    fileSize: Number(record.fileSize) || 0,
+    uploader: record.uploader || '',
+    createdAt: record.createdAt || 0,
+    url: `/resource.html?id=${encodeURIComponent(record.id)}`,
+  };
+}
+
 // ============================================================
 //  工具函数
 // ============================================================
@@ -219,14 +241,16 @@ async function getPostsByUser(username) {
 // ============================================================
 //  投递消息（REST & WS 共用）
 // ============================================================
-async function deliverMessage(from, to, content, replyTo, io, attachment) {
+async function deliverMessage(from, to, content, replyTo, io, attachment, resourceId) {
   if (!to || to === from) return { error: '参数错误', code: 400 };
   const moderationBlock = await checkModeration(from, 'dm');
   if (moderationBlock) return { error: moderationBlock, code: 403 };
   const att = normalizeAttachment(attachment, from);
   if (att && att.error) return { error: att.error, code: 400 };
+  const resource = await getResourceSnapshot(resourceId);
+  if (resourceId && !resource) return { error: '资源不存在', code: 404 };
   content = String(content || '').trim();
-  if (!content && !att) return { error: '消息不能为空', code: 400 };
+  if (!content && !att && !resource) return { error: '消息不能为空', code: 400 };
   const users = (await kvGet('users')) || {};
   if (!users[to] && to !== 'admin') return { error: '用户不存在', code: 404 };
 
@@ -246,6 +270,7 @@ async function deliverMessage(from, to, content, replyTo, io, attachment) {
     from, to,
     content: content.slice(0, 2000),
     attachment: att || undefined,
+    resource: resource || undefined,
     time: Date.now(),
     read: false,
     recalled: false,
@@ -255,7 +280,7 @@ async function deliverMessage(from, to, content, replyTo, io, attachment) {
   await saveMessages(convId, msgs);
 
   const kindLabel = att ? (att.kind === 'image' ? '图片' : att.kind === 'video' ? '视频' : att.kind === 'audio' ? '语音' : '文件') : '';
-  const preview = att ? `[${kindLabel}] ${att.name}`.slice(0, 40) : msg.content.slice(0, 40);
+  const preview = resource ? `分享了资源：${resource.title}`.slice(0, 40) : (att ? `[${kindLabel}] ${att.name}`.slice(0, 40) : msg.content.slice(0, 40));
   await patchConvo(from, to, { lastMsg: preview, lastTime: msg.time });
   await patchConvo(to, from, { lastMsg: preview, lastTime: msg.time });
 
@@ -308,7 +333,7 @@ async function ensureGroupConvo(username, group, preview) {
   await saveConvos(username, convos);
 }
 
-async function deliverGroupMessage(from, groupId, content, replyTo, io, attachment) {
+async function deliverGroupMessage(from, groupId, content, replyTo, io, attachment, resourceId) {
   const group = await getDmGroup(groupId);
   if (!group) return { error: '群聊不存在', code: 404 };
   if (!Array.isArray(group.members) || !group.members.includes(from)) return { error: '你不在这个群聊里', code: 403 };
@@ -316,8 +341,10 @@ async function deliverGroupMessage(from, groupId, content, replyTo, io, attachme
   if (moderationBlock) return { error: moderationBlock, code: 403 };
   const att = normalizeAttachment(attachment, from);
   if (att && att.error) return { error: att.error, code: 400 };
+  const resource = await getResourceSnapshot(resourceId);
+  if (resourceId && !resource) return { error: '资源不存在', code: 404 };
   content = String(content || '').trim();
-  if (!content && !att) return { error: '消息不能为空', code: 400 };
+  if (!content && !att && !resource) return { error: '消息不能为空', code: 400 };
   const msgs = await getMessages(groupId);
   const msg = {
     id: 'M' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -327,6 +354,7 @@ async function deliverGroupMessage(from, groupId, content, replyTo, io, attachme
     groupName: group.name,
     content: content.slice(0, 2000),
     attachment: att || undefined,
+    resource: resource || undefined,
     time: Date.now(),
     readBy: [from],
     recalled: false,
@@ -335,7 +363,7 @@ async function deliverGroupMessage(from, groupId, content, replyTo, io, attachme
   msgs.push(msg);
   await saveMessages(groupId, msgs);
   const kindLabel = att ? (att.kind === 'image' ? '图片' : att.kind === 'video' ? '视频' : att.kind === 'audio' ? '语音' : '文件') : '';
-  const preview = att ? `[${kindLabel}] ${att.name}`.slice(0, 40) : msg.content.slice(0, 40);
+  const preview = resource ? `分享了资源：${resource.title}`.slice(0, 40) : (att ? `[${kindLabel}] ${att.name}`.slice(0, 40) : msg.content.slice(0, 40));
   for (const member of group.members) {
     await ensureGroupConvo(member, group, from + '：' + preview);
     if (member !== from) {
@@ -705,10 +733,10 @@ function registerSocialRoutes(app, deps) {
   app.post('/api/social/dm/messages', async (req, res) => {
     const s = await auth(req);
     if (!s) return res.status(401).json({ error: '请先登录' });
-    const { to, groupId, content, replyTo, attachment } = req.body || {};
+    const { to, groupId, content, replyTo, attachment, resourceId } = req.body || {};
     const result = groupId
-      ? await deliverGroupMessage(s.username, String(groupId), content, replyTo, io, attachment)
-      : await deliverMessage(s.username, to, content, replyTo, io, attachment);
+      ? await deliverGroupMessage(s.username, String(groupId), content, replyTo, io, attachment, resourceId)
+      : await deliverMessage(s.username, to, content, replyTo, io, attachment, resourceId);
     if (result.error) return res.status(result.code || 400).json({ error: result.error });
     res.json({ success: true, message: result.message });
   });
@@ -868,8 +896,8 @@ function registerSocialSocket(io, deps) {
       const from = socketUsers.get(socket.id);
       if (!from) return cb && cb({ error: '请先登录' });
       const result = payload?.groupId
-        ? await deliverGroupMessage(from, String(payload.groupId), payload?.content, payload?.replyTo, io, payload?.attachment)
-        : await deliverMessage(from, payload?.to, payload?.content, payload?.replyTo, io, payload?.attachment);
+        ? await deliverGroupMessage(from, String(payload.groupId), payload?.content, payload?.replyTo, io, payload?.attachment, payload?.resourceId)
+        : await deliverMessage(from, payload?.to, payload?.content, payload?.replyTo, io, payload?.attachment, payload?.resourceId);
       cb && cb(result);
     });
 

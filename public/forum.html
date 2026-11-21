@@ -800,6 +800,8 @@
           <label>内容 <span style="color:#ef4444">*</span></label>
           <textarea id="newPostContent" placeholder="分享你的想法...&#10;&#10;提示：直接粘贴链接，系统会自动识别&#10;如：https://www.example.com"></textarea>
         </div>
+        <input type="hidden" id="newPostResourceId" value="">
+        <div id="newPostResourcePreview" class="post-resource-preview" style="display:none;"></div>
         <div class="form-field">
           <label>图片（最多 3 张，每张 ≤ 500KB）</label>
           <div class="img-upload-area" id="postImagesArea">
@@ -934,6 +936,25 @@
       return String(s || '').replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
       }[c]));
+    }
+
+    function fmtBytes(n) {
+      n = Number(n) || 0;
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+      return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+    }
+
+    function resourceCardHtml(resource) {
+      if (!resource || !resource.id) return '';
+      const labels = { video: '视频', audio: '音频', image: '图片', file: '文件', link: '外链' };
+      return `<a class="resource-share-card" href="/resource.html?id=${encodeURIComponent(resource.id)}">
+        <span class="resource-share-icon">${escapeHtml(labels[resource.kind] || '资源')}</span>
+        <span class="resource-share-body"><b>${escapeHtml(resource.title || '未命名资源')}</b>
+        <small>${escapeHtml(resource.uploader || '')} · ${resource.kind === 'link' ? '外链资源' : fmtBytes(resource.fileSize)}</small></span>
+        <span class="resource-share-arrow">打开详情 ›</span>
+      </a>`;
     }
     
     function linkify(text) {
@@ -1236,6 +1257,7 @@
               </div>
               <div class="post-title">${escapeHtml(p.title)}</div>
               <div class="post-excerpt">${escapeHtml(p.excerpt || '')}</div>
+              ${resourceCardHtml(p.resource)}
               <div class="post-meta">
                 <span class="post-cat">${cat.name}</span>
                 ${(p.tags || []).slice(0, 2).map(t => `<span class="post-tag">#${escapeHtml(t)}</span>`).join('')}
@@ -1259,6 +1281,7 @@
           if (e.target.closest('.quick-btn')) return;
           if (e.target.closest('[data-user]')) return;
           if (e.target.closest('[data-lightbox]')) return;
+          if (e.target.closest('.resource-share-card')) return;
           openPostDetail(card.dataset.postId);
         });
       });
@@ -1381,7 +1404,7 @@
           ).join('')}</div>`
         : '';
 
-      const contentHtml = `<div class="post-detail-content">${linkify(post.content)}</div>`;
+      const contentHtml = `<div class="post-detail-content">${linkify(post.content)}</div>` + resourceCardHtml(post.resource);
 
       const linksHtml = (post.links || []).length > 0
         ? `<div style="margin-bottom:20px;">
@@ -1691,6 +1714,8 @@
       document.getElementById('newPostTitle').value = '';
       document.getElementById('newPostContent').value = '';
       document.getElementById('newPostTags').value = '';
+      document.getElementById('newPostResourceId').value = '';
+      document.getElementById('newPostResourcePreview').style.display = 'none';
       postImages = [];
       renderPostImages();
       document.getElementById('newPostModal').classList.add('show');
@@ -1743,7 +1768,8 @@
       const tags = document.getElementById('newPostTags').value.trim();
 
       if (!title) { showToast('请输入标题', 'error'); return; }
-      if (!content) { showToast('请输入内容', 'error'); return; }
+      const resourceId = document.getElementById('newPostResourceId').value;
+      if (!content && !resourceId) { showToast('请输入内容', 'error'); return; }
 
       const btn = document.getElementById('newPostSubmit');
       btn.disabled = true;
@@ -1755,6 +1781,7 @@
         fd.append('content', content);
         fd.append('category', selectedPostCategory);
         fd.append('tags', tags);
+        if (resourceId) fd.append('resourceId', resourceId);
         postImages.forEach(img => fd.append('images', img.file));
 
         const res = await fetch('/api/forum/posts', {
@@ -1929,7 +1956,15 @@
           openNewPost();
           var title = params.get('shareTitle') || '资源分享';
           document.getElementById('newPostTitle').value = '分享资源：' + title.slice(0, 70);
-          document.getElementById('newPostContent').value = '分享一个资源中心的资源：\nhttps://greenboxhweb.com/resources.html?resource=' + encodeURIComponent(shareResource) + '\n\n' + title;
+          document.getElementById('newPostResourceId').value = shareResource;
+          document.getElementById('newPostContent').value = '';
+          var preview = document.getElementById('newPostResourcePreview');
+          preview.style.display = 'flex';
+          preview.innerHTML = '<span>将附带资源卡片：<b>' + escapeHtml(title) + '</b></span><button type="button" id="removeNewPostResource">移除</button>';
+          document.getElementById('removeNewPostResource').addEventListener('click', function () {
+            document.getElementById('newPostResourceId').value = '';
+            preview.style.display = 'none';
+          });
           history.replaceState(null, '', location.pathname);
         }, 450);
       }

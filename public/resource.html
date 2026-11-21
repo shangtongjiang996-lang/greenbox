@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>资源详情 - GreenBox</title>
+<meta name="description" content="查看资源详情、在线预览和下载。">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%2316a34a'/%3E%3Ctext x='50' y='70' font-size='60' font-family='Arial' fill='white' text-anchor='middle' font-weight='bold'%3EG%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#22c55e">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.setAttribute('data-accent', localStorage.getItem('accent') || 'green');
+  })();
+</script>
+<style>
+  .rd-wrap { max-width: 900px; margin: 0 auto; padding: 1.8rem 1.25rem 3rem; }
+  .rd-back { display: inline-flex; align-items: center; gap: 0.3rem; color: var(--muted); text-decoration: none; font-size: 0.84rem; margin-bottom: 0.8rem; }
+  .rd-back:hover { color: var(--primary); }
+  .rd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .rd-head h1 { font-size: 1.7rem; margin: 0 0 0.25rem; line-height: 1.45; }
+  .rd-meta { color: var(--muted); font-size: 0.82rem; line-height: 1.8; }
+  .rd-badge { display: inline-block; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 2px 8px; background: var(--primary-light); color: var(--primary-dark); margin-right: 0.3rem; }
+  .rd-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; margin-bottom: 1rem; }
+  .rd-preview { background: #070b12; border-radius: 10px; overflow: hidden; min-height: 180px; display: flex; align-items: center; justify-content: center; }
+  .rd-preview video { width: 100%; max-height: 540px; display: block; background: #000; }
+  .rd-preview img { max-width: 100%; max-height: 620px; display: block; object-fit: contain; }
+  .rd-preview audio { width: 90%; }
+  .rd-file { text-align: center; color: #cbd5e1; padding: 3rem 1rem; }
+  .rd-file .ext { font-size: 2rem; font-weight: 800; margin-bottom: 0.4rem; }
+  .rd-actions { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-top: 0.9rem; }
+  .rd-actions a, .rd-actions button { border: 1px solid var(--border); background: var(--card-bg); color: var(--text); border-radius: 8px; padding: 0.45rem 0.85rem; font-family: inherit; font-size: 0.82rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+  .rd-actions a.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .rd-actions a:hover, .rd-actions button:hover { border-color: var(--primary); color: var(--primary); }
+  .rd-actions a.primary:hover { color: #fff; }
+  .rd-note { color: var(--muted); font-size: 0.78rem; line-height: 1.7; margin-top: 0.7rem; }
+  .rd-error { text-align: center; color: #ef4444; padding: 3rem 1rem; }
+  .rd-loading { text-align: center; color: var(--muted); padding: 3rem 1rem; }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container">
+    <a href="/index.html" class="logo">GreenBox</a>
+    <ul class="nav-links">
+      <li><a href="/index.html">首页</a></li>
+      <li><a href="/tools.html">工具</a></li>
+      <li><a href="/changelog.html">更新日志</a></li>
+      <li><a href="/forum.html">论坛</a></li>
+      <li><a href="/messages.html">消息</a></li>
+      <li><a href="/resources.html">资源中心</a></li>
+      <li id="profile-nav"><a href="/profile.html">个人中心</a></li>
+    </ul>
+    <div class="navbar-right">
+      <button id="theme-toggle" aria-label="切换主题"><svg class="ico" aria-hidden="true"><use href="/icons.svg#moon"/></svg></button>
+    </div>
+  </div>
+</nav>
+
+<main class="rd-wrap">
+  <a class="rd-back" href="/resources.html">‹ 返回资源中心</a>
+  <div id="rdContent"><div class="rd-loading">加载中...</div></div>
+</main>
+
+<script src="/vendor/hls.min.js"></script>
+<script src="/script.js"></script>
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  var id = params.get('id') || '';
+  var content = document.getElementById('rdContent');
+  var labels = { video: '视频', audio: '音频', image: '图片', document: '文档', archive: '压缩包', link: '外链', other: '文件' };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function fmtSize(n) {
+    n = Number(n) || 0;
+    if (!n) return '外链';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+    return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+  }
+  function dateText(ts) {
+    return ts ? new Date(ts).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }) : '-';
+  }
+  function previewHtml(r) {
+    var url = esc(r.playUrl || '');
+    if (r.kind === 'video') {
+      return '<div class="rd-preview"><video id="rdVideo" controls preload="metadata" src="' + (r.ext === 'm3u8' ? '' : url) + '" data-src="' + url + '"></video></div>';
+    }
+    if (r.kind === 'audio') {
+      return '<div class="rd-preview"><audio controls src="' + url + '"></audio></div>';
+    }
+    if (r.kind === 'image') {
+      return '<div class="rd-preview"><img src="' + url + '" alt="' + esc(r.title) + '"></div>';
+    }
+    return '<div class="rd-preview"><div class="rd-file"><div class="ext">' + esc((r.ext || 'FILE').toUpperCase()) + '</div><div>该文件类型不支持在线预览</div></div></div>';
+  }
+  function render(r) {
+    var shareTitle = encodeURIComponent(r.title || '资源分享');
+    var shareForum = '/forum.html?shareResource=' + encodeURIComponent(r.id) + '&shareTitle=' + shareTitle;
+    var shareDM = '/messages.html?shareResource=' + encodeURIComponent(r.id) + '&shareTitle=' + shareTitle;
+    var downloadLabel = r.type === 'link' ? '打开外链' : '下载文件';
+    content.innerHTML =
+      '<div class="rd-head"><div><h1>' + esc(r.title || '未命名资源') + '</h1>' +
+      '<div class="rd-meta"><span class="rd-badge">' + esc(labels[r.kind] || '文件') + '</span>' +
+      esc(r.uploader || '') + ' · ' + fmtSize(r.fileSize) + ' · ' + dateText(r.createdAt) +
+      (r.storageName ? ' · ' + esc(r.storageName) : '') + '</div></div></div>' +
+      '<section class="rd-card">' + previewHtml(r) +
+      '<div class="rd-actions">' +
+      '<a class="primary" href="' + esc(r.playUrl || '#') + '" target="_blank" rel="noopener">' + downloadLabel + '</a>' +
+      '<a href="' + shareForum + '">分享到论坛</a>' +
+      '<a href="' + shareDM + '">分享到私聊</a>' +
+      '<button type="button" id="rdCopy">复制详情链接</button>' +
+      '<a href="/report.html?type=tool&id=' + encodeURIComponent(r.id) + '">举报</a>' +
+      '</div>' +
+      '<div class="rd-note">资源详情页链接固定为 /resource.html?id=' + esc(r.id) + '，分享到论坛或私聊会显示资源卡片。</div>' +
+      '</section>';
+
+    var video = document.getElementById('rdVideo');
+    if (video && r.kind === 'video' && r.ext === 'm3u8' && window.Hls) {
+      if (Hls.isSupported()) {
+        var hls = new Hls();
+        hls.loadSource(r.playUrl);
+        hls.attachMedia(video);
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = r.playUrl;
+      }
+    }
+    document.getElementById('rdCopy').addEventListener('click', function () {
+      var url = location.origin + '/resource.html?id=' + encodeURIComponent(r.id);
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(url).then(function () { alert('详情链接已复制'); }, function () { prompt('复制链接', url); });
+      } else {
+        prompt('复制链接', url);
+      }
+    });
+  }
+
+  if (!/^res_[a-zA-Z0-9]+$/.test(id)) {
+    content.innerHTML = '<div class="rd-error">资源不存在</div>';
+    return;
+  }
+  fetch('/api/resource/' + encodeURIComponent(id), { cache: 'no-store' })
+    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+    .then(function (res) {
+      if (!res.ok) throw new Error(res.data.error || '资源不存在');
+      document.title = (res.data.title || '资源详情') + ' - GreenBox';
+      render(res.data);
+    })
+    .catch(function (e) {
+      content.innerHTML = '<div class="rd-error">' + esc(e.message || '加载失败') + '</div>';
+    });
+})();
+</script>
+</body>
+</html>

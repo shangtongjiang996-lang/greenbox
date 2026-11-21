@@ -732,6 +732,19 @@
     margin-bottom: 8px;
     font-size: 12px;
   }
+  .dm-pending-resource {
+    display: flex; align-items: center; gap: 7px;
+    border: 1px solid var(--border); border-radius: 9px;
+    background: var(--card-bg); padding: 7px 9px; margin-bottom: 8px;
+    font-size: 12px; min-width: 0;
+  }
+  .dm-pending-resource-label { color: var(--primary); font-weight: 700; flex-shrink: 0; }
+  .dm-pending-resource b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dm-pending-resource button { margin-left: auto; border: 0; background: transparent; color: #ef4444; cursor: pointer; font-family: inherit; font-size: 11px; flex-shrink: 0; }
+  .dm-resource-card { display: flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin: 5px 0; background: var(--bg-alt); color: var(--text); text-decoration: none; font-size: 12px; }
+  .dm-resource-card:hover { border-color: var(--primary); }
+  .dm-resource-card .label { color: var(--primary); font-weight: 700; flex-shrink: 0; }
+  .dm-resource-card .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dm-attach-file { flex: 1; min-width: 0; display: flex; gap: 6px; align-items: baseline; }
   .dm-attach-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
   .dm-attach-size { color: var(--muted); white-space: nowrap; }
@@ -1019,6 +1032,11 @@
           <div class="dm-attach-bar"><div id="dmAttachBar"></div></div>
           <button type="button" class="dm-attach-remove" id="dmAttachRemove">移除</button>
         </div>
+        <div class="dm-pending-resource" id="dmPendingResource" style="display:none;">
+          <span class="dm-pending-resource-label">分享资源</span>
+          <b id="dmPendingResourceTitle"></b>
+          <button type="button" id="dmPendingResourceRemove">移除</button>
+        </div>
         <div class="dm-input-row">
           <button class="dm-attach-btn" id="dmAttachBtn" type="button" title="发送图片 / 视频 / 文件（最大 200MB，7 天有效）" aria-label="添加附件">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5l-8.5 8.5a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>
@@ -1132,6 +1150,7 @@
   const attachmentUrls = new Map();
   let uploading = false;
   let pendingShareText = '';
+  let pendingShareResource = null;
   const sentReadSet = new Set();
 
   // ============================================================
@@ -1770,6 +1789,10 @@
   }
 
   function applyPendingShare() {
+    if (pendingShareResource) {
+      showPendingResource();
+      return;
+    }
     if (!pendingShareText) return;
     const input = document.getElementById('dmInput');
     if (input && !input.value.trim()) {
@@ -1778,6 +1801,21 @@
       pendingShareText = '';
       setTimeout(function () { input.focus(); }, 100);
     }
+  }
+
+  function showPendingResource() {
+    if (!pendingShareResource) return;
+    const box = document.getElementById('dmPendingResource');
+    if (!box) return;
+    document.getElementById('dmPendingResourceTitle').textContent = pendingShareResource.title || '资源';
+    box.style.display = 'flex';
+    document.getElementById('dmInput').focus();
+  }
+
+  function clearPendingResource() {
+    pendingShareResource = null;
+    const box = document.getElementById('dmPendingResource');
+    if (box) box.style.display = 'none';
   }
 
   async function openGroupConvo(groupId) {
@@ -1919,6 +1957,9 @@
     }
 
     const attachHtml = m.attachment ? attachmentPlaceholder(m) : '';
+    const resourceHtml = m.resource && m.resource.id
+      ? `<a class="dm-resource-card" href="${esc(m.resource.url || ('/resource.html?id=' + encodeURIComponent(m.resource.id)))}" target="_blank" rel="noopener"><span class="label">资源</span><span class="name">${esc(m.resource.title || '未命名资源')}</span><span style="color:var(--muted);">›</span></a>`
+      : '';
     const canRecall = isSelf && (Date.now() - m.time < 2 * 60 * 1000) && !m.recalled;
 
     return `
@@ -1929,6 +1970,7 @@
           <div class="dm-bubble">
             ${quoteHtml}
             ${attachHtml}
+            ${resourceHtml}
             ${m.content ? `<div class="msg-text">${linkify(m.content)}</div>` : ''}
             <div class="msg-time">${timeStr}${readTag}</div>
           </div>
@@ -2067,7 +2109,7 @@
     if (!currentConvo || uploading) return;
     const input = document.getElementById('dmInput');
     const text = input.value.trim();
-    if (!text && !pendingAttachment) return;
+    if (!text && !pendingAttachment && !pendingShareResource) return;
 
     const sendBtn = document.getElementById('dmSendBtn');
     const file = pendingAttachment;
@@ -2102,6 +2144,7 @@
         content: text,
         replyTo: replyTo || undefined,
         attachment: attachmentPayload || undefined,
+        resourceId: pendingShareResource ? pendingShareResource.id : undefined,
       };
       const res = await api('/api/social/dm/messages', { method: 'POST', body: payload });
       if (res && res.message) {
@@ -2116,6 +2159,7 @@
       input.value = '';
       input.style.height = 'auto';
       clearPendingAttachment();
+      clearPendingResource();
     } catch (e) {
       showToast(e.message || '发送失败', 'error');
     } finally {
@@ -2403,6 +2447,7 @@
     sendBtn.addEventListener('click', sendCurrentMessage);
     document.getElementById('dmAttachBtn').addEventListener('click', () => fileInput.click());
     document.getElementById('dmAttachRemove').addEventListener('click', clearPendingAttachment);
+    document.getElementById('dmPendingResourceRemove').addEventListener('click', clearPendingResource);
     fileInput.addEventListener('change', () => {
       const file = fileInput.files && fileInput.files[0];
       fileInput.value = '';
@@ -2475,9 +2520,10 @@
     const shareResource = params.get('shareResource');
     if (shareResource) {
       const shareTitle = params.get('shareTitle') || '资源分享';
-      pendingShareText = '分享一个资源中心的资源：\nhttps://greenboxhweb.com/resources.html?resource=' + encodeURIComponent(shareResource) + '\n\n' + shareTitle;
+      pendingShareResource = { id: shareResource, title: shareTitle };
+      pendingShareText = '';
       history.replaceState(null, '', location.pathname);
-      setTimeout(function () { showToast('选择一个会话，分享内容已准备好', 'info'); }, 550);
+      setTimeout(function () { showToast('选择一个会话，资源卡片已准备好', 'info'); }, 550);
     }
     if (groupParam) {
       setTimeout(() => {
