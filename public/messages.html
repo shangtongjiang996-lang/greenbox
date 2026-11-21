@@ -2621,13 +2621,42 @@
 
   window.editGroupIcon = async function () {
     if (!currentConvo) return;
-    const icon = prompt('输入一个 emoji，或图片 URL', currentConvo.icon || '群');
-    if (icon == null) return;
-    try {
-      await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id), { method: 'PUT', body: { icon: icon.trim() || '群' } });
-      showToast('群图标已修改', 'success');
-      await refreshGroupInfo();
-    } catch (e) { showToast(e.message || '修改失败', 'error'); }
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/*';
+    picker.onchange = async function () {
+      const file = picker.files && picker.files[0];
+      if (!file) return;
+      if (!/^image\//.test(file.type)) return showToast('请选择图片文件', 'error');
+      if (file.size > 5 * 1024 * 1024) return showToast('图片不能超过 5MB', 'error');
+      const dataUrl = await new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function () {
+          const img = new Image();
+          img.onload = function () {
+            const size = 160;
+            const canvas = document.createElement('canvas');
+            canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const scale = Math.max(size / img.width, size / img.height);
+            const w = img.width * scale, h = img.height * scale;
+            ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
+          };
+          img.onerror = reject;
+          img.src = reader.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      }).catch(function () { return null; });
+      if (!dataUrl) return showToast('图片读取失败', 'error');
+      try {
+        await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id), { method: 'PUT', body: { icon: dataUrl } });
+        showToast('群图标已修改', 'success');
+        await refreshGroupInfo();
+      } catch (e) { showToast(e.message || '修改失败', 'error'); }
+    };
+    picker.click();
   };
 
   window.addGroupMember = async function () {

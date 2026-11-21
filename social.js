@@ -717,7 +717,7 @@ function registerSocialRoutes(app, deps) {
     if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
     if (!isGroupAdmin(group, s.username)) return res.status(403).json({ error: '只有群管理员可以修改' });
     const name = req.body && req.body.name != null ? String(req.body.name).trim() : group.name;
-    const icon = req.body && req.body.icon != null ? String(req.body.icon).trim().slice(0, 120) : group.icon;
+    const icon = req.body && req.body.icon != null ? String(req.body.icon).trim().slice(0, 200000) : group.icon;
     if (name.length < 2 || name.length > 30) return res.status(400).json({ error: '群聊名称需要 2-30 个字' });
     group.name = name;
     group.icon = icon || '群';
