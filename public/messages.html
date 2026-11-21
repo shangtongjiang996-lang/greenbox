@@ -2642,21 +2642,31 @@
   function openMoreMenu() {
     if (!currentConvo) return;
     const body = document.getElementById('dmMoreBody');
-    body.innerHTML = `
-      <button class="dm-btn dm-btn-cancel" data-action="pin" style="text-align:left;">${currentConvo.pinned ? '取消置顶' : '置顶会话'}</button>
-      <button class="dm-btn dm-btn-cancel" data-action="mute" style="text-align:left;">${currentConvo.muted ? '取消免打扰' : '免打扰'}</button>
-      <button class="dm-btn dm-btn-cancel" data-action="profile" style="text-align:left;">查看对方主页</button>
-      <button class="dm-btn dm-btn-cancel" data-action="remark" style="text-align:left;">设置备注</button>
-      <button class="dm-btn dm-btn-cancel" data-action="block" style="text-align:left;color:#dc2626;">拉黑对方</button>
-      <button class="dm-btn dm-btn-cancel" data-action="delete" style="text-align:left;color:#dc2626;">删除会话</button>
-      <button class="dm-btn dm-btn-cancel" data-action="unfriend" style="text-align:left;color:#dc2626;">解除好友关系</button>
-    `;
+    if (currentConvo.type === 'group') {
+      body.innerHTML = `
+        <button class="dm-btn dm-btn-cancel" data-action="pin" style="text-align:left;">${currentConvo.pinned ? '取消置顶' : '置顶会话'}</button>
+        <button class="dm-btn dm-btn-cancel" data-action="mute" style="text-align:left;">${currentConvo.muted ? '取消免打扰' : '免打扰'}</button>
+        <button class="dm-btn dm-btn-cancel" data-action="members" style="text-align:left;">查看群聊成员</button>
+        <button class="dm-btn dm-btn-cancel" data-action="delete" style="text-align:left;color:#dc2626;">删除会话</button>
+      `;
+    } else {
+      body.innerHTML = `
+        <button class="dm-btn dm-btn-cancel" data-action="pin" style="text-align:left;">${currentConvo.pinned ? '取消置顶' : '置顶会话'}</button>
+        <button class="dm-btn dm-btn-cancel" data-action="mute" style="text-align:left;">${currentConvo.muted ? '取消免打扰' : '免打扰'}</button>
+        <button class="dm-btn dm-btn-cancel" data-action="profile" style="text-align:left;">查看对方主页</button>
+        <button class="dm-btn dm-btn-cancel" data-action="remark" style="text-align:left;">设置备注</button>
+        <button class="dm-btn dm-btn-cancel" data-action="block" style="text-align:left;color:#dc2626;">拉黑对方</button>
+        <button class="dm-btn dm-btn-cancel" data-action="delete" style="text-align:left;color:#dc2626;">删除会话</button>
+        <button class="dm-btn dm-btn-cancel" data-action="unfriend" style="text-align:left;color:#dc2626;">解除好友关系</button>
+      `;
+    }
     body.querySelectorAll('[data-action]').forEach(b => {
       b.addEventListener('click', async () => {
         const act = b.dataset.action;
         document.getElementById('dmMoreModal').classList.remove('show');
         if (act === 'pin') return togglePin();
         if (act === 'mute') return toggleMute();
+        if (act === 'members') return openGroupInfo();
         if (act === 'profile') {
           location.href = '/user.html?u=' + encodeURIComponent(currentConvo.peer);
           return;
