@@ -296,7 +296,8 @@ main h2 { font-size: 1.3rem; font-weight: 700; margin: 2.4rem 0 0.8rem; }
   animation: gb-dm-in 0.22s ease;
 }
 @keyframes gb-dm-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.gb-dm-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-light); color: var(--primary-dark); display: grid; place-items: center; font-weight: 800; flex-shrink: 0; }
+.gb-dm-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-light); color: var(--primary-dark); display: grid; place-items: center; font-weight: 800; flex-shrink: 0; overflow: hidden; }
+.gb-dm-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .gb-dm-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .gb-dm-body b { font-size: 0.8rem; }
 .gb-dm-body span { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
