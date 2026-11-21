@@ -906,7 +906,7 @@
     });
 
     avatarRemoveBtn.addEventListener('click', async () => {
-      if (!confirm('确定要移除当前头像吗？')) return;
+      if (!(await gbConfirm('确定要移除当前头像吗？', { title: '移除头像', danger: true, okText: '移除' }))) return;
       try {
         const res = await fetch('/api/user/avatar', {
           method: 'DELETE',
@@ -985,7 +985,7 @@
     });
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
-      if (!confirm('确定要退出登录吗？')) return;
+      if (!(await gbConfirm('确定要退出登录吗？', { title: '退出登录', okText: '退出' }))) return;
       if (token) {
         try {
           await fetch('/api/logout', {
@@ -1000,8 +1000,8 @@
     });
 
     document.getElementById('deleteAccountBtn').addEventListener('click', async () => {
-      if (!confirm('确定要注销账号吗？此操作将永久删除您的所有数据，不可恢复！')) return;
-      if (!confirm('二次确认：真的要注销吗？')) return;
+      if (!(await gbConfirm('确定要注销账号吗？此操作将永久删除您的所有数据，不可恢复！', { title: '注销账号', danger: true, okText: '继续' }))) return;
+      if (!(await gbConfirm('二次确认：真的要注销吗？', { title: '再次确认', danger: true, okText: '注销' }))) return;
 
       try {
         const res = await fetch('/api/delete-account', {

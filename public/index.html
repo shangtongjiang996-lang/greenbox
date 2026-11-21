@@ -1426,7 +1426,7 @@
       });
 
       clearBtn.addEventListener('click', async () => {
-        if (!confirm('清空所有消息？')) return;
+        if (!(await gbConfirm('清空所有消息？', { title: '清空消息', danger: true, okText: '清空' }))) return;
         const token = localStorage.getItem('greenbox_token');
         if (!token) return;
         try {
@@ -1677,7 +1677,7 @@
           };
           item.querySelector('.del').onclick = async (e) => {
             e.stopPropagation();
-            if (!confirm(`删除会话「${s.title}」？`)) return;
+            if (!(await gbConfirm(`删除会话「${s.title}」？`, { title: '删除会话', danger: true, okText: '删除' }))) return;
             const token = localStorage.getItem('greenbox_token');
             await fetch(`/api/chat/sessions/${s.id}`, {
               method: 'DELETE',
@@ -2054,7 +2054,7 @@
 
       clearBtn.addEventListener('click', async () => {
         if (currentMessages.length === 0) return;
-        if (!confirm('确定清空当前会话的所有消息吗？')) return;
+        if (!(await gbConfirm('确定清空当前会话的所有消息吗？', { title: '清空当前会话', danger: true, okText: '清空' }))) return;
         currentMessages = [];
         renderMessages();
         await saveCurrentSession();

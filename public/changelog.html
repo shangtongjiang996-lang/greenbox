@@ -552,7 +552,7 @@
       });
 
       clearBtn.addEventListener('click', async () => {
-        if (!confirm('清空所有消息？')) return;
+        if (!(await gbConfirm('清空所有消息？', { title: '清空消息', danger: true, okText: '清空' }))) return;
         const token = localStorage.getItem('greenbox_token');
         if (!token) return;
         try {

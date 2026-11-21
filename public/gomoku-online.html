@@ -886,14 +886,14 @@
       if (room) applyRoom(room);
     }
     $('undoBtn').addEventListener('click', function () { sendRequest('undo'); });
-    $('restartBtn').addEventListener('click', function () {
-      if (room && !room.gameOver && !confirm('对局还在进行中，向对方发起重新开始？')) return;
+    $('restartBtn').addEventListener('click', async function () {
+      if (room && !room.gameOver && !(await gbConfirm('对局还在进行中，向对方发起重新开始？', { title: '重新开始', okText: '重新开始' }))) return;
       sendRequest('restart');
     });
     $('playAgainBtn').addEventListener('click', function () { sendRequest('restart'); });
     $('viewBoardBtn').addEventListener('click', function () { overlayDismissed = true; $('overlay').classList.remove('show'); });
-    $('resignBtn').addEventListener('click', function () {
-      if (!confirm('确定要认输吗？这一局将判对方获胜。')) return;
+    $('resignBtn').addEventListener('click', async function () {
+      if (!(await gbConfirm('确定要认输吗？这一局将判对方获胜。', { title: '认输', danger: true, okText: '认输' }))) return;
       socket.emit('resign', { roomId: roomId });
     });
 
@@ -1064,9 +1064,9 @@
       loadRooms(true);
     }
 
-    function leaveWithConfirm() {
+    async function leaveWithConfirm() {
       var playing = room && !room.gameOver && room.history && room.history.length > 0 && Object.keys(room.players).length === 2;
-      if (playing && !confirm('对局正在进行，离开后对方会看到你离线。确定要离开吗？')) return;
+      if (playing && !(await gbConfirm('对局正在进行，离开后对方会看到你离线。确定要离开吗？', { title: '离开对局', danger: true, okText: '离开' }))) return;
       backToLobby(true);
     }
     $('menuBtn').addEventListener('click', leaveWithConfirm);

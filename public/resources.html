@@ -382,7 +382,7 @@
   }
   async function discardUpload() {
     if (!uploadState) return;
-    if (!confirm('确定放弃这个未完成的上传吗？已上传的分片会被清理。')) return;
+    if (!(await gbConfirm('确定放弃这个未完成的上传吗？已上传的分片会被清理。', { title: '放弃上传', danger: true, okText: '放弃' }))) return;
     await abortState();
     clearUploadState();
     setUploadStatus('已放弃未完成的上传');
@@ -528,7 +528,7 @@
 
   document.getElementById('selectFileBtn').addEventListener('click', () => { resumePick = false; });
 
-  document.getElementById('resFile').addEventListener('change', (e) => {
+  document.getElementById('resFile').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -549,7 +549,7 @@
     }
 
     if (uploadState) {
-      if (!confirm('有未完成的上传，是否放弃并开始新的上传？')) {
+      if (!(await gbConfirm('有未完成的上传，是否放弃并开始新的上传？', { title: '继续上传', okText: '放弃并继续' }))) {
         e.target.value = '';
         return;
       }
@@ -598,7 +598,7 @@
     if (!title) return alert('请输入资源标题');
 
     if (uploadState && (uploadState.name !== selectedFile.name || uploadState.size !== selectedFile.size)) {
-      if (!confirm('检测到另一个未完成的上传，是否放弃它并开始新的上传？')) return;
+      if (!(await gbConfirm('检测到另一个未完成的上传，是否放弃它并开始新的上传？', { title: '继续上传', okText: '放弃并继续' }))) return;
       await abortState();
       clearUploadState();
     }
@@ -685,7 +685,7 @@
   };
 
   window.deleteResource = async function(id) {
-    if (!confirm('确定要删除该资源吗？此操作不可恢复。')) return;
+    if (!(await gbConfirm('确定要删除该资源吗？此操作不可恢复。', { title: '删除资源', danger: true, okText: '删除' }))) return;
     try {
       await api('/api/resource/' + id, { method: 'DELETE' });
       alert('已删除');
@@ -870,10 +870,10 @@
       navigator.clipboard.writeText(item.playUrl).then(function () {
         showResToast('链接已复制，7 天内有效');
       }).catch(function () {
-        prompt('复制链接', item.playUrl);
+        gbPrompt('复制链接', item.playUrl, { title: '复制链接', okText: '复制' });
       });
     } else {
-      prompt('复制链接', item.playUrl);
+      gbPrompt('复制链接', item.playUrl, { title: '复制链接', okText: '复制' });
     }
   }
 

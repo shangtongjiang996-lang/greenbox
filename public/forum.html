@@ -1561,7 +1561,7 @@
       const delBtn = document.getElementById('deletePostBtn');
       if (delBtn) {
         delBtn.addEventListener('click', async () => {
-          if (!confirm('确定要删除这个帖子吗？删除后不可恢复。')) return;
+          if (!(await gbConfirm('确定要删除这个帖子吗？删除后不可恢复。', { title: '删除帖子', danger: true, okText: '删除' }))) return;
           try {
             const res = await fetch(`/api/forum/posts/${post.id}`, {
               method: 'DELETE',
@@ -1612,7 +1612,7 @@
 
       document.querySelectorAll('[data-del-comment]').forEach(b => {
         b.addEventListener('click', async () => {
-          if (!confirm('确定删除这条评论吗？')) return;
+          if (!(await gbConfirm('确定删除这条评论吗？', { title: '删除评论', danger: true, okText: '删除' }))) return;
           const cid = b.dataset.delComment;
           try {
             const res = await fetch(`/api/forum/comments/${post.id}/${cid}`, {

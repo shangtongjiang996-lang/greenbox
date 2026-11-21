@@ -788,7 +788,7 @@
         return;
       }
 
-      if (act === 'add') {        const msg = prompt('附上一条验证消息（可选）：', '');
+      if (act === 'add') {        const msg = await gbPrompt('附上一条验证消息（可选）：', '', { title: '添加好友' });
         if (msg === null) { btn.disabled = false; return; }
         const r = await api('/api/social/friends/request', {
           method: 'POST',
@@ -807,7 +807,7 @@
       }
 
       if (act === 'reject') {
-        if (!confirm('确定拒绝对方的好友申请？')) { btn.disabled = false; return; }
+        if (!(await gbConfirm('确定拒绝对方的好友申请？', { title: '拒绝申请', danger: true, okText: '拒绝' }))) { btn.disabled = false; return; }
         await api('/api/social/friends/reject', { method: 'POST', body: { from: p.username } });
         showToast('已拒绝申请', 'success');
         await reload();
@@ -815,7 +815,7 @@
       }
 
       if (act === 'block') {
-        if (!confirm('确定将 ' + p.username + ' 加入黑名单？对方将无法给你发消息。')) { btn.disabled = false; return; }
+        if (!(await gbConfirm('确定将 ' + p.username + ' 加入黑名单？对方将无法给你发消息。', { title: '加入黑名单', danger: true, okText: '拉黑' }))) { btn.disabled = false; return; }
         await api('/api/social/friends/block', { method: 'POST', body: { username: p.username, blocked: true } });
         showToast('已拉黑', 'success');
         await reload();
