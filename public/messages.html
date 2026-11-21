@@ -2234,14 +2234,14 @@
             showToast('已复制', 'success');
           } catch (e) { showToast('复制失败', 'error'); }
         } else if (act === 'recall') {
-          if (!confirm('确定撤回这条消息吗？')) return;
+          if (!(await gbConfirm('确定撤回这条消息吗？', { title: '撤回消息', okText: '撤回' }))) return;
           try {
             await api('/api/social/dm/recall', { method: 'POST', body: { convId: currentConvo.id, msgId: mid } });
             m.recalled = true; m.content = '';
             rerenderMessagesOnly();
           } catch (err) { showToast(err.message, 'error'); }
         } else if (act === 'del-local') {
-          if (!confirm('仅从本地删除？对方仍可见。')) return;
+          if (!(await gbConfirm('仅从本地删除？对方仍可见。', { title: '删除消息', danger: true, okText: '删除' }))) return;
           const idx = currentMessages.findIndex(x => x.id === mid);
           if (idx >= 0) currentMessages.splice(idx, 1);
           rerenderMessagesOnly();
@@ -2575,7 +2575,7 @@
       }
     }));
     list.querySelectorAll('[data-kick-member]').forEach(b => b.addEventListener('click', async () => {
-      if (!confirm('确定把 ' + b.dataset.kickMember + ' 移出群聊吗？')) return;
+      if (!(await gbConfirm('确定把 ' + b.dataset.kickMember + ' 移出群聊吗？', { title: '移出群成员', danger: true, okText: '移出' }))) return;
       try {
         await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id) + '/members/' + encodeURIComponent(b.dataset.kickMember), { method: 'DELETE' });
         showToast('已移出群聊', 'success');
@@ -2610,7 +2610,7 @@
 
   window.editGroupName = async function () {
     if (!currentConvo) return;
-    const name = prompt('新的群聊名称（2-30 个字）', currentConvo.name || '');
+    const name = await gbPrompt('新的群聊名称（2-30 个字）', currentConvo.name || '', { title: '修改群名称', maxlength: 30 });
     if (name == null) return;
     try {
       const r = await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id), { method: 'PUT', body: { name: name.trim() } });
@@ -2661,7 +2661,7 @@
 
   window.addGroupMember = async function () {
     if (!currentConvo) return;
-    const username = prompt('输入要添加的用户名');
+    const username = await gbPrompt('输入要添加的用户名', '', { title: '添加群成员' });
     if (!username) return;
     try {
       await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id) + '/members', { method: 'POST', body: { username: username.trim() } });
@@ -2742,7 +2742,7 @@
   async function promptRemark() {
     if (!currentConvo) return;
     const cur = (friends.find(f => f.username === currentConvo.peer) || {}).remark || '';
-    const remark = prompt('给 ' + currentConvo.peer + ' 设置备注（留空取消）：', cur);
+    const remark = await gbPrompt('给 ' + currentConvo.peer + ' 设置备注（留空取消）：', cur, { title: '设置备注' });
     if (remark === null) return;
     try {
       await api('/api/social/friends/remark', { method: 'POST', body: { username: currentConvo.peer, remark } });
@@ -2753,7 +2753,7 @@
 
   async function blockPeer() {
     if (!currentConvo) return;
-    if (!confirm('确定拉黑 ' + currentConvo.peer + ' 吗？')) return;
+    if (!(await gbConfirm('确定拉黑 ' + currentConvo.peer + ' 吗？', { title: '拉黑用户', danger: true, okText: '拉黑' }))) return;
     try {
       await api('/api/social/friends/block', { method: 'POST', body: { username: currentConvo.peer, blocked: true } });
       showToast('已拉黑', 'success');
@@ -2763,7 +2763,7 @@
 
   async function deleteConvo() {
     if (!currentConvo) return;
-    if (!confirm('确定删除该会话？')) return;
+    if (!(await gbConfirm('确定删除该会话？', { title: '删除会话', danger: true, okText: '删除' }))) return;
     try {
       await api('/api/social/dm/convo/' + encodeURIComponent(currentConvo.id), { method: 'DELETE' });
       currentConvo = null;
@@ -2779,7 +2779,7 @@
 
   async function unfriend() {
     if (!currentConvo) return;
-    if (!confirm('确定解除与 ' + currentConvo.peer + ' 的好友关系？')) return;
+    if (!(await gbConfirm('确定解除与 ' + currentConvo.peer + ' 的好友关系？', { title: '解除好友', danger: true, okText: '解除' }))) return;
     try {
       await api('/api/social/friends/' + encodeURIComponent(currentConvo.peer), { method: 'DELETE' });
       showToast('已解除好友关系', 'success');
@@ -2957,5 +2957,6 @@
   })();
 })();
 </script>
+<script src="/dialog.js"></script>
 </body>
 </html>

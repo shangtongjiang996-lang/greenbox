@@ -1424,9 +1424,9 @@ window.updateTool = (idx, key, val) => { currentData.tools[idx][key] = val; };
 window.updateChangelog = (idx, key, val) => { currentData.changelogs[idx][key] = val; };
 window.updateChangelogText = (idx, val) => { currentData.changelogs[idx].changes = val.split('\n').filter(s => s.trim()); };
 window.addTool = () => { currentData.tools.push({ name: '新工具', description: '', url: '#', icon: '', isGame: false }); renderTools(); updateStats(); };
-window.removeTool = (idx) => { if (confirm('确定删除该工具吗？')) { currentData.tools.splice(idx, 1); renderTools(); updateStats(); } };
+window.removeTool = async (idx) => { if (!(await gbConfirm('确定删除该工具吗？', { title: '删除工具', danger: true, okText: '删除' }))) return; currentData.tools.splice(idx, 1); renderTools(); updateStats(); };
 window.addChangelog = () => { const today = new Date().toISOString().slice(0,10); currentData.changelogs.unshift({ version: 'v1.0.0', date: today, changes: ['新增功能'] }); renderChangelogs(); updateStats(); };
-window.removeChangelog = (idx) => { if (confirm('确定删除该更新日志吗？')) { currentData.changelogs.splice(idx, 1); renderChangelogs(); updateStats(); } };
+window.removeChangelog = async (idx) => { if (!(await gbConfirm('确定删除该更新日志吗？', { title: '删除更新日志', danger: true, okText: '删除' }))) return; currentData.changelogs.splice(idx, 1); renderChangelogs(); updateStats(); };
 window.moveTool = (idx, direction) => { const newIdx = idx + direction; if (newIdx < 0 || newIdx >= currentData.tools.length) return; const [item] = currentData.tools.splice(idx, 1); currentData.tools.splice(newIdx, 0, item); renderTools(); updateStats(); };
 window.previewTool = (url) => { if (url && url !== '#') window.open(url, '_blank'); else showToast('该工具暂无有效链接', 'error'); };
 
@@ -2777,5 +2777,6 @@ window.onload = function() {
 };
 </script>
 <script src="/presence.js"></script>
+<script src="/dialog.js"></script>
 </body>
 </html>
