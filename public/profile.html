@@ -592,14 +592,16 @@
     }
 
     async function autoCompressExistingAvatar(username) {
+      const checkedKey = 'gb_avatar_compress_checked:' + username;
       try {
+        if (localStorage.getItem(checkedKey)) return;
         const res = await fetch('/api/user/avatar/' + encodeURIComponent(username) + '?t=' + 1, { cache: 'no-store' });
         if (!res.ok) return;
         const blob = await res.blob();
-        if (blob.size <= 200 * 1024) return;
+        if (blob.size <= 200 * 1024) { localStorage.setItem(checkedKey, '1'); return; }
         const file = new File([blob], 'avatar.' + (blob.type.split('/')[1] || 'png'), { type: blob.type });
         const compressed = await compressAvatarFile(file);
-        if (!compressed || compressed.size >= blob.size) return;
+        if (!compressed || compressed.size >= blob.size) { localStorage.setItem(checkedKey, '1'); return; }
         const fd = new FormData();
         fd.append('avatar', compressed);
         const up = await fetch('/api/user/avatar', {
@@ -608,6 +610,7 @@
           body: fd
         });
         if (up.ok) {
+          localStorage.setItem(checkedKey, '1');
           currentUser.hasAvatar = true;
           renderAvatar(username, true);
         }
