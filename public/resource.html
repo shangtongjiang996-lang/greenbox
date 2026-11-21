@@ -37,6 +37,8 @@
   .rd-actions a:hover, .rd-actions button:hover { border-color: var(--primary); color: var(--primary); }
   .rd-actions a.primary:hover { color: #fff; }
   .rd-note { color: var(--muted); font-size: 0.78rem; line-height: 1.7; margin-top: 0.7rem; }
+  .rd-text-preview { margin-top: 0.8rem; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-alt); padding: 0.75rem; max-height: 420px; overflow: auto; display: none; }
+  .rd-text-preview pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.65; color: var(--text); }
   .rd-error { text-align: center; color: #ef4444; padding: 3rem 1rem; }
   .rd-loading { text-align: center; color: var(--muted); padding: 3rem 1rem; }
 </style>
@@ -74,6 +76,7 @@
   var id = params.get('id') || '';
   var content = document.getElementById('rdContent');
   var labels = { video: '视频', audio: '音频', image: '图片', document: '文档', archive: '压缩包', link: '外链', other: '文件' };
+  var TEXT_EXTS = ['txt','md','markdown','json','js','mjs','cjs','ts','tsx','jsx','css','scss','less','html','htm','xml','yml','yaml','csv','tsv','log','py','java','c','h','cpp','hpp','cs','go','rs','php','rb','swift','kt','sh','bash','ps1','bat','sql','ini','conf','toml','env','dockerfile'];
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -120,8 +123,10 @@
       '<a href="' + shareForum + '">分享到论坛</a>' +
       '<a href="' + shareDM + '">分享到私聊</a>' +
       '<button type="button" id="rdCopy">复制详情链接</button>' +
+      (TEXT_EXTS.indexOf(String(r.ext || '').toLowerCase()) >= 0 ? '<button type="button" id="rdPreviewText">预览文本</button>' : '') +
       '<a href="/report.html?type=tool&id=' + encodeURIComponent(r.id) + '">举报</a>' +
       '</div>' +
+      '<div class="rd-text-preview" id="rdTextPreview"><pre id="rdTextContent"></pre></div>' +
       '<div class="rd-note">资源详情页链接固定为 /resource.html?id=' + esc(r.id) + '，分享到论坛或私聊会显示资源卡片。</div>' +
       '</section>';
 
@@ -143,6 +148,29 @@
         prompt('复制链接', url);
       }
     });
+    var previewBtn = document.getElementById('rdPreviewText');
+    if (previewBtn) {
+      if (params.get('preview') === '1') setTimeout(function () { previewBtn.click(); }, 50);
+      previewBtn.addEventListener('click', async function () {
+        var box = document.getElementById('rdTextPreview');
+        if (box.style.display === 'block') { box.style.display = 'none'; return; }
+        previewBtn.disabled = true;
+        previewBtn.textContent = '读取中...';
+        try {
+          var res = await fetch('/api/resource/' + encodeURIComponent(r.id) + '/text', { cache: 'no-store' });
+          var data = await res.json();
+          if (!res.ok) throw new Error(data.error || '预览失败');
+          document.getElementById('rdTextContent').textContent = data.text + (data.truncated ? '\n\n...（内容过长，已截断）' : '');
+          box.style.display = 'block';
+          previewBtn.textContent = '收起预览';
+        } catch (e) {
+          alert(e.message || '预览失败');
+          previewBtn.textContent = '预览文本';
+        } finally {
+          previewBtn.disabled = false;
+        }
+      });
+    }
   }
 
   if (!/^res_[a-zA-Z0-9]+$/.test(id)) {

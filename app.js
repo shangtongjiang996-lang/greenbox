@@ -2420,6 +2420,33 @@ app.get('/api/resource/:id', async (req, res) => {
   res.json(copy);
 });
 
+const TEXT_PREVIEW_EXTS = ['txt', 'md', 'markdown', 'json', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'css', 'scss', 'less', 'html', 'htm', 'xml', 'yml', 'yaml', 'csv', 'tsv', 'log', 'py', 'java', 'c', 'h', 'cpp', 'hpp', 'cs', 'go', 'rs', 'php', 'rb', 'swift', 'kt', 'sh', 'bash', 'ps1', 'bat', 'sql', 'ini', 'conf', 'toml', 'env', 'dockerfile'];
+function isTextPreviewExt(ext) {
+  return TEXT_PREVIEW_EXTS.includes(String(ext || '').toLowerCase());
+}
+
+app.get('/api/resource/:id/text', async (req, res) => {
+  const id = String(req.params.id || '');
+  if (!/^res_[a-zA-Z0-9]+$/.test(id)) return res.status(400).json({ error: '资源 ID 无效' });
+  const record = await kvGet(`resource:${id}`);
+  if (!record) return res.status(404).json({ error: '资源不存在' });
+  if (record.type === 'link' || !record.objectKey || record.objectKey === 'external') {
+    return res.status(400).json({ error: '外链资源不支持服务端文本预览' });
+  }
+  const ext = resourceExt(record);
+  if (!isTextPreviewExt(ext)) return res.status(400).json({ error: '不是可预览的文本文件' });
+  if (Number(record.fileSize) > 1024 * 1024) return res.status(413).json({ error: '文本文件超过 1MB，请下载查看' });
+  try {
+    const storage = await getStorageForRecord(record);
+    const obj = await storage.client.send(new GetObjectCommand({ Bucket: storage.account.bucket, Key: record.objectKey }));
+    const text = await obj.Body.transformToString('utf-8');
+    res.set('Cache-Control', 'no-store');
+    res.json({ text: String(text).slice(0, 512 * 1024), truncated: text.length > 512 * 1024, name: record.title || '文本文件' });
+  } catch (e) {
+    res.status(502).json({ error: '文本读取失败' });
+  }
+});
+
 app.get('/api/resource/list/:category', async (req, res) => {
   const category = req.params.category;
   const indexKey = `resource_index:${category}`;
@@ -2737,6 +2764,18 @@ app.get('/api/dm/attachment/:convId/:msgId', async (req, res) => {
         }));
       } catch (e) { /* 删除失败不影响返回 */ }
       return res.status(410).json({ error: '文件已过期（7 天有效）' });
+    }
+    if (req.query.text === '1') {
+      const ext = String(att.name || '').split('.').pop().toLowerCase();
+      if (!isTextPreviewExt(ext)) return res.status(400).json({ error: '不是可预览的文本文件' });
+      if (Number(att.size) > 1024 * 1024) return res.status(413).json({ error: '文本文件超过 1MB，请下载查看' });
+      try {
+        const obj = await b2Client.send(new GetObjectCommand({ Bucket: process.env.B2_BUCKET_NAME, Key: att.key }));
+        const text = await obj.Body.transformToString('utf-8');
+        return res.json({ text: String(text).slice(0, 512 * 1024), truncated: text.length > 512 * 1024, name: att.name });
+      } catch (e) {
+        return res.status(502).json({ error: '文本读取失败' });
+      }
     }
     const download = req.query.download === '1' || att.kind === 'file';
     const rawName = String(att.name || 'file');

@@ -838,6 +838,7 @@
           </div>
           <div class="res-actions">
             <a class="res-action" href="/resource.html?id=${encodeURIComponent(item.id)}">详情</a>
+            ${/^(txt|md|markdown|json|js|mjs|ts|tsx|jsx|css|html|xml|yml|yaml|csv|log|py|java|c|cpp|go|rs|php|sh|sql)$/i.test(item.ext || '') ? `<a class="res-action" href="/resource.html?id=${encodeURIComponent(item.id)}&preview=1">预览</a>` : ''}
             <button class="res-action" type="button" onclick="copyResourceLink('${rid}')">复制链接</button>
             <button class="res-action" type="button" onclick="shareResourceToForum('${rid}')">分享到论坛</button>
             <button class="res-action" type="button" onclick="shareResourceToDM('${rid}')">分享到私聊</button>

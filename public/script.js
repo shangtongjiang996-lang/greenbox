@@ -333,6 +333,74 @@ const THEME_ICON = {
     setTimeout(function () { box.remove(); if (host && !host.children.length) host.remove(); }, 6000);
   }
 
+  function showFriendRequestPopup(req) {
+    if (!req || !req.from || document.querySelector('.gb-friend-request')) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'gb-major-overlay gb-friend-request';
+    overlay.innerHTML = '<div class="gb-major-card">' +
+      '<div class="gb-major-badge info">好友申请</div>' +
+      '<h3>' + escHtml(req.fromDisplay || req.from) + ' 想添加你为好友</h3>' +
+      '<p>' + escHtml(req.message || '对方没有填写验证消息') + '</p>' +
+      '<div class="gb-major-meta">@' + escHtml(req.from) + '</div>' +
+      '<div class="gb-major-actions">' +
+      '<button type="button" class="gb-major-ghost" data-fr="reject">拒绝</button>' +
+      '<a class="gb-major-ghost" href="/user.html?u=' + encodeURIComponent(req.from) + '" data-fr="view">查看主页</a>' +
+      '<button type="button" class="gb-major-go" data-fr="accept">同意</button>' +
+      '</div></div>';
+    document.body.appendChild(overlay);
+    var busy = false;
+    overlay.addEventListener('click', async function (e) {
+      var btn = e.target.closest('[data-fr]');
+      if (!btn || busy) return;
+      var act = btn.getAttribute('data-fr');
+      if (act === 'view') { overlay.remove(); return; }
+      busy = true;
+      btn.disabled = true;
+      try {
+        var res = await fetch('/api/social/friends/' + (act === 'accept' ? 'accept' : 'reject'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+          body: JSON.stringify({ from: req.from })
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) throw new Error(data.error || '操作失败');
+        overlay.remove();
+        showDmSystemToast(act === 'accept' ? '已添加 ' + req.from + ' 为好友' : '已拒绝好友申请');
+      } catch (err) {
+        busy = false;
+        btn.disabled = false;
+        alert(err.message || '操作失败');
+      }
+    });
+  }
+
+  function showDmSystemToast(text) {
+    var t = document.getElementById('gb-system-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'gb-system-toast';
+      t.className = 'gb-system-toast';
+      document.body.appendChild(t);
+    }
+    t.textContent = text;
+    t.classList.add('show');
+    clearTimeout(showDmSystemToast._t);
+    showDmSystemToast._t = setTimeout(function () { t.classList.remove('show'); }, 3000);
+  }
+
+  function checkFriendRequests() {
+    var token = getToken();
+    if (!token) return;
+    fetch('/api/social/friends/requests', { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.incoming) || !data.incoming.length) return;
+        if (document.querySelector('.gb-friend-request')) return;
+        showFriendRequestPopup(data.incoming[0]);
+      })
+      .catch(function () {});
+  }
+
   function showMajorNotice(n) {
     if (!n || document.querySelector('.gb-major-overlay') || document.querySelector('.gb-invite-banner')) return;
     var overlay = document.createElement('div');
@@ -513,6 +581,14 @@ const THEME_ICON = {
         socket.on('notify:update', function (n) {
           showSystemToast(n);
         });
+        socket.on('social:friend-request', function (data) {
+          if (!data || !data.from) return;
+          showFriendRequestPopup({ from: data.from, message: data.message || '', fromDisplay: data.fromDisplay || data.from });
+        });
+        socket.on('social:friend-added', function () {
+          var popup = document.querySelector('.gb-friend-request');
+          if (popup) popup.remove();
+        });
       } catch (e) {}
     }
 
@@ -680,6 +756,7 @@ const THEME_ICON = {
     setupNav();
     setupTour();
     setupMajorNotices();
+    setTimeout(checkFriendRequests, 4200);
     setupPresence();
     setupServiceWorker();
     setupInstallPrompt();

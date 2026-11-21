@@ -268,7 +268,7 @@ async function deliverMessage(from, to, content, replyTo, io, attachment, resour
   const msg = {
     id: 'M' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     from, to,
-    content: content.slice(0, 2000),
+    content: content.slice(0, 10000),
     attachment: att || undefined,
     resource: resource || undefined,
     time: Date.now(),
@@ -300,7 +300,14 @@ async function deliverMessage(from, to, content, replyTo, io, attachment, resour
 
 async function getDmGroup(id) {
   const g = await kvGet(`dm_group:${id}`);
-  return g && typeof g === 'object' ? g : null;
+  if (!g || typeof g !== 'object') return null;
+  if (!Array.isArray(g.admins)) g.admins = g.owner ? [g.owner] : [];
+  if (!g.owner && g.admins.length) g.owner = g.admins[0];
+  if (!g.icon) g.icon = '群';
+  return g;
+}
+function isGroupAdmin(group, username) {
+  return !!group && (group.owner === username || (Array.isArray(group.admins) && group.admins.includes(username)));
 }
 async function saveDmGroup(group) {
   await kvPut(`dm_group:${group.id}`, group);
@@ -314,6 +321,9 @@ async function ensureGroupConvo(username, group, preview) {
       type: 'group',
       peer: '',
       name: group.name,
+      icon: group.icon || '群',
+      owner: group.owner,
+      admins: group.admins || [],
       members: group.members,
       lastMsg: preview || '群聊已创建',
       lastTime: Date.now(),
@@ -324,6 +334,9 @@ async function ensureGroupConvo(username, group, preview) {
     });
   } else {
     convos[idx].name = group.name;
+    convos[idx].icon = group.icon || '群';
+    convos[idx].owner = group.owner;
+    convos[idx].admins = group.admins || [];
     convos[idx].members = group.members;
     if (preview) {
       convos[idx].lastMsg = preview;
@@ -331,6 +344,11 @@ async function ensureGroupConvo(username, group, preview) {
     }
   }
   await saveConvos(username, convos);
+}
+
+async function removeGroupConvo(username, groupId) {
+  const convos = await getConvos(username);
+  await saveConvos(username, convos.filter(c => c.id !== groupId));
 }
 
 async function deliverGroupMessage(from, groupId, content, replyTo, io, attachment, resourceId) {
@@ -352,7 +370,7 @@ async function deliverGroupMessage(from, groupId, content, replyTo, io, attachme
     to: groupId,
     groupId,
     groupName: group.name,
-    content: content.slice(0, 2000),
+    content: content.slice(0, 10000),
     attachment: att || undefined,
     resource: resource || undefined,
     time: Date.now(),
@@ -547,7 +565,14 @@ function registerSocialRoutes(app, deps) {
     myOut.push({ to: username, message: String(message || '').slice(0, 100), createdAt: Date.now() });
     await saveOutgoingRequests(s.username, myOut.slice(-100));
 
-    if (io) emitToUser(io, username, 'social:friend-request', { from: s.username });
+    if (io) {
+      const senderProfile = await publicProfile(s.username);
+      emitToUser(io, username, 'social:friend-request', {
+        from: s.username,
+        message: String(message || '').slice(0, 100),
+        fromDisplay: senderProfile.displayName || s.username,
+      });
+    }
     res.json({ success: true, auto: false, msg: '好友申请已发送' });
   });
 
@@ -646,7 +671,7 @@ function registerSocialRoutes(app, deps) {
     if (members.length < 2) return res.status(400).json({ error: '至少选择一位群成员' });
     if (members.length > 30) return res.status(400).json({ error: '群成员不能超过 30 人' });
     const id = 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const group = { id, name, owner: s.username, members, createdAt: Date.now() };
+    const group = { id, name, owner: s.username, admins: [s.username], icon: '群', members, createdAt: Date.now() };
     await saveDmGroup(group);
     for (const member of members) await ensureGroupConvo(member, group, '群聊已创建');
     if (io) {
@@ -661,6 +686,122 @@ function registerSocialRoutes(app, deps) {
     const group = await getDmGroup(String(req.params.id || ''));
     if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
     res.json(group);
+  });
+
+  app.get('/api/social/dm/groups/:id/members', async (req, res) => {
+    const s = await auth(req);
+    if (!s) return res.status(401).json({ error: '请先登录' });
+    const group = await getDmGroup(String(req.params.id || ''));
+    if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
+    const out = [];
+    for (const name of group.members) {
+      const p = await publicProfile(name);
+      out.push({
+        username: name,
+        displayName: p.displayName || name,
+        hasAvatar: !!p.hasAvatar,
+        role: p.role || 'user',
+        isOwner: group.owner === name,
+        isAdmin: isGroupAdmin(group, name),
+        isMe: name === s.username,
+      });
+    }
+    res.json({ group, members: out, canManage: isGroupAdmin(group, s.username) });
+  });
+
+  app.put('/api/social/dm/groups/:id', async (req, res) => {
+    const s = await auth(req);
+    if (!s) return res.status(401).json({ error: '请先登录' });
+    const group = await getDmGroup(String(req.params.id || ''));
+    if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
+    if (!isGroupAdmin(group, s.username)) return res.status(403).json({ error: '只有群管理员可以修改' });
+    const name = req.body && req.body.name != null ? String(req.body.name).trim() : group.name;
+    const icon = req.body && req.body.icon != null ? String(req.body.icon).trim().slice(0, 120) : group.icon;
+    if (name.length < 2 || name.length > 30) return res.status(400).json({ error: '群聊名称需要 2-30 个字' });
+    group.name = name;
+    group.icon = icon || '群';
+    group.updatedAt = Date.now();
+    await saveDmGroup(group);
+    for (const member of group.members) await ensureGroupConvo(member, group);
+    for (const member of group.members) emitToUser(io, member, 'dm:group-update', group);
+    res.json({ success: true, group });
+  });
+
+  app.post('/api/social/dm/groups/:id/members', async (req, res) => {
+    const s = await auth(req);
+    if (!s) return res.status(401).json({ error: '请先登录' });
+    const group = await getDmGroup(String(req.params.id || ''));
+    if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
+    if (!isGroupAdmin(group, s.username)) return res.status(403).json({ error: '只有群管理员可以添加成员' });
+    const users = (await kvGet('users')) || {};
+    const name = String((req.body && req.body.username) || '').trim();
+    if (!name || (!users[name] && name !== 'admin')) return res.status(404).json({ error: '用户不存在' });
+    if (group.members.includes(name)) return res.status(400).json({ error: '对方已经在群里' });
+    if (group.members.length >= 30) return res.status(400).json({ error: '群成员不能超过 30 人' });
+    group.members.push(name);
+    await saveDmGroup(group);
+    await ensureGroupConvo(name, group, '你已加入群聊');
+    for (const member of group.members) emitToUser(io, member, 'dm:group-update', group);
+    res.json({ success: true, group });
+  });
+
+  app.delete('/api/social/dm/groups/:id/members/:username', async (req, res) => {
+    const s = await auth(req);
+    if (!s) return res.status(401).json({ error: '请先登录' });
+    const group = await getDmGroup(String(req.params.id || ''));
+    if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
+    if (!isGroupAdmin(group, s.username)) return res.status(403).json({ error: '只有群管理员可以移除成员' });
+    const target = String(req.params.username || '');
+    if (target === group.owner) return res.status(400).json({ error: '不能移除群主' });
+    if (target === s.username) return res.status(400).json({ error: '请使用退出群聊' });
+    if (!group.members.includes(target)) return res.status(404).json({ error: '成员不在群里' });
+    group.members = group.members.filter(x => x !== target);
+    group.admins = (group.admins || []).filter(x => x !== target);
+    await saveDmGroup(group);
+    await removeGroupConvo(target, group.id);
+    emitToUser(io, target, 'dm:group-removed', { groupId: group.id, name: group.name });
+    for (const member of group.members) {
+      await ensureGroupConvo(member, group);
+      emitToUser(io, member, 'dm:group-update', group);
+    }
+    res.json({ success: true, group });
+  });
+
+  app.post('/api/social/dm/groups/:id/leave', async (req, res) => {
+    const s = await auth(req);
+    if (!s) return res.status(401).json({ error: '请先登录' });
+    const group = await getDmGroup(String(req.params.id || ''));
+    if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
+    if (group.owner === s.username) return res.status(400).json({ error: '群主不能退出，请先转让或解散' });
+    group.members = group.members.filter(x => x !== s.username);
+    group.admins = (group.admins || []).filter(x => x !== s.username);
+    await saveDmGroup(group);
+    await removeGroupConvo(s.username, group.id);
+    for (const member of group.members) {
+      await ensureGroupConvo(member, group);
+      emitToUser(io, member, 'dm:group-update', group);
+    }
+    res.json({ success: true });
+  });
+
+  app.post('/api/social/dm/groups/:id/admins', async (req, res) => {
+    const s = await auth(req);
+    if (!s) return res.status(401).json({ error: '请先登录' });
+    const group = await getDmGroup(String(req.params.id || ''));
+    if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
+    if (group.owner !== s.username) return res.status(403).json({ error: '只有群主可以设置管理员' });
+    const target = String((req.body && req.body.username) || '');
+    if (!group.members.includes(target)) return res.status(404).json({ error: '成员不在群里' });
+    const makeAdmin = !!req.body.admin;
+    if (makeAdmin && !(group.admins || []).includes(target)) group.admins.push(target);
+    if (!makeAdmin) group.admins = (group.admins || []).filter(x => x !== target);
+    group.admins = Array.from(new Set([group.owner].concat(group.admins || [])));
+    await saveDmGroup(group);
+    for (const member of group.members) {
+      await ensureGroupConvo(member, group);
+      emitToUser(io, member, 'dm:group-update', group);
+    }
+    res.json({ success: true, group });
   });
 
   // ---------- 会话列表 ----------

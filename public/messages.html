@@ -820,6 +820,25 @@
     align-items: center;
     gap: 8px;
   }
+  .dm-group-info-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .dm-group-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--primary-light); color: var(--primary-dark); display: grid; place-items: center; font-size: 20px; font-weight: 800; overflow: hidden; flex-shrink: 0; }
+  .dm-group-icon img { width: 100%; height: 100%; object-fit: cover; }
+  .dm-group-info-sub { color: var(--muted); font-size: 12px; }
+  .dm-group-manage { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .dm-group-manage button { border: 1px solid var(--border); background: var(--bg-alt); color: var(--text); border-radius: 7px; padding: 5px 9px; font-family: inherit; font-size: 11px; cursor: pointer; }
+  .dm-group-manage button:hover { border-color: var(--dm-accent); color: var(--dm-accent); }
+  .dm-group-members { display: flex; flex-direction: column; gap: 2px; max-height: 46vh; overflow: auto; border-top: 1px solid var(--border); padding-top: 8px; }
+  .dm-group-member { display: flex; align-items: center; gap: 9px; padding: 7px 2px; border-bottom: 1px solid var(--border); }
+  .dm-group-member:last-child { border-bottom: 0; }
+  .dm-group-member .who { min-width: 0; flex: 1; }
+  .dm-group-member .who b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dm-group-member .who small { color: var(--muted); font-size: 11px; }
+  .dm-group-member .ops { display: flex; gap: 4px; flex-shrink: 0; }
+  .dm-group-member .ops button { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 6px; padding: 3px 6px; font-family: inherit; font-size: 10.5px; cursor: pointer; }
+  .dm-group-member .ops button.danger { color: var(--danger); border-color: rgba(239,68,68,.35); }
+  .dm-text-preview { border: 1px solid var(--border); border-radius: 9px; background: var(--bg-alt); padding: 10px; max-height: 58vh; overflow: auto; }
+  .dm-text-preview pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, Consolas, monospace; font-size: 12px; line-height: 1.65; color: var(--text); }
+  .dm-file-preview { border: 1px solid var(--border); background: transparent; color: var(--primary); border-radius: 6px; padding: 2px 7px; font-family: inherit; font-size: 11px; cursor: pointer; flex-shrink: 0; }
   .dm-modal label {
     display: block;
     font-size: 13px;
@@ -1130,6 +1149,37 @@
   </div>
 </div>
 
+<div class="dm-modal-overlay" id="dmGroupInfoModal">
+  <div class="dm-modal" style="max-width:440px;">
+    <div class="dm-group-info-head">
+      <div class="dm-group-icon" id="dmGroupInfoIcon">群</div>
+      <div style="min-width:0;">
+        <h3 id="dmGroupInfoName" style="margin:0 0 2px;">群聊</h3>
+        <div class="dm-group-info-sub" id="dmGroupInfoSub"></div>
+      </div>
+    </div>
+    <div class="dm-group-manage" id="dmGroupManage" style="display:none;">
+      <button type="button" id="dmGroupEditName">修改群名</button>
+      <button type="button" id="dmGroupEditIcon">修改图标</button>
+      <button type="button" id="dmGroupAddMember">添加成员</button>
+    </div>
+    <div class="dm-group-members" id="dmGroupMemberList"></div>
+    <div class="modal-actions">
+      <button class="dm-btn dm-btn-cancel" id="dmGroupInfoClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="dm-modal-overlay" id="dmTextModal">
+  <div class="dm-modal" style="max-width:720px;">
+    <h3 id="dmTextModalTitle">文本预览</h3>
+    <div class="dm-text-preview"><pre id="dmTextContent"></pre></div>
+    <div class="modal-actions">
+      <button class="dm-btn dm-btn-cancel" id="dmTextClose">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div class="dm-toast" id="dmToast"></div>
 
 <!-- 引入公共 script.js 修复月亮按钮 -->
@@ -1232,6 +1282,19 @@
       
     const dot = withDot ? `<div class="dot ${online?'online':''}"></div>` : '';
     return `<div class="${cls}">${img}${dot}</div>`;
+  }
+
+  const TEXT_EXTS = ['txt','md','markdown','json','js','mjs','cjs','ts','tsx','jsx','css','scss','less','html','htm','xml','yml','yaml','csv','tsv','log','py','java','c','h','cpp','hpp','cs','go','rs','php','rb','swift','kt','sh','bash','ps1','bat','sql','ini','conf','toml','env','dockerfile'];
+  function isTextName(name) {
+    return TEXT_EXTS.includes(String(name || '').split('.').pop().toLowerCase());
+  }
+
+  function groupIconHtml(icon, cls) {
+    const value = String(icon || '群');
+    const inner = /^(https?:\/\/|\/|data:image\/)/i.test(value)
+      ? `<img src="${esc(value)}" alt="" loading="lazy">`
+      : esc(value);
+    return `<div class="${cls || 'dm-avatar'}">${inner}</div>`;
   }
 
   function showToast(msg, type) {
@@ -1370,6 +1433,40 @@
       refreshConvos();
     });
 
+    socket.on('dm:group-update', (group) => {
+      if (!group || !group.id) return;
+      const c = convos.find(x => x.id === group.id);
+      if (c) {
+        c.name = group.name;
+        c.peerName = group.name;
+        c.icon = group.icon;
+        c.members = group.members;
+        c.owner = group.owner;
+        c.admins = group.admins;
+      }
+      if (currentConvo && currentConvo.id === group.id) {
+        currentConvo.name = group.name;
+        currentConvo.icon = group.icon;
+        currentConvo.members = group.members;
+        currentConvo.owner = group.owner;
+        currentConvo.admins = group.admins;
+        updateChatHeader();
+        if (currentGroupInfo) openGroupInfo();
+      }
+      renderList();
+    });
+
+    socket.on('dm:group-removed', ({ groupId }) => {
+      convos = convos.filter(x => x.id !== groupId);
+      if (currentConvo && currentConvo.id === groupId) {
+        currentConvo = null;
+        document.getElementById('dmChatView').style.display = 'none';
+        document.getElementById('dmPlaceholder').style.display = 'flex';
+      }
+      renderList();
+      showToast('你已被移出群聊', 'error');
+    });
+
     socket.on('dm:read', ({ convId }) => {
       if (currentConvo && currentConvo.id === convId) {
         let changed = false;
@@ -1410,7 +1507,6 @@
     });
 
     socket.on('social:friend-request', ({ from }) => {
-      showToast('收到来自 ' + from + ' 的好友申请', 'success');
       refreshRequests();
     });
 
@@ -1504,7 +1600,7 @@
     el.innerHTML = arr.map(c => {
       const active = currentConvo && currentConvo.id === c.id ? 'active' : '';
       const av = c.type === 'group'
-        ? '<div class="user-avatar-mini" style="width:38px;height:38px;font-size:14px;">群</div>'
+        ? groupIconHtml(c.icon, 'dm-avatar')
         : avatarHtml(c.peer, c.peerAvatar, { online: c.online });
       return `
         <div class="dm-convo-item ${active} ${c.pinned?'pinned':''}" data-cid="${esc(c.id)}" data-peer="${esc(c.peer || '')}" data-group="${c.type === 'group' ? '1' : '0'}">
@@ -1833,7 +1929,7 @@
     if (!conv) {
       try {
         const group = await api('/api/social/dm/groups/' + encodeURIComponent(groupId));
-        conv = { id: group.id, type: 'group', peer: '', name: group.name, peerName: group.name, members: group.members, unread: 0, pinned: false, muted: false };
+        conv = { id: group.id, type: 'group', peer: '', name: group.name, peerName: group.name, icon: group.icon, owner: group.owner, admins: group.admins || [], members: group.members, unread: 0, pinned: false, muted: false };
         convos.unshift(conv);
       } catch (e) { showToast(e.message, 'error'); return; }
     }
@@ -1868,9 +1964,11 @@
     const c = currentConvo;
     const avEl = document.getElementById('dmChatAvatar');
     if (c.type === 'group') {
-      avEl.innerHTML = '群';
+      avEl.innerHTML = groupIconHtml(c.icon, 'dm-avatar');
       avEl.style.display = 'flex';
       document.getElementById('dmChatName').textContent = c.name || c.peerName || '群聊';
+      document.getElementById('dmChatTitle').title = '查看群聊成员';
+      document.getElementById('dmProfileBtn').title = '查看群聊成员';
       const subEl = document.getElementById('dmChatSub');
       subEl.textContent = `${(c.members || []).length} 位成员`;
       subEl.className = 'sub online';
@@ -1879,6 +1977,8 @@
       return;
     }
     const initial = (c.peer || '?').slice(0,1).toUpperCase();
+    document.getElementById('dmChatTitle').title = '查看对方主页';
+    document.getElementById('dmProfileBtn').title = '查看对方主页';
     avEl.innerHTML = c.peerAvatar
       ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${c.peer === 'admin' ? '管' : initial}'">`
       : (c.peer === 'admin' ? '管' : initial);
@@ -2025,12 +2125,14 @@
       if (!m || !m.attachment) continue;
       if (attachmentUrls.has(mid)) {
         el.innerHTML = renderAttachment(m, attachmentUrls.get(mid));
+        bindAttachmentPreview(el, m);
         continue;
       }
       try {
         const info = await api(`/api/dm/attachment/${encodeURIComponent(currentConvo.id)}/${encodeURIComponent(mid)}`);
         attachmentUrls.set(mid, info);
         el.innerHTML = renderAttachment(m, info);
+        bindAttachmentPreview(el, m);
       } catch (e) {
         el.innerHTML = `<div class="dm-attach-error">${esc(e.message || '附件加载失败')}</div>`;
       }
@@ -2057,8 +2159,29 @@
           <div class="dm-file-name" title="${name}">${name}</div>
           <div class="dm-file-meta">${size}</div>
         </div>
+        ${isTextName(a.name) ? `<button class="dm-file-preview" type="button" data-preview-mid="${esc(m.id)}">预览</button>` : ''}
         <a class="dm-file-dl" href="${url}" target="_blank" rel="noopener" download>下载</a>
       </div>${note}`;
+  }
+
+  function bindAttachmentPreview(root, m) {
+    const btn = root.querySelector('[data-preview-mid]');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = '读取中';
+      try {
+        const data = await api(`/api/dm/attachment/${encodeURIComponent(currentConvo.id)}/${encodeURIComponent(m.id)}?text=1`);
+        document.getElementById('dmTextModalTitle').textContent = (m.attachment && m.attachment.name) || '文本预览';
+        document.getElementById('dmTextContent').textContent = data.text + (data.truncated ? '\n\n...（内容过长，已截断）' : '');
+        document.getElementById('dmTextModal').classList.add('show');
+      } catch (e) {
+        showToast(e.message || '文本预览失败', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '预览';
+      }
+    });
   }
 
   function linkify(text) {
@@ -2157,12 +2280,26 @@
     if (card) card.classList.toggle('dm-file-failed', !!m.attachment.failed);
   }
 
+  const LONG_TEXT_LIMIT = 2000;
+
+  function makeTextFile(text, prefix) {
+    const stamp = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const name = (prefix || '长文本') + '-' + stamp.getFullYear() + pad(stamp.getMonth() + 1) + pad(stamp.getDate()) + '-' + pad(stamp.getHours()) + pad(stamp.getMinutes()) + pad(stamp.getSeconds()) + '.txt';
+    return new File([String(text || '')], name, { type: 'text/plain;charset=utf-8' });
+  }
+
   async function sendCurrentMessage() {
     if (!currentConvo || uploading) return;
     const input = document.getElementById('dmInput');
-    const text = input.value.trim();
-    const file = pendingAttachment;
+    let text = input.value.trim();
+    let file = pendingAttachment;
     const resource = pendingShareResource;
+    if (!file && text.length > LONG_TEXT_LIMIT) {
+      file = makeTextFile(text, '粘贴文本');
+      text = '';
+      showToast('内容较长，已自动转为 txt 文件', 'info');
+    }
     if (!text && !file && !resource) return;
 
     const sendBtn = document.getElementById('dmSendBtn');
@@ -2378,6 +2515,130 @@
   // ============================================================
   //  更多菜单
   // ============================================================
+  let currentGroupInfo = null;
+
+  async function openGroupInfo() {
+    if (!currentConvo || currentConvo.type !== 'group') return;
+    try {
+      currentGroupInfo = await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id) + '/members');
+      renderGroupInfo();
+      document.getElementById('dmGroupInfoModal').classList.add('show');
+    } catch (e) {
+      showToast(e.message || '群聊信息加载失败', 'error');
+    }
+  }
+
+  function memberAvatar(m) {
+    return `<div class="dm-avatar" style="width:34px !important;height:34px !important;">${m.hasAvatar
+      ? `<img src="/api/user/avatar/${encodeURIComponent(m.username)}?t=${Date.now()}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${esc((m.displayName || m.username).slice(0,1).toUpperCase())}'">`
+      : esc((m.displayName || m.username).slice(0,1).toUpperCase())}</div>`;
+  }
+
+  function renderGroupInfo() {
+    if (!currentGroupInfo) return;
+    const g = currentGroupInfo.group;
+    const canManage = !!currentGroupInfo.canManage;
+    document.getElementById('dmGroupInfoIcon').innerHTML = /^(https?:\/\/|\/|data:image\/)/i.test(g.icon || '')
+      ? `<img src="${esc(g.icon)}" alt="">` : esc(g.icon || '群');
+    document.getElementById('dmGroupInfoName').textContent = g.name || '群聊';
+    document.getElementById('dmGroupInfoSub').textContent = `${(g.members || []).length} 位成员 · 群主 ${g.owner}`;
+    document.getElementById('dmGroupManage').style.display = canManage ? 'flex' : 'none';
+    const list = document.getElementById('dmGroupMemberList');
+    list.innerHTML = (currentGroupInfo.members || []).map(m => {
+      const role = m.isOwner ? '群主' : m.isAdmin ? '管理员' : '成员';
+      return `<div class="dm-group-member">
+        ${memberAvatar(m)}
+        <div class="who"><b>${esc(m.displayName || m.username)}${m.isMe ? '（我）' : ''}</b><small>@${esc(m.username)} · ${role}</small></div>
+        <div class="ops">
+          ${m.isMe ? '' : `<button type="button" data-view-user="${esc(m.username)}">主页</button>`}
+          ${m.isMe ? '' : `<button type="button" data-add-friend="${esc(m.username)}">加好友</button>`}
+          ${canManage && !m.isOwner && !m.isMe && g.owner === me.username ? `<button type="button" data-toggle-admin="${esc(m.username)}" data-admin="${m.isAdmin ? '1' : '0'}">${m.isAdmin ? '取消管理' : '设为管理'}</button>` : ''}
+          ${canManage && !m.isOwner && !m.isMe ? `<button type="button" class="danger" data-kick-member="${esc(m.username)}">移出</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('[data-view-user]').forEach(b => b.addEventListener('click', () => {
+      location.href = '/user.html?u=' + encodeURIComponent(b.dataset.viewUser);
+    }));
+    list.querySelectorAll('[data-add-friend]').forEach(b => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        const r = await api('/api/social/friends/request', { method: 'POST', body: { username: b.dataset.addFriend } });
+        showToast(r.msg || '好友申请已发送', 'success');
+        b.textContent = '已申请';
+      } catch (e) {
+        showToast(e.message || '发送失败', 'error');
+        b.disabled = false;
+      }
+    }));
+    list.querySelectorAll('[data-kick-member]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('确定把 ' + b.dataset.kickMember + ' 移出群聊吗？')) return;
+      try {
+        await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id) + '/members/' + encodeURIComponent(b.dataset.kickMember), { method: 'DELETE' });
+        showToast('已移出群聊', 'success');
+        await refreshGroupInfo();
+      } catch (e) { showToast(e.message || '操作失败', 'error'); }
+    }));
+    list.querySelectorAll('[data-toggle-admin]').forEach(b => b.addEventListener('click', async () => {
+      try {
+        await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id) + '/admins', {
+          method: 'POST', body: { username: b.dataset.toggleAdmin, admin: b.dataset.admin !== '1' }
+        });
+        await refreshGroupInfo();
+      } catch (e) { showToast(e.message || '操作失败', 'error'); }
+    }));
+  }
+
+  async function refreshGroupInfo() {
+    if (!currentConvo || currentConvo.type !== 'group') return;
+    currentGroupInfo = await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id) + '/members');
+    if (currentConvo) {
+      currentConvo.name = currentGroupInfo.group.name;
+      currentConvo.icon = currentGroupInfo.group.icon;
+      currentConvo.members = currentGroupInfo.group.members;
+      currentConvo.owner = currentGroupInfo.group.owner;
+      currentConvo.admins = currentGroupInfo.group.admins;
+      document.getElementById('dmChatName').textContent = currentConvo.name;
+      document.getElementById('dmChatSub').textContent = `${currentConvo.members.length} 位成员`;
+    }
+    renderGroupInfo();
+    renderConvoList(document.getElementById('dmList'));
+  }
+
+  window.editGroupName = async function () {
+    if (!currentConvo) return;
+    const name = prompt('新的群聊名称（2-30 个字）', currentConvo.name || '');
+    if (name == null) return;
+    try {
+      const r = await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id), { method: 'PUT', body: { name: name.trim() } });
+      showToast('群名称已修改', 'success');
+      await refreshGroupInfo();
+    } catch (e) { showToast(e.message || '修改失败', 'error'); }
+  };
+
+  window.editGroupIcon = async function () {
+    if (!currentConvo) return;
+    const icon = prompt('输入一个 emoji，或图片 URL', currentConvo.icon || '群');
+    if (icon == null) return;
+    try {
+      await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id), { method: 'PUT', body: { icon: icon.trim() || '群' } });
+      showToast('群图标已修改', 'success');
+      await refreshGroupInfo();
+    } catch (e) { showToast(e.message || '修改失败', 'error'); }
+  };
+
+  window.addGroupMember = async function () {
+    if (!currentConvo) return;
+    const username = prompt('输入要添加的用户名');
+    if (!username) return;
+    try {
+      await api('/api/social/dm/groups/' + encodeURIComponent(currentConvo.id) + '/members', { method: 'POST', body: { username: username.trim() } });
+      showToast('已添加成员', 'success');
+      await refreshGroupInfo();
+    } catch (e) { showToast(e.message || '添加失败', 'error'); }
+  };
+
   function openMoreMenu() {
     if (!currentConvo) return;
     const body = document.getElementById('dmMoreBody');
@@ -2552,6 +2813,16 @@
         sendCurrentMessage();
       }
     });
+    input.addEventListener('paste', (e) => {
+      const pasted = e.clipboardData && e.clipboardData.getData('text/plain');
+      if (!pasted || pasted.length <= LONG_TEXT_LIMIT) return;
+      e.preventDefault();
+      const file = makeTextFile(pasted, '粘贴文本');
+      pendingAttachment = file;
+      showAttachPreview(file);
+      showToast('内容较长，已转为 txt 文件，可直接发送', 'info');
+      input.focus();
+    });
     input.addEventListener('input', () => {
       input.style.height = 'auto';
       input.style.height = Math.min(input.scrollHeight, 130) + 'px';
@@ -2569,10 +2840,28 @@
     document.getElementById('dmPinBtn').addEventListener('click', togglePin);
     document.getElementById('dmMuteBtn').addEventListener('click', toggleMute);
     document.getElementById('dmProfileBtn').addEventListener('click', () => {
-      if (currentConvo) location.href = '/user.html?u=' + encodeURIComponent(currentConvo.peer);
+      if (!currentConvo) return;
+      if (currentConvo.type === 'group') openGroupInfo();
+      else location.href = '/user.html?u=' + encodeURIComponent(currentConvo.peer);
     });
     document.getElementById('dmChatTitle').addEventListener('click', () => {
-      if (currentConvo) location.href = '/user.html?u=' + encodeURIComponent(currentConvo.peer);
+      if (!currentConvo) return;
+      if (currentConvo.type === 'group') openGroupInfo();
+      else location.href = '/user.html?u=' + encodeURIComponent(currentConvo.peer);
+    });
+    document.getElementById('dmChatAvatar').addEventListener('click', () => {
+      if (!currentConvo) return;
+      if (currentConvo.type === 'group') openGroupInfo();
+      else location.href = '/user.html?u=' + encodeURIComponent(currentConvo.peer);
+    });
+    document.getElementById('dmGroupInfoClose').addEventListener('click', () => {
+      document.getElementById('dmGroupInfoModal').classList.remove('show');
+    });
+    document.getElementById('dmGroupEditName').addEventListener('click', window.editGroupName);
+    document.getElementById('dmGroupEditIcon').addEventListener('click', window.editGroupIcon);
+    document.getElementById('dmGroupAddMember').addEventListener('click', window.addGroupMember);
+    document.getElementById('dmTextClose').addEventListener('click', () => {
+      document.getElementById('dmTextModal').classList.remove('show');
     });
 
     document.getElementById('dmBackBtn').addEventListener('click', () => {
