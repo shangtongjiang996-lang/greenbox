@@ -270,7 +270,7 @@
         
         // 修复：添加默认头像
         const av = user.hasAvatar 
-          ? `<img class="user-avatar-mini" src="/api/user/avatar/${encodeURIComponent(user.username)}?t=${Date.now()}" onerror="this.style.display='none'">`
+          ? `<img class="user-avatar-mini" src="/api/user/avatar/${encodeURIComponent(user.username)}?t=${1}" onerror="this.style.display='none'">`
           : `<div class="user-avatar-mini" style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;">${(user.username||'U').slice(0,1).toUpperCase()}</div>`;
 
         document.getElementById('userArea').innerHTML = `

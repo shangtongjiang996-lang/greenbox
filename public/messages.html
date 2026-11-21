@@ -1277,7 +1277,7 @@
     
     // 图片加载失败时才回退到文字，不覆盖正常头像
     const img = hasAvatar
-      ? `<img src="/api/user/avatar/${encodeURIComponent(username)}?t=${Date.now()}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${showEmoji.replace(/'/g, "\\'")}'">`
+      ? `<img src="/api/user/avatar/${encodeURIComponent(username)}?t=${1}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${showEmoji.replace(/'/g, "\\'")}'">`
       : showEmoji;
       
     const dot = withDot ? `<div class="dot ${online?'online':''}"></div>` : '';
@@ -1362,7 +1362,7 @@
     const el = document.getElementById('userArea');
     if (!me) { el.innerHTML = ''; return; }
     const av = me.hasAvatar
-      ? `<img class="user-avatar-mini" src="/api/user/avatar/${encodeURIComponent(me.username)}?t=${Date.now()}" onerror="this.style.display='none'">`
+      ? `<img class="user-avatar-mini" src="/api/user/avatar/${encodeURIComponent(me.username)}?t=${1}" onerror="this.style.display='none'">`
       : `<div class="user-avatar-mini">${(me.username||'U').slice(0,1).toUpperCase()}</div>`;
       
     el.innerHTML = `
@@ -1982,7 +1982,7 @@
     document.getElementById('dmProfileBtn').title = '查看对方主页';
     document.getElementById('dmReportBtn').style.display = '';
     avEl.innerHTML = c.peerAvatar
-      ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${c.peer === 'admin' ? '管' : initial}'">`
+      ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${1}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${c.peer === 'admin' ? '管' : initial}'">`
       : (c.peer === 'admin' ? '管' : initial);
     document.getElementById('dmChatName').textContent = c.peerName || c.peer;
     const subEl = document.getElementById('dmChatSub');
@@ -2532,7 +2532,7 @@
 
   function memberAvatar(m) {
     return `<div class="dm-avatar" style="width:34px !important;height:34px !important;">${m.hasAvatar
-      ? `<img src="/api/user/avatar/${encodeURIComponent(m.username)}?t=${Date.now()}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${esc((m.displayName || m.username).slice(0,1).toUpperCase())}'">`
+      ? `<img src="/api/user/avatar/${encodeURIComponent(m.username)}?t=${1}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${esc((m.displayName || m.username).slice(0,1).toUpperCase())}'">`
       : esc((m.displayName || m.username).slice(0,1).toUpperCase())}</div>`;
   }
 

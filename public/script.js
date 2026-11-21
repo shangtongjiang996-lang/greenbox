@@ -506,7 +506,7 @@ const THEME_ICON = {
     var title = msg.groupId ? (msg.groupName || '群聊') + ' · ' + msg.from : msg.from;
     var initial = String(msg.from).slice(0, 1).toUpperCase();
     toast.innerHTML =
-      '<span class="gb-dm-avatar"><img src="/api/user/avatar/' + encodeURIComponent(msg.from) + '?t=' + Date.now() + '" alt="" onerror="this.style.display=\'none\';this.parentNode.textContent=\'' + initial + '\'"></span>' +
+      '<span class="gb-dm-avatar"><img src="/api/user/avatar/' + encodeURIComponent(msg.from) + '?t=' + 1 + '" alt="" onerror="this.style.display=\'none\';this.parentNode.textContent=\'' + initial + '\'"></span>' +
       '<span class="gb-dm-body"><b>' + escHtml(title) + '</b><span>' + escHtml(preview) + '</span><small>点击查看</small></span>' +
       '<button type="button" class="gb-dm-close" aria-label="关闭">×</button>';
     var timer = setTimeout(function () { toast.remove(); }, 6500);

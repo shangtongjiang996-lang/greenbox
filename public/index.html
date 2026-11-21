@@ -1141,7 +1141,7 @@
       const notifBtn = document.getElementById('notifBtn');
       const user = await checkAuth();
       if (user) {
-        const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + Date.now();
+        const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + 1;
         const avatarHtml = user.hasAvatar
           ? `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`
           : '';
@@ -1171,8 +1171,8 @@
       location.reload();
     };
 
-    function showPasswordUpgradeModal() { document.getElementById('passwordModal').classList.remove('hidden'); }
-    window.skipUpgrade = function() { document.getElementById('passwordModal').classList.add('hidden'); };
+    function showPasswordUpgradeModal() { const m = document.getElementById('passwordModal'); m.classList.remove('hidden'); m.classList.add('show'); }
+    window.skipUpgrade = function() { document.getElementById('passwordModal').classList.add('hidden'); document.getElementById('passwordModal').classList.remove('show'); };
     window.submitPasswordUpgrade = async function() {
       const newPwd = document.getElementById('newPassword').value;
       const confirmPwd = document.getElementById('confirmPassword').value;
@@ -1188,7 +1188,7 @@
           body: JSON.stringify({ newPassword: newPwd })
         });
         const data = await res.json();
-        if (data.success) { document.getElementById('passwordModal').classList.add('hidden'); alert('密码升级成功！'); }
+        if (data.success) { document.getElementById('passwordModal').classList.add('hidden'); document.getElementById('passwordModal').classList.remove('show'); alert('密码升级成功！'); }
         else { errorEl.textContent = data.error || '操作失败'; errorEl.style.display = 'block'; }
       } catch (e) { errorEl.textContent = '网络错误，请稍后重试'; errorEl.style.display = 'block'; }
     };

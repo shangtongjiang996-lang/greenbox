@@ -603,7 +603,7 @@
       const pn = document.getElementById('profile-nav');
       if (pn) pn.style.display = 'list-item';
       const av = data.hasAvatar
-        ? `<img class="user-avatar-mini" src="/api/user/avatar/${encodeURIComponent(data.username)}?t=${Date.now()}" onerror="this.style.display='none'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);">`
+        ? `<img class="user-avatar-mini" src="/api/user/avatar/${encodeURIComponent(data.username)}?t=${1}" onerror="this.style.display='none'" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid var(--primary);">`
         : '';
       el.innerHTML = `
         ${av}
@@ -649,7 +649,7 @@
     const initials = (p.username || '?').slice(0,1).toUpperCase();
     if (p.hasAvatar) {
       avEl.innerHTML = `
-        <img src="/api/user/avatar/${encodeURIComponent(p.username)}?t=${Date.now()}" onerror="this.parentNode.innerHTML='<span>${p.username==='admin'?'管':initials}</span><div class=\\'online-dot\\' id=\\'onlineDot\\'></div>'">
+        <img src="/api/user/avatar/${encodeURIComponent(p.username)}?t=${1}" onerror="this.parentNode.innerHTML='<span>${p.username==='admin'?'管':initials}</span><div class=\\'online-dot\\' id=\\'onlineDot\\'></div>'">
         <div class="online-dot ${p.online ? 'online' : ''}" id="onlineDot"></div>`;
     } else {
       avEl.innerHTML = `

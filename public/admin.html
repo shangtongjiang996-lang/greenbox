@@ -1535,7 +1535,7 @@ async function loadUsers() {
     container.innerHTML = users.map(u => {
       const isAdmin = u.username === 'admin';
       const avatarHtml = u.hasAvatar
-        ? `<img class="user-avatar-sm" src="/api/user/avatar/${encodeURIComponent(u.username)}?t=${Date.now()}" alt="" onerror="this.textContent='用';this.removeAttribute('src');">`
+        ? `<img class="user-avatar-sm" src="/api/user/avatar/${encodeURIComponent(u.username)}?t=${1}" alt="" onerror="this.textContent='用';this.removeAttribute('src');">`
         : `<div class="user-avatar-sm">${isAdmin ? '管' : '用'}</div>`;
       return `
         <div class="user-item">

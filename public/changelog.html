@@ -355,7 +355,7 @@
       const notifBtn = document.getElementById('notifBtn');
       const user = await checkAuth();
       if (user) {
-        const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + Date.now();
+        const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + 1;
         const avatarHtml = user.hasAvatar
           ? `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`
           : '';

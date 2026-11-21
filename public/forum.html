@@ -1015,7 +1015,7 @@
       var sizeStyle = size ? 'width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size*0.4) + 'px;' : '';
       var safeUser = escapeHtml(username);
       if (hasAvatar) {
-        var url = '/api/user/avatar/' + encodeURIComponent(username) + '?t=' + Date.now();
+        var url = '/api/user/avatar/' + encodeURIComponent(username) + '?t=' + 1;
         // 修复了 onerror 里的引号错乱问题，用 data URI 替换失败的图片，确保不撑破
         var onerr = "this.onerror=null;this.style.background='linear-gradient(135deg,#16a34a,#15803d)';this.style.color='#fff';this.style.display='flex';this.style.alignItems='center';this.style.justifyContent='center';this.style.fontWeight='bold';this.style.fontSize='16px';this.src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';this.alt='" + escapeHtml(showEmoji) + "';this.insertAdjacentText('afterbegin','" + escapeHtml(showEmoji) + "');";
         return '<img class="' + cls + '" style="' + sizeStyle + '" src="' + url + '" alt="' + escapeHtml(showEmoji) + '" data-user="' + safeUser + '" onerror="' + onerr + '">';
@@ -1110,7 +1110,7 @@
       const profileNav = document.getElementById('profile-nav');
       const user = await checkAuth();
       if (user) {
-        const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + Date.now();
+        const avatarUrl = `/api/user/avatar/${encodeURIComponent(user.username)}?t=` + 1;
         const avatarHtml = user.hasAvatar
           ? `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`
           : '';

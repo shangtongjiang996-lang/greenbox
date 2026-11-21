@@ -1203,7 +1203,7 @@ app.get('/api/user/avatar/:username', async (req, res) => {
   const mime = match[1];
   const buf = Buffer.from(match[2], 'base64');
   res.set('Content-Type', mime);
-  res.set('Cache-Control', 'public, max-age=3600');
+  res.set('Cache-Control', 'public, max-age=300');
   res.send(buf);
 });
 

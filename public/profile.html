@@ -593,7 +593,7 @@
 
     async function autoCompressExistingAvatar(username) {
       try {
-        const res = await fetch('/api/user/avatar/' + encodeURIComponent(username) + '?t=' + Date.now(), { cache: 'no-store' });
+        const res = await fetch('/api/user/avatar/' + encodeURIComponent(username) + '?t=' + 1, { cache: 'no-store' });
         if (!res.ok) return;
         const blob = await res.blob();
         if (blob.size <= 200 * 1024) return;
@@ -653,7 +653,7 @@
     function renderAvatar(username, hasAvatar) {
       const box = document.getElementById('avatarBig');
       if (hasAvatar) {
-        const url = `/api/user/avatar/${encodeURIComponent(username)}?t=` + Date.now();
+        const url = `/api/user/avatar/${encodeURIComponent(username)}?t=` + 1;
         box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentNode.textContent='我';">`;
       } else {
         box.innerHTML = username === 'admin' ? '<svg class="ico" aria-hidden="true"><use href="/icons.svg#shield"/></svg>' : '<svg class="ico" aria-hidden="true"><use href="/icons.svg#user"/></svg>';
@@ -798,7 +798,7 @@
       avatarFileInput.value = '';
       avatarPreviewBox.classList.remove('has-image');
       if (currentUser.hasAvatar) {
-        avatarPreviewBox.innerHTML = `<img src="/api/user/avatar/${encodeURIComponent(currentUser.username)}?t=${Date.now()}" alt="">`;
+        avatarPreviewBox.innerHTML = `<img src="/api/user/avatar/${encodeURIComponent(currentUser.username)}?t=${1}" alt="">`;
         avatarPreviewBox.classList.add('has-image');
         avatarRemoveBtn.style.display = 'inline-flex';
       } else {
@@ -1028,7 +1028,7 @@
         `;
         return;
       }
-      const avatarUrl = `/api/user/avatar/${encodeURIComponent(currentUser.username)}?t=` + Date.now();
+      const avatarUrl = `/api/user/avatar/${encodeURIComponent(currentUser.username)}?t=` + 1;
       const avatarHtml = currentUser.hasAvatar
         ? `<img class="user-avatar-mini" src="${avatarUrl}" alt="" onerror="this.style.display='none'">`
         : '';

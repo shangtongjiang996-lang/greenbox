@@ -22,7 +22,7 @@
   })();
 </script>
 <style>
-  .rk-wrap { max-width: 900px; margin: 0 auto; padding: 1.6rem 1.25rem 3rem; }
+  .rk-wrap { max-width: 1120px; margin: 0 auto; padding: 1.6rem 1.5rem 3rem; }
   .rk-head h1 { font-size: 1.8rem; margin-bottom: 0.3rem; }
   .rk-head p { color: var(--muted); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1.2rem; }
   .rk-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.1rem; margin-bottom: 1rem; }
@@ -95,7 +95,7 @@
   }
 
   function avatar(u) {
-    if (u.hasAvatar) return '<span class="rk-avatar"><img src="/api/user/avatar/' + encodeURIComponent(u.username) + '?t=' + Date.now() + '" alt=""></span>';
+    if (u.hasAvatar) return '<span class="rk-avatar"><img src="/api/user/avatar/' + encodeURIComponent(u.username) + '?t=' + 1 + '" alt=""></span>';
     return '<span class="rk-avatar">' + esc((u.displayName || u.username || '?').slice(0, 1)) + '</span>';
   }
 

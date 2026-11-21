@@ -309,7 +309,155 @@ main h2 { font-size: 1.3rem; font-weight: 700; margin: 2.4rem 0 0.8rem; }
   box-shadow: var(--shadow-lg); z-index: 10020; opacity: 0; pointer-events: none;
   transition: opacity .2s, transform .2s;
 }
+/* ===== 统一弹窗外观：与重大通知弹窗保持同一套卡片语言 ===== */
 .gb-system-toast.show { opacity: 1; transform: translate(-50%, 0); }
+body .modal-overlay,
+body .dm-modal-overlay,
+body .avatar-modal-overlay {
+  background: rgba(15, 23, 42, 0.52) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  padding: 20px !important;
+  z-index: 10020 !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+body .modal-overlay.show,
+body .dm-modal-overlay.show,
+body .avatar-modal-overlay.show {
+  display: flex !important;
+}
+body .modal-overlay:not(.show),
+body .dm-modal-overlay:not(.show),
+body .avatar-modal-overlay:not(.show) {
+  display: none !important;
+}
+body .modal-box,
+body .dm-modal,
+body .avatar-modal,
+body .modal-card,
+body .gm-invite-modal {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--shadow-lg) !important;
+  animation: gbModalIn 0.24s cubic-bezier(.2,.8,.2,1) !important;
+}
+body .modal-box,
+body .dm-modal,
+body .avatar-modal,
+body .modal-card {
+  padding: 22px !important;
+}
+body .modal-head,
+body .modal-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 0 0 14px !important;
+  margin-bottom: 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+body .modal-head h2,
+body .modal-header h2,
+body .modal-title,
+body .dm-modal > h3,
+body .avatar-modal h3,
+body .gm-invite-modal h3 {
+  font-size: 1.08rem !important;
+  font-weight: 800 !important;
+  color: var(--text) !important;
+  margin: 0 !important;
+  padding: 0 0 12px !important;
+  border-bottom: 1px solid var(--border) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+body .modal-head h2,
+body .modal-header h2,
+body .modal-title {
+  padding-bottom: 0 !important;
+  border-bottom: 0 !important;
+}
+body .modal-close {
+  border: 1px solid var(--border) !important;
+  background: var(--bg-alt) !important;
+  color: var(--muted) !important;
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+}
+body .modal-body {
+  padding: 0 !important;
+}
+body .modal-foot {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  padding: 14px 0 0 !important;
+  margin-top: 14px !important;
+  border-top: 1px solid var(--border) !important;
+}
+body .modal-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+  margin-top: 16px !important;
+}
+body .modal-foot button,
+body .modal-actions button,
+body .dm-btn,
+body .avatar-modal-actions button {
+  min-height: 36px !important;
+  border-radius: 9px !important;
+  padding: 7px 13px !important;
+  font-family: inherit !important;
+  font-size: 0.84rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+}
+body .modal-foot .action-btn,
+body .modal-actions .dm-btn-cancel,
+body .avatar-modal-actions button:not(.primary),
+body .dm-btn-cancel {
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+  color: var(--muted) !important;
+}
+body .modal-foot .comment-send,
+body .modal-actions .dm-btn-confirm,
+body .avatar-modal-actions button.primary,
+body .dm-btn-confirm {
+  background: var(--primary) !important;
+  border: 1px solid var(--primary) !important;
+  color: #fff !important;
+}
+body .modal-input,
+body .dm-modal input,
+body .dm-modal select,
+body .dm-modal textarea,
+body .avatar-modal input,
+body .gm-invite-modal input {
+  border: 1px solid var(--border) !important;
+  border-radius: 9px !important;
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  padding: 9px 11px !important;
+  font-family: inherit !important;
+}
+body .dm-modal h3 + .hint,
+body .dm-modal h3 + label {
+  margin-top: 0;
+}
+@keyframes gbModalIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .gb-dm-close { position: absolute; top: 4px; right: 5px; border: 0; background: transparent; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; padding: 2px 4px; }
 .gb-dm-close:hover { color: var(--text); }
 @media (max-width: 640px) {
