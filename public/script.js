@@ -589,6 +589,10 @@ const THEME_ICON = {
           var popup = document.querySelector('.gb-friend-request');
           if (popup) popup.remove();
         });
+        socket.on('social:friend-rejected', function () {
+          var popup = document.querySelector('.gb-friend-request');
+          if (popup) popup.remove();
+        });
       } catch (e) {}
     }
 

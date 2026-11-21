@@ -618,6 +618,7 @@ function registerSocialRoutes(app, deps) {
     await saveIncomingRequests(s.username, inc.filter(r => r.from !== from));
     const theirOut = await getOutgoingRequests(from);
     await saveOutgoingRequests(from, theirOut.filter(r => r.to !== s.username));
+    if (io) emitToUser(io, s.username, 'social:friend-rejected', { from });
     res.json({ success: true });
   });
 
@@ -695,7 +696,7 @@ function registerSocialRoutes(app, deps) {
     if (!group || !group.members.includes(s.username)) return res.status(404).json({ error: '群聊不存在' });
     const out = [];
     for (const name of group.members) {
-      const p = await publicProfile(name);
+      const p = (await publicProfile(name)) || {};
       out.push({
         username: name,
         displayName: p.displayName || name,

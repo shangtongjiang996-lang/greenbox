@@ -1451,7 +1451,7 @@
         currentConvo.owner = group.owner;
         currentConvo.admins = group.admins;
         updateChatHeader();
-        if (currentGroupInfo) openGroupInfo();
+        if (currentGroupInfo && document.getElementById('dmGroupInfoModal').classList.contains('show')) openGroupInfo();
       }
       renderList();
     });
