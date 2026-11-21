@@ -143,9 +143,9 @@
     document.getElementById('rdCopy').addEventListener('click', function () {
       var url = location.origin + '/resource.html?id=' + encodeURIComponent(r.id);
       if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(url).then(function () { alert('详情链接已复制'); }, function () { prompt('复制链接', url); });
+        navigator.clipboard.writeText(url).then(function () { alert('详情链接已复制'); }, function () { gbPrompt('复制链接', url, { title: '复制链接', okText: '复制' }); });
       } else {
-        prompt('复制链接', url);
+        gbPrompt('复制链接', url, { title: '复制链接', okText: '复制' });
       }
     });
     var previewBtn = document.getElementById('rdPreviewText');

@@ -161,10 +161,10 @@ const THEME_ICON = {
     var link = pn.querySelector('a');
     if (link) {
       link.title = '登录后使用个人中心';
-      link.addEventListener('click', function (e) {
+      link.addEventListener('click', async function (e) {
         if (getToken()) return;
         e.preventDefault();
-        if (window.confirm('个人中心需要登录，是否现在去登录？')) {
+        if (await gbConfirm('个人中心需要登录，是否现在去登录？', { title: '需要登录', okText: '去登录' })) {
           location.href = '/login.html?redirect=/profile.html';
         }
       });
