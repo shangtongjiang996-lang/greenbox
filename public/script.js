@@ -434,11 +434,11 @@ const THEME_ICON = {
     toast.href = msg.groupId
       ? '/messages.html?group=' + encodeURIComponent(msg.groupId)
       : '/messages.html?peer=' + encodeURIComponent(msg.from);
-    var preview = String(msg.content || (msg.attachment ? '[附件]' : '')).slice(0, 90);
+    var preview = String(msg.content || (msg.attachment ? '[附件]' : '')).slice(0, 120);
     var title = msg.groupId ? (msg.groupName || '群聊') + ' · ' + msg.from : msg.from;
     toast.innerHTML =
       '<span class="gb-dm-avatar">' + escHtml(String(msg.from).slice(0, 1).toUpperCase()) + '</span>' +
-      '<span class="gb-dm-body"><b>' + escHtml(title) + '</b><span>' + escHtml(preview) + '</span></span>' +
+      '<span class="gb-dm-body"><b>' + escHtml(title) + '</b><span>' + escHtml(preview) + '</span><small>点击查看</small></span>' +
       '<button type="button" class="gb-dm-close" aria-label="关闭">×</button>';
     var timer = setTimeout(function () { toast.remove(); }, 6500);
     toast.querySelector('.gb-dm-close').addEventListener('click', function (e) {

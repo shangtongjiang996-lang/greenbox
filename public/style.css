@@ -300,6 +300,7 @@ main h2 { font-size: 1.3rem; font-weight: 700; margin: 2.4rem 0 0.8rem; }
 .gb-dm-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .gb-dm-body b { font-size: 0.8rem; }
 .gb-dm-body span { color: var(--muted); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gb-dm-body small { color: var(--primary); font-size: 0.68rem; font-weight: 700; margin-top: 1px; }
 .gb-dm-close { position: absolute; top: 4px; right: 5px; border: 0; background: transparent; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; padding: 2px 4px; }
 .gb-dm-close:hover { color: var(--text); }
 @media (max-width: 640px) {

@@ -756,6 +756,7 @@
   .dm-attach video { max-width: 100%; border-radius: 10px; display: block; background: #000; }
   .dm-attach audio { width: 240px; max-width: 100%; }
   .dm-attach-note { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .dm-msg-row.self .dm-attach-note { color: rgba(255,255,255,.78); }
   .dm-attach-loading, .dm-attach-error, .dm-attach-expired {
     font-size: 12px; color: var(--muted);
     padding: 6px 8px;
@@ -769,10 +770,18 @@
     padding: 8px 10px;
     display: flex; align-items: center; gap: 10px;
     background: var(--bg-alt);
+    color: var(--text);
   }
-  .dm-file-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
+  .dm-file-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; color: var(--text); }
   .dm-file-meta { font-size: 11px; color: var(--muted); }
-  .dm-file-dl { margin-left: auto; font-size: 12px; color: var(--dm-accent); text-decoration: none; flex-shrink: 0; }
+  .dm-file-dl { margin-left: auto; font-size: 12px; color: var(--primary); text-decoration: none; flex-shrink: 0; }
+  .dm-row-uploading { color: var(--text); }
+  .dm-file-progress { height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+  .dm-file-progress span { display: block; height: 100%; width: 0; background: var(--primary); border-radius: 999px; transition: width .18s; }
+  .dm-file-upload-meta { display: flex; justify-content: space-between; gap: 6px; margin-top: 4px; font-size: 10.5px; color: var(--muted); }
+  .dm-file-upload-meta .spinner-mini { display: inline-block; width: 10px; height: 10px; border: 1.5px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: dmSpin .7s linear infinite; vertical-align: -1px; margin-right: 3px; }
+  @keyframes dmSpin { to { transform: rotate(360deg); } }
+  .dm-file-failed { border-color: #fecaca; background: #fef2f2; }
 
   /* ===== 弹窗 ===== */
   .dm-modal-overlay {
@@ -1216,9 +1225,9 @@
     const initial = (username || '?').slice(0,1).toUpperCase();
     const showEmoji = username === 'admin' ? '管' : initial;
     
-    // 图片加载失败时，自动隐藏图片层，露出底层的文字或emoji
+    // 图片加载失败时才回退到文字，不覆盖正常头像
     const img = hasAvatar
-      ? `<img src="/api/user/avatar/${encodeURIComponent(username)}?t=${Date.now()}" onerror="this.style.display='none'">`
+      ? `<img src="/api/user/avatar/${encodeURIComponent(username)}?t=${Date.now()}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${showEmoji.replace(/'/g, "\\'")}'">`
       : showEmoji;
       
     const dot = withDot ? `<div class="dot ${online?'online':''}"></div>` : '';
@@ -1871,7 +1880,7 @@
     }
     const initial = (c.peer || '?').slice(0,1).toUpperCase();
     avEl.innerHTML = c.peerAvatar
-      ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" onerror="this.style.display='none'"><span style="position:absolute;pointer-events:none;">${c.peer==='admin'?'管':initial}</span>`
+      ? `<img src="/api/user/avatar/${encodeURIComponent(c.peer)}?t=${Date.now()}" alt="" onerror="this.style.display='none';this.parentElement.textContent='${c.peer === 'admin' ? '管' : initial}'">`
       : (c.peer === 'admin' ? '管' : initial);
     document.getElementById('dmChatName').textContent = c.peerName || c.peer;
     const subEl = document.getElementById('dmChatSub');
@@ -1924,6 +1933,20 @@
     el.scrollTop = el.scrollHeight;
   }
 
+  function localAttachmentHtml(m) {
+    const a = m.attachment || {};
+    const pct = Math.max(0, Math.min(100, Number(a.progress) || 0));
+    const failed = !!a.failed;
+    return `<div class="dm-file-card ${failed ? 'dm-file-failed' : ''}">
+      <div style="flex:1;min-width:0;">
+        <div class="dm-file-name">${esc(a.name || '文件')}</div>
+        <div class="dm-file-meta">${esc(fileKindLabel(a.kind))} · ${fmtSize(a.size)}</div>
+        <div class="dm-file-progress"><span style="width:${pct}%"></span></div>
+        <div class="dm-file-upload-meta"><span>${failed ? '上传失败' : '<span class="spinner-mini"></span>正在上传'}</span><span>${pct}%</span></div>
+      </div>
+    </div>`;
+  }
+
   function renderMessageHtml(m) {
     const isSelf = m.from === me.username;
     const isGroup = !!(currentConvo && currentConvo.type === 'group');
@@ -1956,7 +1979,7 @@
       }
     }
 
-    const attachHtml = m.attachment ? attachmentPlaceholder(m) : '';
+    const attachHtml = m.attachment ? (m._local ? localAttachmentHtml(m) : attachmentPlaceholder(m)) : '';
     const resourceHtml = m.resource && m.resource.id
       ? `<a class="dm-resource-card" href="${esc(m.resource.url || ('/resource.html?id=' + encodeURIComponent(m.resource.id)))}" target="_blank" rel="noopener"><span class="label">资源</span><span class="name">${esc(m.resource.title || '未命名资源')}</span><span style="color:var(--muted);">›</span></a>`
       : '';
@@ -2105,14 +2128,77 @@
   // ============================================================
   //  发送消息
   // ============================================================
+  function attachmentKindOf(file) {
+    const mime = (file && file.type) || '';
+    if (mime.startsWith('image/')) return 'image';
+    if (mime.startsWith('video/')) return 'video';
+    if (mime.startsWith('audio/')) return 'audio';
+    const ext = ((file && file.name) || '').split('.').pop().toLowerCase();
+    if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return 'image';
+    if (['mp4','webm','mov','mkv','ogv'].includes(ext)) return 'video';
+    if (['mp3','wav','ogg','m4a','flac','aac'].includes(ext)) return 'audio';
+    return 'file';
+  }
+
+  function updateLocalAttachment(id, progress, failed) {
+    const m = currentMessages.find(x => x.id === id);
+    if (!m || !m.attachment) return;
+    m.attachment.progress = Math.max(0, Math.min(100, Number(progress) || 0));
+    if (failed) m.attachment.failed = true;
+    const node = document.querySelector(`.dm-msg-row[data-mid="${id}"]`);
+    if (!node) return;
+    const bar = node.querySelector('.dm-file-progress span');
+    if (bar) bar.style.width = m.attachment.progress + '%';
+    const meta = node.querySelector('.dm-file-upload-meta');
+    if (meta) {
+      meta.innerHTML = '<span>' + (m.attachment.failed ? '上传失败' : '<span class="spinner-mini"></span>正在上传') + '</span><span>' + m.attachment.progress + '%</span>';
+    }
+    const card = node.querySelector('.dm-file-card');
+    if (card) card.classList.toggle('dm-file-failed', !!m.attachment.failed);
+  }
+
   async function sendCurrentMessage() {
     if (!currentConvo || uploading) return;
     const input = document.getElementById('dmInput');
     const text = input.value.trim();
-    if (!text && !pendingAttachment && !pendingShareResource) return;
+    const file = pendingAttachment;
+    const resource = pendingShareResource;
+    if (!text && !file && !resource) return;
 
     const sendBtn = document.getElementById('dmSendBtn');
-    const file = pendingAttachment;
+    const reply = replyTo;
+    const localId = 'local_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    let localMsg = null;
+
+    if (file) {
+      localMsg = {
+        id: localId,
+        from: me.username,
+        to: currentConvo.type === 'group' ? undefined : currentConvo.peer,
+        groupId: currentConvo.type === 'group' ? currentConvo.id : undefined,
+        content: text,
+        attachment: {
+          name: file.name,
+          size: file.size,
+          mime: file.type || 'application/octet-stream',
+          kind: attachmentKindOf(file),
+          progress: 0,
+          uploading: true,
+        },
+        time: Date.now(),
+        _local: true,
+      };
+      currentMessages.push(localMsg);
+      appendMessage(localMsg, true);
+    }
+
+    // 发送后立即清空输入和待发送区，上传进度在聊天卡片里显示
+    input.value = '';
+    input.style.height = 'auto';
+    input.placeholder = '输入消息… (Enter 发送 / Shift+Enter 换行)';
+    clearPendingAttachment();
+    clearPendingResource();
+    replyTo = null;
     uploading = true;
     sendBtn.disabled = true;
 
@@ -2128,25 +2214,32 @@
             size: file.size,
           },
         });
-        setAttachProgress(0);
-        await uploadToB2(info.uploadUrl, file, setAttachProgress);
+        updateLocalAttachment(localId, 0);
+        await uploadToB2(info.uploadUrl, file, function (p) { updateLocalAttachment(localId, p); });
         attachmentPayload = {
           key: info.key,
           name: file.name,
           size: file.size,
           mime: file.type || 'application/octet-stream',
         };
+        updateLocalAttachment(localId, 100);
       }
 
       const payload = {
         to: currentConvo.type === 'group' ? undefined : currentConvo.peer,
         groupId: currentConvo.type === 'group' ? currentConvo.id : undefined,
         content: text,
-        replyTo: replyTo || undefined,
+        replyTo: reply || undefined,
         attachment: attachmentPayload || undefined,
-        resourceId: pendingShareResource ? pendingShareResource.id : undefined,
+        resourceId: resource ? resource.id : undefined,
       };
       const res = await api('/api/social/dm/messages', { method: 'POST', body: payload });
+      if (localMsg) {
+        const idx = currentMessages.findIndex(x => x.id === localId);
+        if (idx >= 0) currentMessages.splice(idx, 1);
+        const node = document.querySelector(`.dm-msg-row[data-mid="${localId}"]`);
+        if (node) node.remove();
+      }
       if (res && res.message) {
         if (!currentMessages.some(m => m.id === res.message.id)) {
           currentMessages.push(res.message);
@@ -2154,13 +2247,8 @@
         }
         refreshConvos();
       }
-      replyTo = null;
-      input.placeholder = '输入消息… (Enter 发送 / Shift+Enter 换行)';
-      input.value = '';
-      input.style.height = 'auto';
-      clearPendingAttachment();
-      clearPendingResource();
     } catch (e) {
+      if (localMsg) updateLocalAttachment(localId, localMsg.attachment.progress, true);
       showToast(e.message || '发送失败', 'error');
     } finally {
       uploading = false;
