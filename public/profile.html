@@ -494,6 +494,25 @@
         </div>
 
         <div class="profile-section">
+          <div class="profile-section-title">邮箱与找回密码</div>
+          <div class="profile-field">
+            <label>当前邮箱</label>
+            <div style="font-size:0.92rem;font-weight:600;" id="currentEmail">未绑定</div>
+            <div class="hint" style="text-align:left;margin-top:0.25rem;" id="emailStatus">绑定并验证邮箱后，可以使用邮箱找回密码</div>
+          </div>
+          <div class="profile-field">
+            <label>绑定或修改邮箱</label>
+            <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email" maxlength="254">
+            <div class="hint" style="text-align:left;">修改邮箱需要输入当前密码确认</div>
+          </div>
+          <div class="btn-row">
+            <button class="pbtn pbtn-primary" id="saveEmailBtn">保存并发送验证</button>
+            <button class="pbtn pbtn-outline" id="resendEmailBtn" style="display:none;">重发验证邮件</button>
+          </div>
+          <div id="emailMsg" style="margin-top:0.5rem;font-weight:500;font-size:0.9rem;"></div>
+        </div>
+
+        <div class="profile-section">
           <div class="profile-section-title">账号安全</div>
           <div class="btn-row">
             <button class="pbtn pbtn-outline" id="changePwdBtn">修改密码</button>
@@ -652,6 +671,79 @@
       } else {
         document.getElementById('adminSection').style.display = 'none';
         document.getElementById('deleteAccountBtn').style.display = 'inline-flex';
+      }
+      renderEmail(data);
+    }
+
+    function renderEmail(data) {
+      const email = data && data.email ? data.email : '';
+      const verified = !!(data && data.emailVerified);
+      document.getElementById('currentEmail').textContent = email || '未绑定';
+      const status = document.getElementById('emailStatus');
+      status.textContent = !email
+        ? '绑定并验证邮箱后，可以使用邮箱找回密码'
+        : verified
+          ? '已验证，可以使用邮箱找回密码'
+          : '尚未验证，请查收验证邮件或点击重发';
+      status.style.color = email && !verified ? '#f59e0b' : '';
+      document.getElementById('emailInput').value = email || '';
+      document.getElementById('resendEmailBtn').style.display = email && !verified ? 'inline-flex' : 'none';
+    }
+
+    async function saveEmail() {
+      const input = document.getElementById('emailInput');
+      const msg = document.getElementById('emailMsg');
+      const email = input.value.trim();
+      msg.textContent = '';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+        msg.style.color = '#ef4444';
+        msg.textContent = '请输入正确的邮箱地址';
+        return;
+      }
+      const password = await gbPrompt('输入当前密码以确认修改邮箱', '', { title: '确认修改邮箱' });
+      if (password === null) return;
+      const btn = document.getElementById('saveEmailBtn');
+      btn.disabled = true;
+      btn.textContent = '保存中...';
+      try {
+        const res = await fetch('/api/user/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ email: email, password: password })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || '保存失败');
+        if (currentUser) { currentUser.email = data.email; currentUser.emailVerified = data.emailVerified; }
+        renderEmail({ email: data.email, emailVerified: data.emailVerified });
+        msg.style.color = data.emailSent ? '#16a34a' : '#f59e0b';
+        msg.textContent = data.emailSent ? '邮箱已保存，验证邮件已发送。' : (data.message || '邮箱已保存，但验证邮件发送失败。');
+      } catch (e) {
+        msg.style.color = '#ef4444';
+        msg.textContent = e.message || '保存失败';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '保存并发送验证';
+      }
+    }
+
+    async function resendEmail() {
+      const msg = document.getElementById('emailMsg');
+      const btn = document.getElementById('resendEmailBtn');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/user/email/resend', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || '发送失败');
+        msg.style.color = '#16a34a';
+        msg.textContent = '验证邮件已发送，请查收。';
+      } catch (e) {
+        msg.style.color = '#ef4444';
+        msg.textContent = e.message || '发送失败';
+      } finally {
+        btn.disabled = false;
       }
     }
 
@@ -928,6 +1020,8 @@
 
     const pwdModal = document.getElementById('pwdModal');
 
+    document.getElementById('saveEmailBtn').addEventListener('click', saveEmail);
+    document.getElementById('resendEmailBtn').addEventListener('click', resendEmail);
     document.getElementById('changePwdBtn').addEventListener('click', () => {
       document.getElementById('pwdNew').value = '';
       document.getElementById('pwdConfirm').value = '';

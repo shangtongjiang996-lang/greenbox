@@ -13,6 +13,7 @@ const {
 } = require('./redis');
 const { getModerationState, checkModeration, applyModeration } = require('./moderation');
 const { writeAudit } = require('./audit');
+const { appBaseUrl, layout: emailLayout, sendEmail, isEmailConfigured } = require('./email');
 
 // ===== 社交模块 =====
 const { registerSocialRoutes, registerSocialSocket, emitToUser } = require('./social');
@@ -293,8 +294,7 @@ async function verifyUserRecord(user, password) {
     const targetIterations = Number(process.env.PBKDF2_ITERATIONS) || 600000;
     if (Number(user.iterations) < targetIterations) {
       const upgraded = await createUserRecord(password);
-      upgraded.role = user.role || 'user';
-      upgraded.createdAt = user.createdAt || upgraded.createdAt;
+      copyUserMeta(upgraded, user);
       return { ok: true, needsUpgrade: true, upgradedRecord: upgraded };
     }
     return { ok: true, needsUpgrade: false };
@@ -302,7 +302,7 @@ async function verifyUserRecord(user, password) {
   const hash = crypto.createHash('sha256').update(password + user.salt).digest('hex');
   if (hash !== user.passwordHash) return { ok: false };
   const upgraded = await createUserRecord(password);
-  upgraded.role = user.role || 'user';
+  copyUserMeta(upgraded, user);
   return { ok: true, needsUpgrade: true, upgradedRecord: upgraded };
 }
 
@@ -588,6 +588,105 @@ function timingSafeHex(a, b) {
     return false;
   }
 }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase().slice(0, 254);
+}
+function isValidEmail(value) {
+  return EMAIL_RE.test(normalizeEmail(value));
+}
+function emailOwnerKey(email) {
+  return `email_owner:${sha256Hex(normalizeEmail(email))}`;
+}
+function copyUserMeta(next, previous) {
+  if (!next || !previous) return next;
+  next.role = previous.role || next.role || 'user';
+  next.createdAt = previous.createdAt || next.createdAt;
+  if (previous.email) next.email = previous.email;
+  if (previous.emailVerified) next.emailVerified = true;
+  if (previous.emailVerifiedAt) next.emailVerifiedAt = previous.emailVerifiedAt;
+  if (previous.emailUpdatedAt) next.emailUpdatedAt = previous.emailUpdatedAt;
+  return next;
+}
+async function revokeAllSessions(username) {
+  const list = (await kvGet(`user_sessions:${username}`)) || [];
+  for (const entry of list) {
+    if (entry && entry.token) await revokeSessionToken(username, entry.token);
+  }
+  await kvDelete(`user_sessions:${username}`);
+}
+
+async function createEmailToken(username, email, type) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const ttl = 30 * 60;
+  await kvPut(`email_token:${sha256Hex(token)}`, {
+    type,
+    username,
+    email: normalizeEmail(email),
+    createdAt: Date.now(),
+    expiresAt: Date.now() + ttl * 1000,
+  }, { expirationTtl: ttl });
+  return token;
+}
+async function readEmailToken(token, type) {
+  if (!/^[a-f0-9]{64}$/i.test(String(token || ''))) return null;
+  const hash = sha256Hex(String(token).toLowerCase());
+  const record = await kvGet(`email_token:${hash}`);
+  if (!record || record.type !== type) return null;
+  if (!record.expiresAt || record.expiresAt < Date.now()) {
+    await kvDelete(`email_token:${hash}`);
+    return null;
+  }
+  return { record, hash };
+}
+async function sendVerificationEmail(username, email) {
+  if (!isEmailConfigured()) return { sent: false, error: '邮件服务暂未配置' };
+  const token = await createEmailToken(username, email, 'verify');
+  const url = `${appBaseUrl()}/verify-email.html?token=${encodeURIComponent(token)}`;
+  try {
+    await sendEmail({
+      to: email,
+      subject: '验证你的 GreenBox 邮箱',
+      html: emailLayout(
+        '验证你的邮箱',
+        `<p>你好，${username}。</p><p>请点击下面的按钮验证邮箱。验证后可以使用邮箱找回密码。</p>`,
+        '验证邮箱',
+        url,
+        '验证链接 30 分钟内有效。如果不是你本人操作，请忽略这封邮件。'
+      ),
+      text: `验证你的 GreenBox 邮箱：${url}\n链接 30 分钟内有效。`,
+    });
+    return { sent: true };
+  } catch (e) {
+    console.error('发送验证邮件失败:', e.message);
+    return { sent: false, error: '邮件发送失败' };
+  }
+}
+async function sendPasswordResetEmail(username, email) {
+  if (!isEmailConfigured()) return { sent: false, error: '邮件服务暂未配置' };
+  const token = await createEmailToken(username, email, 'reset');
+  const url = `${appBaseUrl()}/reset-password.html?token=${encodeURIComponent(token)}`;
+  try {
+    await sendEmail({
+      to: email,
+      subject: '重置你的 GreenBox 密码',
+      html: emailLayout(
+        '重置密码',
+        `<p>你好，${username}。</p><p>我们收到了重置密码的请求。点击下面的按钮设置新密码。</p>`,
+        '设置新密码',
+        url,
+        '重置链接 30 分钟内有效，只能使用一次。如果不是你本人操作，请忽略这封邮件，你的密码不会改变。'
+      ),
+      text: `重置你的 GreenBox 密码：${url}\n链接 30 分钟内有效。`,
+    });
+    return { sent: true };
+  } catch (e) {
+    console.error('发送重置密码邮件失败:', e.message);
+    return { sent: false, error: '邮件发送失败' };
+  }
+}
+
 function randomSixDigit() {
   return String(crypto.randomInt(0, 1000000)).padStart(6, '0');
 }
@@ -801,12 +900,23 @@ const DM_BLOCKED_EXT = new Set([
 app.post('/api/register', async (req, res) => {
   const ip = clientIp(req);
   if (!(await checkRateLimit(`rl:register:${ip}`, 5, 3600))) return res.status(429).json({ error: '请求过于频繁' });
-  const { username, password } = req.body;
+  const { username, password, email } = req.body;
   if (!isValidUsername(username)) return res.status(400).json({ error: '用户名格式错误' });
   if (!isValidPassword(password)) return res.status(400).json({ error: '密码长度需6-72位' });
+  const cleanEmail = email ? normalizeEmail(email) : '';
+  if (cleanEmail && !isValidEmail(cleanEmail)) return res.status(400).json({ error: '邮箱格式错误' });
   const users = await kvGet('users') || {};
   if (users[username]) return res.status(409).json({ error: '用户名已存在' });
+  if (cleanEmail) {
+    const owner = await kvGet(emailOwnerKey(cleanEmail));
+    if (owner) return res.status(409).json({ error: '这个邮箱已经被使用' });
+  }
   const record = await createUserRecord(password);
+  if (cleanEmail) {
+    record.email = cleanEmail;
+    record.emailVerified = false;
+    record.emailUpdatedAt = Date.now();
+  }
   let existed = false;
   await kvUpdate('users', current => {
     const next = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
@@ -815,7 +925,17 @@ app.post('/api/register', async (req, res) => {
     return next;
   }, {});
   if (existed) return res.status(409).json({ error: '用户名已存在' });
-  res.json({ success: true, message: '注册成功' });
+  let emailSent = false;
+  if (cleanEmail) {
+    try {
+      await kvPut(emailOwnerKey(cleanEmail), username);
+      const sent = await sendVerificationEmail(username, cleanEmail);
+      emailSent = !!sent.sent;
+    } catch (e) {
+      console.error('注册后绑定邮箱失败:', e.message);
+    }
+  }
+  res.json({ success: true, message: '注册成功', emailSent });
 });
 
 app.post('/api/login', async (req, res) => {
@@ -1103,8 +1223,7 @@ app.post('/api/change-my-password', async (req, res) => {
   const user = users[session.username];
   if (!user) return res.status(404).json({ error: '用户不存在' });
   const newRecord = await createUserRecord(newPassword);
-  newRecord.role = user.role || 'user';
-  newRecord.createdAt = user.createdAt || Date.now();
+  copyUserMeta(newRecord, user);
   await kvUpdate('users', current => {
     if (current && current[session.username]) current[session.username] = newRecord;
     return current;
@@ -1116,6 +1235,128 @@ app.post('/api/change-my-password', async (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const ip = clientIp(req);
+  if (!(await checkRateLimit(`rl:forgot:ip:${ip}`, 8, 900))) {
+    return res.status(429).json({ error: '请求过于频繁，请稍后再试' });
+  }
+  const email = normalizeEmail(req.body && req.body.email);
+  if (!isValidEmail(email)) return res.status(400).json({ error: '邮箱格式错误' });
+  if (!(await checkRateLimit(`rl:forgot:email:${sha256Hex(email)}`, 3, 900))) {
+    return res.status(429).json({ error: '请求过于频繁，请稍后再试' });
+  }
+
+  let username = await kvGet(emailOwnerKey(email));
+  let user = username ? ((await kvGet('users')) || {})[username] : null;
+  if (!user || normalizeEmail(user.email) !== email) {
+    const users = (await kvGet('users')) || {};
+    const found = Object.keys(users).find(name => normalizeEmail(users[name] && users[name].email) === email);
+    if (found) { username = found; user = users[found]; }
+  }
+  if (user && username && normalizeEmail(user.email) === email && user.emailVerified === true) {
+    const result = await sendPasswordResetEmail(username, email);
+    if (!result.sent) console.error('找回密码邮件发送失败:', result.error);
+  }
+  // 不泄露邮箱是否存在
+  res.json({ success: true, message: '如果该邮箱已绑定并验证，重置邮件会很快送达。' });
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const token = String((req.body && req.body.token) || '');
+  const password = req.body && req.body.password;
+  if (!isValidPassword(password)) return res.status(400).json({ error: '密码长度需6-72位' });
+  const parsed = await readEmailToken(token, 'reset');
+  if (!parsed) return res.status(400).json({ error: '重置链接无效或已过期' });
+  const { record, hash } = parsed;
+  const users = (await kvGet('users')) || {};
+  const user = users[record.username];
+  if (!user || normalizeEmail(user.email) !== normalizeEmail(record.email)) {
+    await kvDelete(`email_token:${hash}`);
+    return res.status(400).json({ error: '重置链接无效或已过期' });
+  }
+  const next = await createUserRecord(password);
+  copyUserMeta(next, user);
+  users[record.username] = next;
+  await kvPut('users', users);
+  await kvDelete(`email_token:${hash}`);
+  await revokeAllSessions(record.username);
+  try { await writeAudit(record.username, 'password:reset', record.username, '通过邮箱重置密码'); } catch (e) {}
+  res.json({ success: true, message: '密码已重置，请重新登录' });
+});
+
+app.post('/api/auth/verify-email', async (req, res) => {
+  const token = String((req.body && req.body.token) || '');
+  const parsed = await readEmailToken(token, 'verify');
+  if (!parsed) return res.status(400).json({ error: '验证链接无效或已过期' });
+  const { record, hash } = parsed;
+  const users = (await kvGet('users')) || {};
+  const user = users[record.username];
+  if (!user || normalizeEmail(user.email) !== normalizeEmail(record.email)) {
+    await kvDelete(`email_token:${hash}`);
+    return res.status(400).json({ error: '验证链接无效或已过期' });
+  }
+  user.emailVerified = true;
+  user.emailVerifiedAt = Date.now();
+  user.email = normalizeEmail(record.email);
+  users[record.username] = user;
+  await kvPut('users', users);
+  await kvPut(emailOwnerKey(record.email), record.username);
+  await kvDelete(`email_token:${hash}`);
+  res.json({ success: true, username: record.username, email: user.email });
+});
+
+app.post('/api/user/email', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  if (session.username === 'admin') return res.status(400).json({ error: '管理员账号不支持绑定邮箱' });
+  const email = normalizeEmail(req.body && req.body.email);
+  const password = req.body && req.body.password;
+  if (!isValidEmail(email)) return res.status(400).json({ error: '邮箱格式错误' });
+  if (!(await checkRateLimit(`rl:email:set:${session.username}`, 5, 3600))) {
+    return res.status(429).json({ error: '操作过于频繁，请稍后再试' });
+  }
+  const users = (await kvGet('users')) || {};
+  const user = users[session.username];
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+  if (!password) return res.status(400).json({ error: '请输入当前密码确认' });
+  const verified = await verifyUserRecord(user, String(password));
+  if (!verified.ok) return res.status(403).json({ error: '当前密码错误' });
+  if (normalizeEmail(user.email) === email && user.emailVerified === true) {
+    return res.json({ success: true, email, emailVerified: true, emailSent: false });
+  }
+  const owner = await kvGet(emailOwnerKey(email));
+  if (owner && owner !== session.username) return res.status(409).json({ error: '这个邮箱已经被使用' });
+  const oldEmail = normalizeEmail(user.email);
+  const oldOwner = oldEmail ? await kvGet(emailOwnerKey(oldEmail)) : null;
+  user.email = email;
+  user.emailVerified = false;
+  user.emailUpdatedAt = Date.now();
+  users[session.username] = user;
+  await kvPut('users', users);
+  await kvPut(emailOwnerKey(email), session.username);
+  if (oldEmail && oldEmail !== email && oldOwner === session.username) {
+    await kvDelete(emailOwnerKey(oldEmail));
+  }
+  const sent = await sendVerificationEmail(session.username, email);
+  res.json({ success: true, email, emailVerified: false, emailSent: !!sent.sent, message: sent.sent ? '验证邮件已发送' : '邮箱已保存，但验证邮件发送失败，请稍后重试' });
+});
+
+app.post('/api/user/email/resend', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  if (session.username === 'admin') return res.status(400).json({ error: '管理员账号不支持邮箱验证' });
+  if (!(await checkRateLimit(`rl:email:resend:${session.username}`, 3, 900))) {
+    return res.status(429).json({ error: '发送过于频繁，请稍后再试' });
+  }
+  const users = (await kvGet('users')) || {};
+  const user = users[session.username];
+  if (!user || !isValidEmail(user.email)) return res.status(400).json({ error: '请先绑定邮箱' });
+  if (user.emailVerified === true) return res.json({ success: true, emailVerified: true, emailSent: false });
+  const sent = await sendVerificationEmail(session.username, user.email);
+  if (!sent.sent) return res.status(502).json({ error: sent.error || '验证邮件发送失败' });
+  res.json({ success: true, emailSent: true });
+});
+
 app.post('/api/delete-account', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -1123,6 +1364,8 @@ app.post('/api/delete-account', async (req, res) => {
   if (session.username === 'admin') return res.status(403).json({ error: '不能删除管理员' });
   const users = await kvGet('users') || {};
   if (!users[session.username]) return res.status(404).json({ error: '用户不存在' });
+  const deletedEmail = normalizeEmail(users[session.username].email);
+  if (deletedEmail) await kvDelete(emailOwnerKey(deletedEmail));
   await kvUpdate('users', current => {
     if (current && current[session.username]) delete current[session.username];
     return current;
@@ -1171,7 +1414,13 @@ app.get('/api/user/me', async (req, res) => {
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
   const profile = await getPublicProfile(session.username);
-  res.json(profile);
+  const users = (await kvGet('users')) || {};
+  const account = users[session.username] || {};
+  res.json(Object.assign({}, profile, {
+    email: session.username === 'admin' ? '' : (account.email || ''),
+    emailVerified: session.username === 'admin' ? false : account.emailVerified === true,
+    emailUpdatedAt: account.emailUpdatedAt || null,
+  }));
 });
 
 app.put('/api/user/profile', async (req, res) => {
@@ -4432,6 +4681,8 @@ app.delete('/api/admin/users', async (req, res) => {
   if (username === 'admin') return res.status(400).json({ error: '不能删除管理员' });
   const users = await kvGet('users') || {};
   if (!users[username]) return res.status(404).json({ error: '用户不存在' });
+  const deletedEmail = normalizeEmail(users[username].email);
+  if (deletedEmail) await kvDelete(emailOwnerKey(deletedEmail));
   delete users[username];
   await kvPut('users', users);
   await kvDelete(`user_profile:${username}`);
@@ -4492,8 +4743,7 @@ app.post('/api/admin/reset-password', async (req, res) => {
   const users = await kvGet('users') || {};
   if (!users[username]) return res.status(404).json({ error: '用户不存在' });
   const newRecord = await createUserRecord(newPassword);
-  newRecord.role = users[username].role || 'user';
-  newRecord.createdAt = users[username].createdAt || Date.now();
+  copyUserMeta(newRecord, users[username]);
   users[username] = newRecord;
   await kvPut('users', users);
   res.json({ success: true });
