@@ -26,11 +26,12 @@
       overlay.className = 'gb-major-overlay gb-dialog-overlay';
       overlay.setAttribute('role', 'dialog');
       overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-labelledby', 'gb-dialog-title');
       var badge = type === 'prompt' ? '输入' : type === 'confirm' ? '确认操作' : '提示';
       overlay.innerHTML =
         '<div class="gb-major-card gb-dialog-card' + (danger ? ' danger' : '') + '">' +
         '<div class="gb-major-badge' + (danger ? ' warning' : '') + '">' + badge + '</div>' +
-        '<h3>' + esc(opts.title || (type === 'alert' ? '提示' : '请确认')) + '</h3>' +
+        '<h3 id="gb-dialog-title">' + esc(opts.title || (type === 'alert' ? '提示' : '请确认')) + '</h3>' +
         '<p>' + esc(opts.message || '') + '</p>' +
         (type === 'prompt' ? '<input class="gb-dialog-input" type="text" value="' + esc(opts.defaultValue || '') + '" maxlength="' + (opts.maxlength || 200) + '" autocomplete="off">' : '') +
         '<div class="gb-major-actions">' +
@@ -38,6 +39,7 @@
         '<button type="button" class="gb-major-go" data-dialog-ok>' + esc(opts.okText || '确定') + '</button>' +
         '</div></div>';
       document.body.appendChild(overlay);
+      var lastFocus = document.activeElement;
       var input = overlay.querySelector('.gb-dialog-input');
       var done = false;
       function finish(value) {
@@ -45,13 +47,22 @@
         done = true;
         overlay.remove();
         document.removeEventListener('keydown', onKey);
+        try { if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus(); } catch (e) {}
         resolve(value);
       }
       function ok() { finish(type === 'prompt' ? String(input ? input.value : '') : true); }
       function cancel() { finish(type === 'prompt' ? null : false); }
       function onKey(e) {
-        if (e.key === 'Escape') { e.preventDefault(); cancel(); }
-        if (e.key === 'Enter') { e.preventDefault(); ok(); }
+        if (e.key === 'Escape') { e.preventDefault(); cancel(); return; }
+        if (e.key === 'Enter') { e.preventDefault(); ok(); return; }
+        if (e.key === 'Tab') {
+          var nodes = Array.prototype.slice.call(overlay.querySelectorAll('button, input, [href], [tabindex]:not([tabindex="-1"])'))
+            .filter(function (el) { return !el.disabled && el.offsetParent !== null; });
+          if (!nodes.length) return;
+          var first = nodes[0], last = nodes[nodes.length - 1];
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
       }
       overlay.querySelector('[data-dialog-ok]').addEventListener('click', ok);
       var cancelBtn = overlay.querySelector('[data-dialog-cancel]');
@@ -77,4 +88,31 @@
     window.__gbNativeAlert = window.alert;
     window.alert = function (message) { window.gbAlert(message); };
   }
+
+  // 通用站内弹窗的 Esc 关闭与 Tab 焦点循环
+  document.addEventListener('keydown', function (e) {
+    if (document.querySelector('.gb-dialog-overlay')) return;
+    var overlay = document.querySelector('.modal-overlay.show, .dm-modal-overlay.show, .avatar-modal-overlay.show, .gm-invite-overlay.show');
+    if (!overlay) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      overlay.classList.remove('show');
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    var nodes = Array.prototype.slice.call(overlay.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])'))
+      .filter(function (el) { return !el.disabled && el.offsetParent !== null; });
+    if (!nodes.length) return;
+    var first = nodes[0], last = nodes[nodes.length - 1];
+    if (!overlay.contains(document.activeElement)) {
+      e.preventDefault();
+      first.focus();
+    } else if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
 })();

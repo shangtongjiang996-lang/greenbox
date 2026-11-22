@@ -27,8 +27,35 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const app = express();
 const server = http.createServer(app);
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://greenboxhweb.com',
+  'https://www.greenboxhweb.com',
+  'https://greenboxhweb.onrender.com',
+  'http://localhost:3000',
+  'http://localhost:5000',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5000'
+];
+const ALLOWED_ORIGINS = new Set(
+  (process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [])
+    .map(s => s.trim()).filter(Boolean)
+    .concat(DEFAULT_ALLOWED_ORIGINS)
+);
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // curl、服务端请求、同源请求
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    const u = new URL(origin);
+    return u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+  } catch (e) {
+    return false;
+  }
+}
+const corsOrigin = (origin, callback) => callback(null, isAllowedOrigin(origin));
+
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: { origin: corsOrigin, methods: ['GET', 'POST'] }
 });
 
 // 多实例广播：Socket.IO 的 Redis adapter
@@ -59,15 +86,60 @@ async function mutateSiteData(mutator) {
   }, { tools: [], changelogs: [] });
 }
 
-app.use(cors());
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  res.setHeader('Content-Security-Policy-Report-Only', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com",
+    "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' blob: https:",
+    "font-src 'self' data:",
+    "connect-src 'self' https: wss:",
+    "frame-src 'self' https: blob: data:",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'"
+  ].join('; '));
+  next();
+});
+app.use(cors({
+  origin: corsOrigin,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Upload-Key', 'Range'],
+  exposedHeaders: ['Content-Length', 'Content-Range'],
+  optionsSuccessStatus: 204,
+}));
 app.use(compression({
   filter: (req, res) => {
     if (req.path === '/api/chat/stream') return false;
     return compression.filter(req, res);
   }
 }));
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(express.static('public'));
+// 大体积 JSON 只放宽站点数据保存；其余接口保持小请求体。
+app.use('/api/update', bodyParser.json({ limit: '5mb' }));
+app.use(bodyParser.json({ limit: '256kb' }));
+app.use(express.static('public', {
+  maxAge: '1h',
+  setHeaders(res, filePath) {
+    if (/\.html?$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else if (/[\\/]vendor[\\/]|[\\/]icons\.svg$|[\\/]manifest\.webmanifest$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+    } else if (/[\\/]sw\.js$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=300');
+    }
+  }
+}));
 
 // 管理组权限闸门：所有 /api/admin 路由先经过分区权限检查
 app.use('/api/admin', async (req, res, next) => {
@@ -209,7 +281,7 @@ async function hashPasswordPBKDF2(password, saltHex, iterations) {
 
 async function createUserRecord(password) {
   const salt = crypto.randomBytes(16).toString('hex');
-  const iterations = 100000;
+  const iterations = Number(process.env.PBKDF2_ITERATIONS) || 600000;
   const passwordHash = await hashPasswordPBKDF2(password, salt, iterations);
   return { passwordHash, salt, iterations, algo: 'pbkdf2-sha256', role: 'user', createdAt: Date.now() };
 }
@@ -217,8 +289,15 @@ async function createUserRecord(password) {
 async function verifyUserRecord(user, password) {
   if (user.algo === 'pbkdf2-sha256' && user.iterations) {
     const candidate = await hashPasswordPBKDF2(password, user.salt, user.iterations);
-    if (candidate === user.passwordHash) return { ok: true, needsUpgrade: false };
-    return { ok: false };
+    if (!timingSafeHex(candidate, user.passwordHash)) return { ok: false };
+    const targetIterations = Number(process.env.PBKDF2_ITERATIONS) || 600000;
+    if (Number(user.iterations) < targetIterations) {
+      const upgraded = await createUserRecord(password);
+      upgraded.role = user.role || 'user';
+      upgraded.createdAt = user.createdAt || upgraded.createdAt;
+      return { ok: true, needsUpgrade: true, upgradedRecord: upgraded };
+    }
+    return { ok: true, needsUpgrade: false };
   }
   const hash = crypto.createHash('sha256').update(password + user.salt).digest('hex');
   if (hash !== user.passwordHash) return { ok: false };
@@ -524,7 +603,7 @@ async function issueToolUploadKey() {
 }
 async function setToolUploadPassword(password) {
   const salt = crypto.randomBytes(16).toString('hex');
-  const iterations = 100000;
+  const iterations = Number(process.env.PBKDF2_ITERATIONS) || 600000;
   const hash = await hashPasswordPBKDF2(password, salt, iterations);
   await kvPut('tool_upload_password', {
     hash, salt, iterations, algo: 'pbkdf2-sha256', updatedAt: Date.now(),
@@ -534,7 +613,7 @@ async function checkToolUploadPassword(password) {
   if (!password) return false;
   const record = await kvGet('tool_upload_password');
   if (!record || !record.hash || !record.salt) return false;
-  const candidate = await hashPasswordPBKDF2(password, record.salt, record.iterations || 100000);
+  const candidate = await hashPasswordPBKDF2(password, record.salt, record.iterations || Number(process.env.PBKDF2_ITERATIONS) || 600000);
   return timingSafeHex(record.hash, candidate);
 }
 async function checkToolUploadAuth(req) {
@@ -782,7 +861,7 @@ app.post('/api/login', async (req, res) => {
     }, {});
   }
   const token = await createSession(username, user.role || 'user', requestMeta(req));
-  const needsUpgrade = user.algo !== 'pbkdf2-sha256' || !user.iterations;
+  const needsUpgrade = !!result.needsUpgrade || user.algo !== 'pbkdf2-sha256' || !user.iterations;
   res.json({ success: true, token, username, role: user.role || 'user', needsUpgrade });
 });
 
