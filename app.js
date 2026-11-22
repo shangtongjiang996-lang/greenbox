@@ -6586,6 +6586,19 @@ const PORT = process.env.PORT || 3000;
 setTimeout(function () { migrateLegacyAvatars(); }, 5000);
 setTimeout(function () { migrateForumMedia(); }, 6500);
 setTimeout(function () { migrateForumImageOptimization(); }, 8500);
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: '请求体过大' });
+  }
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'JSON 格式错误' });
+  }
+  console.error('未处理请求错误:', req.method, req.path, err && err.message);
+  if (res.headersSent) return next(err);
+  if (req.path.startsWith('/api/')) return res.status(500).json({ error: '服务器内部错误' });
+  next(err);
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`GreenBox 服务运行在 http://0.0.0.0:${PORT}`);
   console.log(`WebSocket 已就绪（五子棋 + 私聊）`);
