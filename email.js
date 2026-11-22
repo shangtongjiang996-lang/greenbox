@@ -52,14 +52,22 @@ async function sendEmail({ to, subject, html, text }) {
     text: text || undefined,
   };
   if (process.env.RESEND_REPLY_TO) body.reply_to = process.env.RESEND_REPLY_TO;
-  const res = await fetch(RESEND_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  let res;
+  try {
+    res = await fetch(RESEND_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   let data = null;
   try { data = await res.json(); } catch (e) {}
   if (!res.ok) {
