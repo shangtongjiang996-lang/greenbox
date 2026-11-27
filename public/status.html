@@ -508,7 +508,10 @@
   }
 
   document.getElementById('stRefresh').addEventListener('click', load);
-  document.getElementById('stApply').addEventListener('click', function () { clampRange(); render(); });
+  document.getElementById('stApply').addEventListener('click', function () {
+    clampRange(); render();
+    document.getElementById('stReport').classList.add('show');
+  });
   document.getElementById('stGenerate').addEventListener('click', function () {
     clampRange(); render();
     document.getElementById('stReport').classList.add('show');
@@ -519,6 +522,7 @@
       var p = b.dataset.preset;
       setDefaultRange(p === 'today' ? 1 : p === '30d' ? 30 : 7);
       render();
+      document.getElementById('stReport').classList.add('show');
     });
   });
   document.getElementById('stDayClose').addEventListener('click', function () { document.getElementById('stDayModal').classList.remove('show'); });
