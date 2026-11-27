@@ -28,6 +28,9 @@
   .st-dot { width: 12px; height: 12px; border-radius: 50%; background: #94a3b8; box-shadow: 0 0 0 4px rgba(148,163,184,.15); }
   .st-dot.up { background: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,.15); }
   .st-dot.down { background: #dc2626; box-shadow: 0 0 0 4px rgba(220,38,38,.15); }
+  .st-dot.warn { background: #d97706; box-shadow: 0 0 0 4px rgba(217,119,6,.15); }
+  .st-badge.warn { background: #fef3c7; color: #92400e; }
+  .st-badge.critical { background: #fee2e2; color: #991b1b; }
   .st-banner-main { flex: 1; min-width: 200px; }
   .st-banner-main b { font-size: 1rem; }
   .st-banner-main small { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 0.15rem; }
@@ -57,6 +60,12 @@
   .st-day .date { width: 86px; color: var(--muted); flex-shrink: 0; }
   .st-day .bar { flex: 1; height: 9px; background: var(--bg-alt); border-radius: 999px; overflow: hidden; }
   .st-day .bar span { display: block; height: 100%; background: #16a34a; border-radius: 999px; }
+  .st-day .bar span.warning { background: #d97706; }
+  .st-day .bar span.critical { background: #dc2626; }
+  .st-day .flag { width: 36px; text-align: right; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
+  .st-day .flag.critical { color: #dc2626; }
+  .st-day .flag.warning { color: #b45309; }
+  .st-day .flag.up { color: var(--muted); font-weight: 500; }
   .st-day .num { width: 58px; text-align: right; color: var(--muted); flex-shrink: 0; }
   .st-day .cnt { width: 66px; text-align: right; color: var(--muted); font-size: 0.72rem; flex-shrink: 0; }
   .st-list { display: grid; gap: 0.35rem; max-height: 400px; overflow: auto; }
@@ -66,6 +75,7 @@
   .st-row .state { width: 58px; font-weight: 700; }
   .st-row .state.up { color: #16a34a; }
   .st-row .state.down { color: #dc2626; }
+  .st-row .state.warn { color: #b45309; }
   .st-row .latency { margin-left: auto; color: var(--muted); }
   .st-error { border: 1px solid #fecaca; background: #fef2f2; color: #991b1b; border-radius: 9px; padding: 0.8rem 0.9rem; font-size: 0.84rem; margin-bottom: 0.9rem; display: none; }
   .st-empty { color: var(--muted); text-align: center; padding: 1.3rem 0; font-size: 0.84rem; }
@@ -155,7 +165,7 @@
     <div class="st-kpi"><div class="label">范围可用率</div><div class="value" id="stUptime">-</div></div>
     <div class="st-kpi"><div class="label">平均延迟</div><div class="value" id="stLatency">-</div></div>
     <div class="st-kpi"><div class="label">检查次数</div><div class="value" id="stTotal">-</div></div>
-    <div class="st-kpi"><div class="label">异常次数</div><div class="value" id="stDown">-</div></div>
+    <div class="st-kpi"><div class="label">严重 / 轻微</div><div class="value" id="stDown">-</div></div>
   </div>
 
   <section class="st-card">
@@ -164,7 +174,8 @@
     <div class="st-chart-wrap"><canvas id="stChart"></canvas></div>
     <div class="st-legend">
       <span><i style="background:#16a34a"></i>正常</span>
-      <span><i style="background:#dc2626"></i>异常</span>
+      <span><i style="background:#d97706"></i>轻微异常</span>
+      <span><i style="background:#dc2626"></i>严重故障</span>
       <span><i style="background:#e2e8f0"></i>夜间/无数据</span>
     </div>
   </section>
@@ -188,7 +199,7 @@
     </div>
     <div class="st-report-grid" id="stReportStats"></div>
     <table class="st-report-table" id="stReportTable">
-      <thead><tr><th>日期</th><th>可用率</th><th>正常</th><th>异常</th><th>检查数</th><th>平均延迟</th></tr></thead>
+      <thead><tr><th>日期</th><th>可用率</th><th>正常</th><th>严重</th><th>轻微</th><th>检查数</th><th>平均延迟</th></tr></thead>
       <tbody></tbody>
     </table>
     <div id="stReportIncidents" style="margin-top:0.8rem;"></div>
@@ -257,14 +268,37 @@
     var to = dateTs(end, true);
     return checks.filter(function (c) { return c && c.ts >= from && c.ts <= to; });
   }
+  function classify(c) {
+    if (!c) return 'unknown';
+    if (c.ok) return Number(c.latency) >= 3000 ? 'warning' : 'ok';
+    var status = Number(c.status) || 0;
+    var detail = String(c.error || '') + ' ' + (status ? 'HTTP ' + status : '');
+    if (status === 0 || status >= 500 || /timeout|timed out|econn|enotfound|request failed|http 5\d\d/i.test(detail)) {
+      return 'critical';
+    }
+    return 'warning';
+  }
+  function severityText(c) {
+    var level = classify(c);
+    if (level === 'critical') return '故障';
+    if (level === 'warning') return '轻微异常';
+    if (level === 'ok') return '正常';
+    return '未知';
+  }
   function stats(checks) {
-    var up = checks.filter(function (c) { return c.ok; }).length;
+    var up = 0, critical = 0, warning = 0;
+    checks.forEach(function (c) {
+      var level = classify(c);
+      if (level === 'critical') critical++;
+      else if (level === 'warning') warning++;
+      if (c.ok) up++;
+    });
     var down = checks.length - up;
     var lat = checks.map(function (c) { return Number(c.latency) || 0; }).filter(function (n) { return n > 0; });
     var avg = lat.length ? Math.round(lat.reduce(function (a, b) { return a + b; }, 0) / lat.length) : null;
     var min = lat.length ? Math.min.apply(null, lat) : null;
     var max = lat.length ? Math.max.apply(null, lat) : null;
-    return { up: up, down: down, total: checks.length, percent: checks.length ? up / checks.length * 100 : null, avg: avg, min: min, max: max };
+    return { up: up, down: down, critical: critical, warning: warning, total: checks.length, percent: checks.length ? up / checks.length * 100 : null, avg: avg, min: min, max: max };
   }
 
   async function fetchData() {
@@ -290,14 +324,15 @@
     });
     var latest = data.latest;
     var current = data.current || 'unknown';
+    var level = latest ? classify(latest) : 'unknown';
     var dot = document.getElementById('stDot');
-    dot.className = 'st-dot ' + current;
-    setText('stCurrent', current === 'up' ? '网站运行正常' : current === 'down' ? '网站当前异常' : '暂无检查数据');
-    setText('stCurrentKpi', current === 'up' ? '正常' : current === 'down' ? '异常' : '未知');
-    setText('stCurrentSub', latest ? ('最近检查：' + fmtTime(latest.ts) + ' · ' + fmtLatency(latest.latency)) : '监控 Worker 已连接，但还没有记录');
+    dot.className = 'st-dot ' + (level === 'critical' ? 'down' : level === 'warning' ? 'warn' : current === 'up' ? 'up' : '');
+    setText('stCurrent', level === 'critical' ? '网站出现严重故障' : level === 'warning' ? '网站出现轻微异常' : current === 'up' ? '网站运行正常' : '暂无检查数据');
+    setText('stCurrentKpi', level === 'critical' ? '故障' : level === 'warning' ? '轻微异常' : current === 'up' ? '正常' : '未知');
+    setText('stCurrentSub', latest ? ('最近检查：' + fmtTime(latest.ts) + ' · ' + fmtLatency(latest.latency) + (latest.status ? ' · HTTP ' + latest.status : '') + (latest.error ? ' · ' + latest.error : '')) : '监控 Worker 已连接，但还没有记录');
     var badge = document.getElementById('stBadge');
-    badge.className = 'st-badge ' + current;
-    badge.textContent = current === 'up' ? '正常' : current === 'down' ? '异常' : '未知';
+    badge.className = 'st-badge ' + (level === 'critical' ? 'critical' : level === 'warning' ? 'warn' : current);
+    badge.textContent = level === 'critical' ? '严重故障' : level === 'warning' ? '轻微异常' : current === 'up' ? '正常' : '未知';
   }
 
   function setDefaultRange(days) {
@@ -332,7 +367,7 @@
     setText('stUptime', fmtPercent(st.percent));
     setText('stLatency', fmtLatency(st.avg));
     setText('stTotal', st.total + ' 次');
-    setText('stDown', st.down + ' 次');
+    setText('stDown', st.critical + ' / ' + st.warning);
     setText('stRangeHint', selectedStart + ' 至 ' + selectedEnd + '，点击某一天查看当天每一次检查。');
     drawChart();
     renderDays();
@@ -368,7 +403,7 @@
       var bw = Math.max(2, slot - 3);
       if (s.total) {
         var height = Math.max(3, plotH * (s.percent == null ? 0 : s.percent / 100));
-        ctx.fillStyle = s.down > 0 ? '#dc2626' : '#16a34a';
+        ctx.fillStyle = s.critical > 0 ? '#dc2626' : s.warning > 0 ? '#d97706' : '#16a34a';
         ctx.fillRect(x + 1, top + plotH - height, bw, height);
         ctx.fillStyle = 'rgba(255,255,255,.35)';
         ctx.fillRect(x + 1, top + 4, bw, Math.max(1, plotH - height - 4));
@@ -402,11 +437,14 @@
     el.innerHTML = days.map(function (date) {
       var list = dayMap[date] || [];
       var s = stats(list);
+      var level = s.critical > 0 ? 'critical' : s.warning > 0 ? 'warning' : 'up';
+      var flag = s.total === 0 ? '无' : level === 'critical' ? '严重' : level === 'warning' ? '轻微' : '正常';
       return '<button type="button" class="st-day" data-day="' + esc(date) + '">' +
         '<span class="date">' + esc(date) + '</span>' +
-        '<span class="bar"><span style="width:' + (s.percent == null ? 0 : Math.max(0, Math.min(100, s.percent))) + '%"></span></span>' +
+        '<span class="bar"><span class="' + level + '" style="width:' + (s.percent == null ? 0 : Math.max(0, Math.min(100, s.percent))) + '%"></span></span>' +
         '<span class="num">' + (s.percent == null ? '无数据' : s.percent.toFixed(1) + '%') + '</span>' +
-        '<span class="cnt">' + s.total + ' 次</span></button>';
+        '<span class="cnt">' + s.total + ' 次</span>' +
+        '<span class="flag ' + level + '">' + flag + '</span></button>';
     }).join('');
     el.querySelectorAll('[data-day]').forEach(function (b) {
       b.addEventListener('click', function () { openDay(b.dataset.day); });
@@ -421,9 +459,13 @@
     el.innerHTML = list.map(renderRow).join('');
   }
   function renderRow(c) {
+    var level = classify(c);
+    var stateClass = level === 'critical' ? 'down' : level === 'warning' ? 'warn' : 'up';
+    var stateText = level === 'critical' ? '故障' : level === 'warning' ? '轻微异常' : '正常';
+    var detail = c.status ? 'HTTP ' + c.status : (c.error || '-');
     return '<div class="st-row"><span class="time">' + esc(fmtTime(c.ts)) + '</span>' +
-      '<span class="state ' + (c.ok ? 'up' : 'down') + '">' + (c.ok ? '正常' : '异常') + '</span>' +
-      '<span>' + (c.status ? 'HTTP ' + c.status : esc(c.error || '-')) + '</span>' +
+      '<span class="state ' + stateClass + '">' + stateText + '</span>' +
+      '<span>' + esc(detail) + (c.error && c.status ? ' · ' + esc(c.error) : '') + '</span>' +
       '<span class="latency">' + fmtLatency(c.latency) + '</span></div>';
   }
 
@@ -431,7 +473,7 @@
     var list = (dayMap[date] || []).slice().sort(function (a, b) { return a.ts - b.ts; });
     var s = stats(list);
     document.getElementById('stDayTitle').textContent = date + ' 详细数据';
-    document.getElementById('stDaySub').textContent = '可用率 ' + fmtPercent(s.percent) + ' · 正常 ' + s.up + ' 次 · 异常 ' + s.down + ' 次 · 平均延迟 ' + fmtLatency(s.avg);
+    document.getElementById('stDaySub').textContent = '可用率 ' + fmtPercent(s.percent) + ' · 正常 ' + s.up + ' 次 · 严重 ' + s.critical + ' 次 · 轻微 ' + s.warning + ' 次 · 平均延迟 ' + fmtLatency(s.avg);
     var el = document.getElementById('stDayList');
     el.innerHTML = list.length ? list.map(renderRow).join('') : '<div class="st-empty">当天没有检查记录（可能处于夜间暂停时段）</div>';
     document.getElementById('stDayModal').classList.add('show');
@@ -449,15 +491,17 @@
     statsEl.innerHTML =
       '<div class="st-report-stat"><small>可用率</small><b>' + fmtPercent(st.percent) + '</b></div>' +
       '<div class="st-report-stat"><small>总检查</small><b>' + st.total + ' 次</b></div>' +
-      '<div class="st-report-stat"><small>异常</small><b>' + st.down + ' 次</b></div>' +
+      '<div class="st-report-stat"><small>严重 / 轻微</small><b>' + st.critical + ' / ' + st.warning + '</b></div>' +
       '<div class="st-report-stat"><small>平均 / 最小 / 最大延迟</small><b>' + fmtLatency(st.avg) + ' / ' + fmtLatency(st.min) + ' / ' + fmtLatency(st.max) + '</b></div>';
     document.querySelector('#stReportTable tbody').innerHTML = byDay.map(function (x) {
-      return '<tr><td>' + esc(x.date) + '</td><td>' + fmtPercent(x.stats.percent) + '</td><td>' + x.stats.up + '</td><td>' + x.stats.down + '</td><td>' + x.stats.total + '</td><td>' + fmtLatency(x.stats.avg) + '</td></tr>';
+      return '<tr><td>' + esc(x.date) + '</td><td>' + fmtPercent(x.stats.percent) + '</td><td>' + x.stats.up + '</td><td>' + x.stats.critical + '</td><td>' + x.stats.warning + '</td><td>' + x.stats.total + '</td><td>' + fmtLatency(x.stats.avg) + '</td></tr>';
     }).join('');
     var incidents = buildIncidents(checks);
     document.getElementById('stReportIncidents').innerHTML = incidents.length
       ? '<h3 style="font-size:0.9rem;margin:0 0 0.4rem;">异常时段</h3>' + incidents.map(function (x) {
-          return '<div class="st-row"><span class="state down">异常</span><span>' + esc(fmtTime(x.start)) + ' 至 ' + esc(fmtTime(x.end)) + '</span><span class="latency">' + x.count + ' 次检查</span></div>';
+          var cls = x.severity === 'critical' ? 'down' : 'warn';
+          var label = x.severity === 'critical' ? '故障' : '轻微异常';
+          return '<div class="st-row"><span class="state ' + cls + '">' + label + '</span><span>' + esc(fmtTime(x.start)) + ' 至 ' + esc(fmtTime(x.end)) + '</span><span class="latency">' + x.count + ' 次检查</span></div>';
         }).join('')
       : '<div class="st-empty" style="padding:0.6rem 0;">所选时间段没有异常记录</div>';
   }
@@ -466,18 +510,24 @@
     var down = checks.filter(function (c) { return c && !c.ok; }).sort(function (a, b) { return a.ts - b.ts; });
     var out = [];
     down.forEach(function (c) {
+      var level = classify(c);
       var last = out[out.length - 1];
-      if (last && c.ts - last.end <= 6 * 60 * 1000) { last.end = c.ts; last.count++; }
-      else out.push({ start: c.ts, end: c.ts, count: 1 });
+      if (last && c.ts - last.end <= 6 * 60 * 1000) {
+        last.end = c.ts;
+        last.count++;
+        if (level === 'critical') last.severity = 'critical';
+      } else {
+        out.push({ start: c.ts, end: c.ts, count: 1, severity: level });
+      }
     });
     return out.slice(0, 50);
   }
 
   function csv() {
-    var lines = [['日期', '可用率', '正常', '异常', '检查数', '平均延迟(ms)']];
+    var lines = [['日期', '可用率', '正常', '严重', '轻微', '检查数', '平均延迟(ms)']];
     for (var d = selectedStart; d <= selectedEnd; d = addDays(d, 1)) {
       var s = stats(dayMap[d] || []);
-      lines.push([d, s.percent == null ? '' : s.percent.toFixed(2), s.up, s.down, s.total, s.avg == null ? '' : s.avg]);
+      lines.push([d, s.percent == null ? '' : s.percent.toFixed(2), s.up, s.critical, s.warning, s.total, s.avg == null ? '' : s.avg]);
     }
     var csv = lines.map(function (row) { return row.map(function (x) { return '"' + String(x).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
     var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
