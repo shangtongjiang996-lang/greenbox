@@ -285,6 +285,38 @@
     if (level === 'ok') return '正常';
     return '未知';
   }
+  function statusReason(status) {
+    var map = {
+      0: '网络连接失败',
+      400: '请求参数错误',
+      401: '未授权或登录失效',
+      403: '访问被拒绝',
+      404: '接口不存在',
+      408: '请求超时',
+      429: '请求过于频繁',
+      500: '服务器内部错误',
+      502: '网关错误',
+      503: '服务暂不可用',
+      504: '网关超时',
+      520: '源站返回未知错误',
+      521: '源站拒绝连接',
+      522: '源站连接超时',
+      523: '源站不可达',
+      524: '源站响应超时',
+      525: 'SSL 握手失败',
+      526: 'SSL 证书无效',
+      530: '源站或代理错误'
+    };
+    return map[Number(status)] || '';
+  }
+  function checkDetail(c) {
+    var http = c.status ? 'HTTP ' + c.status : '';
+    var raw = String(c.error || '').trim();
+    if (!raw || /^HTTP\s*\d+$/i.test(raw)) raw = statusReason(c.status);
+    if (raw && http && raw.indexOf(http) === 0) raw = raw.slice(http.length).replace(/^[\s·:：-]+/, '');
+    if (http && raw) return http + ' · ' + raw;
+    return http || raw || '-';
+  }
   function stats(checks) {
     var up = 0, critical = 0, warning = 0;
     checks.forEach(function (c) {
@@ -329,7 +361,7 @@
     dot.className = 'st-dot ' + (level === 'critical' ? 'down' : level === 'warning' ? 'warn' : current === 'up' ? 'up' : '');
     setText('stCurrent', level === 'critical' ? '网站出现严重故障' : level === 'warning' ? '网站出现轻微异常' : current === 'up' ? '网站运行正常' : '暂无检查数据');
     setText('stCurrentKpi', level === 'critical' ? '故障' : level === 'warning' ? '轻微异常' : current === 'up' ? '正常' : '未知');
-    setText('stCurrentSub', latest ? ('最近检查：' + fmtTime(latest.ts) + ' · ' + fmtLatency(latest.latency) + (latest.status ? ' · HTTP ' + latest.status : '') + (latest.error ? ' · ' + latest.error : '')) : '监控 Worker 已连接，但还没有记录');
+    setText('stCurrentSub', latest ? ('最近检查：' + fmtTime(latest.ts) + ' · ' + fmtLatency(latest.latency) + (latest.status ? ' · ' + checkDetail(latest) : (latest.error ? ' · ' + latest.error : ''))) : '监控 Worker 已连接，但还没有记录');
     var badge = document.getElementById('stBadge');
     badge.className = 'st-badge ' + (level === 'critical' ? 'critical' : level === 'warning' ? 'warn' : current);
     badge.textContent = level === 'critical' ? '严重故障' : level === 'warning' ? '轻微异常' : current === 'up' ? '正常' : '未知';
@@ -462,10 +494,10 @@
     var level = classify(c);
     var stateClass = level === 'critical' ? 'down' : level === 'warning' ? 'warn' : 'up';
     var stateText = level === 'critical' ? '故障' : level === 'warning' ? '轻微异常' : '正常';
-    var detail = c.status ? 'HTTP ' + c.status : (c.error || '-');
+    var detail = checkDetail(c);
     return '<div class="st-row"><span class="time">' + esc(fmtTime(c.ts)) + '</span>' +
       '<span class="state ' + stateClass + '">' + stateText + '</span>' +
-      '<span>' + esc(detail) + (c.error && c.status ? ' · ' + esc(c.error) : '') + '</span>' +
+      '<span>' + esc(detail) + '</span>' +
       '<span class="latency">' + fmtLatency(c.latency) + '</span></div>';
   }
 
@@ -501,7 +533,7 @@
       ? '<h3 style="font-size:0.9rem;margin:0 0 0.4rem;">异常时段</h3>' + incidents.map(function (x) {
           var cls = x.severity === 'critical' ? 'down' : 'warn';
           var label = x.severity === 'critical' ? '故障' : '轻微异常';
-          return '<div class="st-row"><span class="state ' + cls + '">' + label + '</span><span>' + esc(fmtTime(x.start)) + ' 至 ' + esc(fmtTime(x.end)) + '</span><span class="latency">' + x.count + ' 次检查</span></div>';
+          return '<div class="st-row"><span class="state ' + cls + '">' + label + '</span><span>' + esc(fmtTime(x.start)) + ' 至 ' + esc(fmtTime(x.end)) + (x.detail ? ' · ' + esc(x.detail) : '') + '</span><span class="latency">' + x.count + ' 次检查</span></div>';
         }).join('')
       : '<div class="st-empty" style="padding:0.6rem 0;">所选时间段没有异常记录</div>';
   }
@@ -516,8 +548,9 @@
         last.end = c.ts;
         last.count++;
         if (level === 'critical') last.severity = 'critical';
+        last.detail = checkDetail(c);
       } else {
-        out.push({ start: c.ts, end: c.ts, count: 1, severity: level });
+        out.push({ start: c.ts, end: c.ts, count: 1, severity: level, detail: checkDetail(c) });
       }
     });
     return out.slice(0, 50);
