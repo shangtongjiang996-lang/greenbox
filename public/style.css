@@ -836,6 +836,7 @@ body.gb-scroll-locked { overflow: hidden !important; }
   transition: all 0.28s ease; display: flex; align-items: center; gap: 0.5rem;
 }
 .toast.show { opacity: 1; transform: translateY(0); }
+body .toast, body #toast-container { z-index: 10060 !important; }
 .toast.success { background: var(--primary-dark); color: #fff; }
 .toast.error { background: var(--danger-dark); color: #fff; }
 

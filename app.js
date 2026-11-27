@@ -3285,7 +3285,17 @@ app.get('/api/chat/sessions', async (req, res) => {
   const cfg = await getChatConfig();
   if (!cfg.enableHistory) return res.json([]);
   const list = await getUserSessions(session.username);
-  res.json(list);
+  // 清理索引中存在、但详情已经过期/删除的旧会话，避免前端列表反复请求 404。
+  const valid = [];
+  let changed = false;
+  for (const item of list) {
+    if (!item || !item.id) { changed = true; continue; }
+    const data = await kvGet(`chat_session:${session.username}:${item.id}`);
+    if (data) valid.push(item);
+    else changed = true;
+  }
+  if (changed) await saveUserSessions(session.username, valid);
+  res.json(valid);
 });
 
 app.post('/api/chat/sessions', async (req, res) => {

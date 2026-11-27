@@ -1657,6 +1657,11 @@
           const res = await fetch('/api/chat/sessions', { headers: { 'Authorization': `Bearer ${token}` } });
           if (!res.ok) return;
           sessions = await res.json();
+          if (currentSessionId && !sessions.some(s => s.id === currentSessionId)) {
+            currentSessionId = null;
+            currentMessages = [];
+            renderMessages();
+          }
           renderSessionList();
         } catch (e) {}
       }
@@ -1735,7 +1740,19 @@
           const res = await fetch(`/api/chat/sessions/${id}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
-          if (!res.ok) return;
+          if (!res.ok) {
+            if (res.status === 404) {
+              sessions = sessions.filter(x => x.id !== id);
+              if (currentSessionId === id) {
+                currentSessionId = null;
+                currentMessages = [];
+                renderMessages();
+              }
+              renderSessionList();
+              console.warn('AI 会话已过期或已删除，已从列表移除:', id);
+            }
+            return;
+          }
           const data = await res.json();
           currentSessionId = id;
           currentMessages = data.messages || [];
@@ -1749,11 +1766,20 @@
         const token = localStorage.getItem('greenbox_token');
         if (!token) return;
         try {
-          await fetch(`/api/chat/sessions/${currentSessionId}`, {
+          const res = await fetch(`/api/chat/sessions/${currentSessionId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ messages: currentMessages })
           });
+          if (res.status === 404) {
+            sessions = sessions.filter(x => x.id !== currentSessionId);
+            currentSessionId = null;
+            currentMessages = [];
+            renderSessionList();
+            renderMessages();
+            console.warn('AI 会话已过期，已停止保存并移除列表项');
+            return;
+          }
           const idx = sessions.findIndex(s => s.id === currentSessionId);
           if (idx >= 0) {
             const firstUser = currentMessages.find(m => m.role === 'user');

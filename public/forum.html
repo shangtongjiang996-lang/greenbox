@@ -1796,6 +1796,9 @@
           currentPage = 1;
           loadPosts();
         } else {
+          if (res.status === 403 && /封禁|禁言/.test(data.error || '')) {
+            document.getElementById('newPostModal').classList.remove('show');
+          }
           showToast(data.error || '发布失败', 'error');
         }
       } catch (e) {
