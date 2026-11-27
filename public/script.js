@@ -550,8 +550,8 @@ const THEME_ICON = {
   }
 
   function setupScrollLock() {
-    var selectors = '.modal, .modal-overlay, .dm-modal-overlay, .modal-backdrop, .gb-modal-overlay, [role="dialog"], .lightbox, .image-viewer, .confirm-overlay, .action-sheet, .notif-panel-overlay.show, .notif-panel.show';
-    var ignore = '.gb-tour, .gb-invite-banner, .gb-dm-toast, .gb-major-overlay';
+    var selectors = '.modal, .modal-overlay, .dm-modal-overlay, .avatar-modal-overlay, .gm-invite-overlay, .modal-backdrop, .gb-modal-overlay, .gb-dialog-overlay, .ai-chat-panel.open, .ai-update-modal, [role="dialog"], .lightbox, .image-viewer, .confirm-overlay, .action-sheet, .notif-panel-overlay.show, .notif-panel.show';
+    var ignore = '.gb-invite-banner, .gb-dm-toast';
     var locked = false;
     function visible(el) {
       if (el.closest(ignore)) return false;

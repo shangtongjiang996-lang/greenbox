@@ -147,4 +147,39 @@
       first.focus();
     }
   });
+
+  // 通用弹窗的滚动锁定（管理后台等没有 script.js 的页面也生效）
+  (function setupModalScrollLock() {
+    var selectors = '.modal, .modal-overlay, .dm-modal-overlay, .avatar-modal-overlay, .gm-invite-overlay, .gb-dialog-overlay, .ai-chat-panel.open, .ai-update-modal, .notif-panel.show, .notif-panel-overlay.show, .gb-major-overlay';
+    var locked = false;
+    var prevHtml = '';
+    var prevBody = '';
+    function visible(el) {
+      var cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return false;
+      var r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    }
+    function sync() {
+      var open = Array.prototype.some.call(document.querySelectorAll(selectors), visible);
+      if (open === locked) return;
+      if (open) {
+        prevHtml = document.documentElement.style.overflow;
+        prevBody = document.body.style.overflow;
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+        document.documentElement.classList.add('gb-scroll-locked');
+        document.body.classList.add('gb-scroll-locked');
+      } else {
+        document.documentElement.style.overflow = prevHtml;
+        document.body.style.overflow = prevBody;
+        document.documentElement.classList.remove('gb-scroll-locked');
+        document.body.classList.remove('gb-scroll-locked');
+      }
+      locked = open;
+    }
+    var observer = new MutationObserver(function () { requestAnimationFrame(sync); });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'] });
+    sync();
+  })();
 })();
