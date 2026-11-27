@@ -467,10 +467,73 @@ body .dm-modal h3 + label {
   from { opacity: 0; transform: translateY(10px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-.gb-dialog-card { width: min(430px, 100%) !important; }
-.gb-dialog-card h3 { font-size: 1.08rem !important; margin: 0 0 8px !important; padding: 0 !important; border: 0 !important; }
-.gb-dialog-card p { white-space: pre-wrap; word-break: break-word; }
-.gb-dialog-card.danger .gb-major-go { background: var(--danger); }
+body .modal-box.gb-dialog-card {
+  width: min(440px, 100%) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: 18px !important;
+}
+.gb-dialog-card .modal-head {
+  padding: 20px 22px 13px !important;
+  margin: 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+.gb-dialog-card .modal-head h2 {
+  font-size: 1.08rem !important;
+  margin: 3px 0 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+.gb-dialog-kicker {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--primary-dark);
+  background: var(--primary-light);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.gb-dialog-card .modal-body {
+  padding: 16px 22px 4px !important;
+}
+.gb-dialog-message {
+  margin: 0 0 12px !important;
+  color: var(--muted) !important;
+  font-size: 0.9rem !important;
+  line-height: 1.75 !important;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.gb-dialog-card .modal-foot {
+  padding: 12px 22px 18px !important;
+  margin: 0 !important;
+  border-top: 1px solid var(--border) !important;
+}
+.gb-dialog-card .modal-foot .action-btn,
+.gb-dialog-card .modal-foot .comment-send {
+  min-height: 36px;
+  border-radius: 9px;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.gb-dialog-card .modal-foot .action-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.gb-dialog-card .modal-foot .comment-send {
+  background: var(--primary);
+  border: 1px solid var(--primary);
+  color: #fff;
+}
+.gb-dialog-card.danger .modal-foot .comment-send {
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
+}
 .gb-dialog-input {
   width: 100%; box-sizing: border-box; margin: 4px 0 2px;
   border: 1px solid var(--border); border-radius: 9px;

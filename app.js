@@ -1357,6 +1357,30 @@ app.post('/api/user/email/resend', async (req, res) => {
   res.json({ success: true, emailSent: true });
 });
 
+app.get('/api/user/email-prompt', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  if (session.username === 'admin') return res.json({ shouldPrompt: false, email: '', emailVerified: true });
+  const users = (await kvGet('users')) || {};
+  const user = users[session.username] || {};
+  const dismissed = !!(await kvGet(`email_prompt_dismissed:${session.username}`));
+  const emailVerified = user.emailVerified === true && isValidEmail(user.email);
+  return res.json({
+    shouldPrompt: !emailVerified && !dismissed,
+    email: user.email || '',
+    emailVerified,
+    dismissed
+  });
+});
+
+app.post('/api/user/email-prompt/dismiss', async (req, res) => {
+  const session = await getSession(getBearerToken(req));
+  if (!session) return res.status(401).json({ error: '请先登录' });
+  if (session.username === 'admin') return res.json({ success: true });
+  await kvPut(`email_prompt_dismissed:${session.username}`, true);
+  res.json({ success: true });
+});
+
 app.post('/api/delete-account', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
@@ -1386,6 +1410,7 @@ app.post('/api/delete-account', async (req, res) => {
   await kvDelete(`chat_limit:${session.username}`);
   
   await kvDelete(`user_settings:${session.username}`);
+  await kvDelete(`email_prompt_dismissed:${session.username}`);
   await kvDelete(`friends:${session.username}`);
   await kvDelete(`friend_requests:${session.username}`);
   await kvDelete(`friend_requests_out:${session.username}`);
@@ -4693,6 +4718,7 @@ app.delete('/api/admin/users', async (req, res) => {
   await kvDelete(`chat_limit:${username}`);
   
   await kvDelete(`user_settings:${username}`);
+  await kvDelete(`email_prompt_dismissed:${username}`);
   await kvDelete(`friends:${username}`);
   await kvDelete(`friend_requests:${username}`);
   await kvDelete(`friend_requests_out:${username}`);

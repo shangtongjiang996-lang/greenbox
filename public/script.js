@@ -477,6 +477,35 @@ const THEME_ICON = {
     });
   }
 
+  function setupEmailPrompt() {
+    if (!getToken()) return;
+    if (/\/profile\.html$/i.test(location.pathname)) return;
+    if (window.__gbEmailPromptStarted) return;
+    window.__gbEmailPromptStarted = true;
+    setTimeout(checkEmailPrompt, 4800);
+  }
+
+  function checkEmailPrompt() {
+    if (!getToken() || typeof window.gbConfirm !== 'function') return;
+    if (document.querySelector('.gb-dialog-overlay, .gb-major-overlay, .modal-overlay.show, .dm-modal-overlay.show')) return;
+    fetch('/api/user/email-prompt', { headers: { Authorization: 'Bearer ' + getToken() } })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.shouldPrompt) return;
+        window.gbConfirm('绑定并验证邮箱后，可以在忘记密码时通过邮箱重置密码，避免账号无法找回。', {
+          title: '建议绑定邮箱',
+          okText: '去设置邮箱',
+        }).then(function (go) {
+          fetch('/api/user/email-prompt/dismiss', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + getToken() },
+          }).catch(function () {});
+          if (go) location.href = '/profile.html#email-section';
+        });
+      })
+      .catch(function () {});
+  }
+
   // ===== 全站在线状态 + 跨设备通知同步 =====
   function showDmToast(msg) {
     if (!msg || !msg.from || (!msg.to && !msg.groupId)) return;
@@ -760,6 +789,7 @@ const THEME_ICON = {
     setupNav();
     setupTour();
     setupMajorNotices();
+    setupEmailPrompt();
     setTimeout(checkFriendRequests, 4200);
     setupPresence();
     setupServiceWorker();

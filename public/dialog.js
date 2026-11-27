@@ -23,20 +23,25 @@
       var type = opts.type || 'alert';
       var danger = !!opts.danger;
       var overlay = document.createElement('div');
-      overlay.className = 'gb-major-overlay gb-dialog-overlay';
+      overlay.className = 'modal-overlay show gb-dialog-overlay';
       overlay.setAttribute('role', 'dialog');
       overlay.setAttribute('aria-modal', 'true');
       overlay.setAttribute('aria-labelledby', 'gb-dialog-title');
-      var badge = type === 'prompt' ? '输入' : type === 'confirm' ? '确认操作' : '提示';
+      var badge = type === 'prompt' ? '输入信息' : type === 'confirm' ? '操作确认' : '提示';
       overlay.innerHTML =
-        '<div class="gb-major-card gb-dialog-card' + (danger ? ' danger' : '') + '">' +
-        '<div class="gb-major-badge' + (danger ? ' warning' : '') + '">' + badge + '</div>' +
-        '<h3 id="gb-dialog-title">' + esc(opts.title || (type === 'alert' ? '提示' : '请确认')) + '</h3>' +
-        '<p>' + esc(opts.message || '') + '</p>' +
-        (type === 'prompt' ? '<input class="gb-dialog-input" type="text" value="' + esc(opts.defaultValue || '') + '" maxlength="' + (opts.maxlength || 200) + '" autocomplete="off">' : '') +
-        '<div class="gb-major-actions">' +
-        (type === 'alert' ? '' : '<button type="button" class="gb-major-ghost" data-dialog-cancel>取消</button>') +
-        '<button type="button" class="gb-major-go" data-dialog-ok>' + esc(opts.okText || '确定') + '</button>' +
+        '<div class="modal-box gb-dialog-card' + (danger ? ' danger' : '') + '">' +
+        '<div class="modal-head">' +
+          '<div><div class="gb-dialog-kicker">' + badge + '</div>' +
+          '<h2 id="gb-dialog-title">' + esc(opts.title || (type === 'alert' ? '提示' : '请确认')) + '</h2></div>' +
+          '<button type="button" class="modal-close" data-dialog-cancel aria-label="关闭">×</button>' +
+        '</div>' +
+        '<div class="modal-body">' +
+          '<p class="gb-dialog-message">' + esc(opts.message || '') + '</p>' +
+          (type === 'prompt' ? '<input class="gb-dialog-input" type="text" value="' + esc(opts.defaultValue || '') + '" maxlength="' + (opts.maxlength || 200) + '" autocomplete="off">' : '') +
+        '</div>' +
+        '<div class="modal-foot">' +
+          (type === 'alert' ? '' : '<button type="button" class="action-btn gb-dialog-cancel" data-dialog-cancel>取消</button>') +
+          '<button type="button" class="comment-send gb-dialog-ok" data-dialog-ok>' + esc(opts.okText || '确定') + '</button>' +
         '</div></div>';
       document.body.appendChild(overlay);
       var lastFocus = document.activeElement;
@@ -54,7 +59,7 @@
       function cancel() { finish(type === 'prompt' ? null : false); }
       function onKey(e) {
         if (e.key === 'Escape') { e.preventDefault(); cancel(); return; }
-        if (e.key === 'Enter') { e.preventDefault(); ok(); return; }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ok(); return; }
         if (e.key === 'Tab') {
           var nodes = Array.prototype.slice.call(overlay.querySelectorAll('button, input, [href], [tabindex]:not([tabindex="-1"])'))
             .filter(function (el) { return !el.disabled && el.offsetParent !== null; });
@@ -65,8 +70,8 @@
         }
       }
       overlay.querySelector('[data-dialog-ok]').addEventListener('click', ok);
-      var cancelBtn = overlay.querySelector('[data-dialog-cancel]');
-      if (cancelBtn) cancelBtn.addEventListener('click', cancel);
+      var cancelBtns = overlay.querySelectorAll('[data-dialog-cancel]');
+      Array.prototype.forEach.call(cancelBtns, function (b) { b.addEventListener('click', cancel); });
       overlay.addEventListener('click', function (e) { if (e.target === overlay) cancel(); });
       document.addEventListener('keydown', onKey);
       setTimeout(function () { if (input) { input.focus(); input.select(); } else { var b = overlay.querySelector('[data-dialog-ok]'); if (b) b.focus(); } }, 30);
