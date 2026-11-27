@@ -385,6 +385,15 @@
     .ai-chat-header .title-block { line-height: 1.25; }
     .ai-chat-header .title { font-weight: 700; font-size: 15px; }
     .ai-chat-header .quota { font-size: 11px; opacity: .9; display: block; font-weight: 400; }
+    .ai-model-select {
+      max-width: 170px; min-width: 105px; height: 32px;
+      border: 1px solid rgba(255,255,255,.35); border-radius: 8px;
+      background: rgba(255,255,255,.18); color: inherit;
+      font-family: inherit; font-size: 11px; padding: 0 7px;
+      outline: none; cursor: pointer;
+    }
+    .ai-model-select option { color: #0f172a; background: #fff; }
+    @media (max-width: 640px) { .ai-model-select { max-width: 132px; font-size: 10px; } }
     .ai-chat-header .actions {
       display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
       justify-content: flex-end; flex-shrink: 0;
@@ -1072,6 +1081,7 @@
           </button>
           <div class="title-block">
             <div class="title">GreenBox AI</div>
+            <select id="aiModelSelect" class="ai-model-select" aria-label="选择 AI 模型" title="选择 AI 模型"></select>
             <span class="quota" id="aiChatQuota">加载中...</span>
           </div>
         </div>
@@ -1462,6 +1472,8 @@
       const exportBtn = document.getElementById('aiExportBtn');
       const clearBtn = document.getElementById('aiClearBtn');
       const quickRow = document.getElementById('aiQuickRow');
+      const modelSelect = document.getElementById('aiModelSelect');
+      let selectedModelId = '';
 
       let cfg = {
         welcomeMessage: '你好！我是 GreenBox 的 AI 助手',
@@ -1480,6 +1492,33 @@
 
       function isMobile() {
         return window.innerWidth <= 640;
+      }
+
+      function populateModels(models, defaultModel) {
+        if (!modelSelect || !Array.isArray(models)) return;
+        modelSelect.innerHTML = '';
+        const available = models.filter(m => m.available !== false);
+        models.forEach(function (m) {
+          const option = document.createElement('option');
+          option.value = m.id;
+          option.textContent = m.label + (m.note ? ' · ' + m.note : '') + (m.available === false ? '（未配置）' : '');
+          option.disabled = m.available === false;
+          modelSelect.appendChild(option);
+        });
+        let saved = '';
+        try { saved = localStorage.getItem('greenbox_ai_model') || ''; } catch (e) {}
+        const savedOk = available.some(m => m.id === saved) ? saved : '';
+        const defaultOk = available.some(m => m.id === defaultModel) ? defaultModel : '';
+        selectedModelId = savedOk || defaultOk || (available[0] && available[0].id) || '';
+        if (selectedModelId) modelSelect.value = selectedModelId;
+        modelSelect.disabled = !available.length;
+      }
+
+      if (modelSelect) {
+        modelSelect.addEventListener('change', function () {
+          selectedModelId = modelSelect.value;
+          try { localStorage.setItem('greenbox_ai_model', selectedModelId); } catch (e) {}
+        });
       }
 
       function escapeHtml(s) {
@@ -1895,6 +1934,7 @@
               sessionId: currentSessionId,
               deepThink: deepThinkEnabled,
               browserInfo: collectBrowserInfo(),
+              model: selectedModelId || undefined,
             })
           });
 
@@ -2193,6 +2233,7 @@
           if (res.ok) {
             const data = await res.json();
             cfg = { ...cfg, ...data };
+            populateModels(data.models, data.model);
           }
         } catch (e) {}
         renderQuickPhrases();

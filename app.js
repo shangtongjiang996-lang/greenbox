@@ -3172,7 +3172,110 @@ const ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 // 只从环境变量读取，密钥绝不能写进源码或提交到仓库。
 const ZHIPU_API_KEY = process.env.ZHIPU_API_KEY || '';
 if (!ZHIPU_API_KEY) {
-  console.warn('[启动警告] 未配置 ZHIPU_API_KEY，AI 聊天接口将返回 503');
+  console.warn('[启动警告] 未配置 ZHIPU_API_KEY，智谱模型不可用');
+}
+
+// 免费模型统一走服务端代理，浏览器不直接访问第三方接口。
+const AI_PROVIDERS = {
+  zhipu: {
+    url: ZHIPU_API_URL,
+    keyEnv: 'ZHIPU_API_KEY',
+    label: '智谱',
+  },
+  openrouter: {
+    url: 'https://openrouter.ai/api/v1/chat/completions',
+    keyEnv: 'OPENROUTER_API_KEY',
+    label: 'OpenRouter',
+    headers: () => ({ 'HTTP-Referer': appBaseUrl(), 'X-Title': 'GreenBox' }),
+  },
+  groq: {
+    url: 'https://api.groq.com/openai/v1/chat/completions',
+    keyEnv: 'GROQ_API_KEY',
+    label: 'Groq',
+  },
+  gemini: {
+    url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    keyEnv: 'GEMINI_API_KEY',
+    label: 'Google Gemini',
+  },
+  pollinations: {
+    url: 'https://text.pollinations.ai/openai',
+    noKey: true,
+    label: 'Pollinations',
+  },
+};
+
+const AI_MODELS = [
+  { id: 'glm-4-flash', label: 'GLM-4-Flash', provider: 'zhipu', model: 'glm-4-flash', free: true, note: '智谱免费模型' },
+  { id: 'glm-4.7-flash', label: 'GLM-4.7-Flash', provider: 'zhipu', model: 'glm-4.7-flash', free: true, note: '智谱免费模型' },
+  { id: 'glm-4-air', label: 'GLM-4-Air', provider: 'zhipu', model: 'glm-4-air', free: false, note: '智谱付费模型' },
+  { id: 'glm-4-plus', label: 'GLM-4-Plus', provider: 'zhipu', model: 'glm-4-plus', free: false, note: '智谱付费模型' },
+  { id: 'openrouter-llama-3.3-free', label: 'Llama 3.3 70B · OpenRouter', provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free', free: true, note: '免费模型' },
+  { id: 'openrouter-qwen-72b-free', label: 'Qwen 2.5 72B · OpenRouter', provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', free: true, note: '免费模型' },
+  { id: 'groq-llama-3.3', label: 'Llama 3.3 70B · Groq', provider: 'groq', model: 'llama-3.3-70b-versatile', free: true, note: '免费额度' },
+  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'gemini', model: 'gemini-2.0-flash', free: true, note: '免费额度' },
+  { id: 'pollinations-free', label: 'Pollinations 公共模型', provider: 'pollinations', model: 'openai', free: true, noKey: true, note: '免密钥' },
+];
+
+function modelAvailable(spec) {
+  if (!spec) return false;
+  const provider = AI_PROVIDERS[spec.provider];
+  if (!provider) return false;
+  if (provider.noKey || spec.noKey) return true;
+  return !!String(process.env[provider.keyEnv] || '').trim();
+}
+function publicChatModels() {
+  return AI_MODELS.map(m => ({
+    id: m.id,
+    label: m.label,
+    provider: m.provider,
+    free: !!m.free,
+    note: m.note || '',
+    available: modelAvailable(m),
+  }));
+}
+function resolveChatModel(id) {
+  const key = String(id || '').trim();
+  const exact = AI_MODELS.find(m => m.id === key || m.model === key);
+  if (exact) return exact;
+  const configured = AI_MODELS.find(m => m.id === DEFAULT_CHAT_CONFIG.model);
+  if (configured && modelAvailable(configured)) return configured;
+  return AI_MODELS.find(modelAvailable) || AI_MODELS[0];
+}
+function chatFallbackModels(primary) {
+  const list = [];
+  if (primary && modelAvailable(primary)) list.push(primary);
+  // 按免费、无需密钥优先的顺序尝试，避免国内网络无法直连时整站 AI 不可用。
+  AI_MODELS.filter(m => m.id !== (primary && primary.id) && modelAvailable(m))
+    .sort((a, b) => (b.noKey ? 1 : 0) - (a.noKey ? 1 : 0))
+    .slice(0, 3)
+    .forEach(m => list.push(m));
+  return list;
+}
+async function fetchChatProvider(spec, messages, cfg) {
+  const provider = AI_PROVIDERS[spec.provider];
+  if (!provider) throw new Error('未知 AI 服务商');
+  const key = provider.keyEnv ? String(process.env[provider.keyEnv] || '').trim() : '';
+  if (!provider.noKey && !spec.noKey && !key) {
+    const err = new Error(`${spec.label} 暂未配置 API Key`);
+    err.code = 'MODEL_NOT_CONFIGURED';
+    throw err;
+  }
+  const headers = { 'Content-Type': 'application/json' };
+  if (key) headers.Authorization = `Bearer ${key}`;
+  if (provider.headers) Object.assign(headers, provider.headers());
+  const response = await fetch(provider.url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: spec.model,
+      messages,
+      temperature: typeof cfg.temperature === 'number' ? cfg.temperature : 0.7,
+      max_tokens: cfg.maxTokens || 2000,
+      stream: true,
+    }),
+  });
+  return { response, provider };
 }
 
 const DEFAULT_CHAT_CONFIG = {
@@ -3263,6 +3366,7 @@ app.get('/api/chat/config', async (req, res) => {
     enableDeepThink: cfg.enableDeepThink,
     enableHistory: cfg.enableHistory,
     model: cfg.model,
+    models: publicChatModels(),
   });
 });
 
@@ -3415,7 +3519,10 @@ app.post('/api/chat/stream', async (req, res) => {
 
     if (messages.length === 0) return res.status(400).json({ error: '消息内容为空' });
 
-    if (!ZHIPU_API_KEY) {
+    const requestedModelId = String((req.body && req.body.model) || '').trim();
+    const primaryModel = resolveChatModel(requestedModelId || cfg.model);
+    const modelCandidates = chatFallbackModels(primaryModel);
+    if (!modelCandidates.length) {
       return res.status(503).json({ error: 'AI 服务暂未配置，请联系管理员' });
     }
 
@@ -3438,77 +3545,84 @@ app.post('/api/chat/stream', async (req, res) => {
 
     messages.unshift({ role: 'system', content: sysPrompt });
 
+    let providerRes = null;
+    let usedModel = null;
+    let lastProviderError = '';
+    for (const candidate of modelCandidates) {
+      try {
+        const attempt = await fetchChatProvider(candidate, messages, cfg);
+        if (attempt.response.ok) {
+          providerRes = attempt.response;
+          usedModel = candidate;
+          break;
+        }
+        const errText = await attempt.response.text().catch(() => '');
+        lastProviderError = `HTTP ${attempt.response.status}`;
+        console.error('AI provider error:', candidate.provider, candidate.model, attempt.response.status, errText.slice(0, 200));
+      } catch (e) {
+        lastProviderError = e.message || '连接失败';
+        console.error('AI provider fetch error:', candidate.provider, candidate.model, e.message);
+      }
+    }
+    if (!providerRes || !usedModel) {
+      return res.status(503).json({ error: 'AI 服务暂时不可用，请稍后再试' + (lastProviderError ? '（' + lastProviderError + '）' : '') });
+    }
+
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     if (typeof res.flushHeaders === 'function') res.flushHeaders();
+    res.write(`data: ${JSON.stringify({ model: usedModel.id, modelLabel: usedModel.label })}\n\n`);
 
-    let zhipuRes;
-    try {
-      zhipuRes = await fetch(ZHIPU_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${ZHIPU_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: cfg.model || DEFAULT_CHAT_CONFIG.model,
-          messages,
-          temperature: typeof cfg.temperature === 'number' ? cfg.temperature : 0.7,
-          max_tokens: cfg.maxTokens || 2000,
-          stream: true,
-        }),
-      });
-    } catch (e) {
-      console.error('Zhipu fetch error:', e);
-      res.write(`data: ${JSON.stringify({ error: 'AI 服务连接失败' })}\n\n`);
-      res.end();
-      return;
-    }
-
-    if (!zhipuRes.ok) {
-      const errText = await zhipuRes.text().catch(() => '');
-      console.error('Zhipu API error:', zhipuRes.status, errText);
-      let msg = 'AI 服务暂时不可用';
-      if (zhipuRes.status === 401) msg = 'AI 服务配置错误';
-      if (zhipuRes.status === 429) msg = 'AI 服务繁忙，请稍后再试';
-      res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
-      res.end();
-      return;
-    }
-
-    const reader = zhipuRes.body.getReader();
-    const decoder = new TextDecoder();
     let fullResponse = '';
     let buffer = '';
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data:')) continue;
-          const data = trimmed.slice(5).trim();
-          if (data === '[DONE]') continue;
-          try {
-            const json = JSON.parse(data);
-            const content = json.choices?.[0]?.delta?.content || '';
-            if (content) {
-              fullResponse += content;
-              res.write(`data: ${JSON.stringify({ content })}\n\n`);
-            }
-          } catch (e) {}
+    if (!(providerRes.headers.get('content-type') || '').includes('text/event-stream')) {
+      try {
+        const text = await providerRes.text();
+        const json = JSON.parse(text);
+        const content = json.choices?.[0]?.message?.content
+          || json.choices?.[0]?.text
+          || json.content
+          || '';
+        if (content) {
+          fullResponse = content;
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
+      } catch (parseErr) {
+        console.error('AI non-stream parse error:', parseErr.message);
       }
-    } catch (streamErr) {
-      console.error('Stream error:', streamErr);
+    } else {
+      const reader = providerRes.body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data:')) continue;
+            const data = trimmed.slice(5).trim();
+            if (data === '[DONE]') continue;
+            try {
+              const json = JSON.parse(data);
+              const content = json.choices?.[0]?.delta?.content || '';
+              if (content) {
+                fullResponse += content;
+                res.write(`data: ${JSON.stringify({ content })}\n\n`);
+              }
+            } catch (e) {}
+          }
+        }
+      } catch (streamErr) {
+        console.error('Stream error:', streamErr);
+      }
     }
 
     let newUsed = 0;
@@ -3584,7 +3698,7 @@ app.post('/api/chat/stream', async (req, res) => {
 app.get('/api/admin/chat/config', async (req, res) => {
   if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
   const cfg = await getChatConfig();
-  res.json(cfg);
+  res.json(Object.assign({}, cfg, { models: publicChatModels() }));
 });
 
 app.put('/api/admin/chat/config', async (req, res) => {
@@ -3601,7 +3715,12 @@ app.put('/api/admin/chat/config', async (req, res) => {
   if (Array.isArray(body.quickPhrases)) {
     newCfg.quickPhrases = body.quickPhrases.slice(0, 10).map(s => String(s).slice(0, 50));
   }
-  if (typeof body.model === 'string') newCfg.model = body.model.slice(0, 50);
+  if (typeof body.model === 'string') {
+    if (!AI_MODELS.some(m => m.id === body.model)) {
+      return res.status(400).json({ error: 'AI 模型无效' });
+    }
+    newCfg.model = body.model;
+  }
   if (typeof body.temperature === 'number' && body.temperature >= 0 && body.temperature <= 1) {
     newCfg.temperature = body.temperature;
   }
