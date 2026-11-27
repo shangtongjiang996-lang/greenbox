@@ -150,7 +150,7 @@
 
   // 通用弹窗的滚动锁定（管理后台等没有 script.js 的页面也生效）
   (function setupModalScrollLock() {
-    var selectors = '.modal, .modal-overlay, .dm-modal-overlay, .avatar-modal-overlay, .gm-invite-overlay, .gb-dialog-overlay, .ai-chat-panel.open, .ai-update-modal, .notif-panel.show, .notif-panel-overlay.show, .gb-major-overlay';
+    var selectors = '.modal, .modal-overlay, .dm-modal-overlay, .avatar-modal-overlay, .gm-invite-overlay, .gb-dialog-overlay, .st-modal-overlay, .ai-chat-panel.open, .ai-update-modal, .notif-panel.show, .notif-panel-overlay.show, .gb-major-overlay';
     var locked = false;
     var prevHtml = '';
     var prevBody = '';
