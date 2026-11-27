@@ -1964,6 +1964,12 @@
               let json;
               try { json = JSON.parse(raw); } catch (e) { continue; }
 
+              if (json.model && modelSelect) {
+                selectedModelId = json.model;
+                modelSelect.value = json.model;
+                modelSelect.title = '当前使用：' + (json.modelLabel || json.model);
+              }
+
               if (json.error) {
                 contentEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(json.error)}</span>`;
                 continue;

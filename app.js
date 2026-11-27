@@ -3272,7 +3272,8 @@ async function fetchChatProvider(spec, messages, cfg) {
       messages,
       temperature: typeof cfg.temperature === 'number' ? cfg.temperature : 0.7,
       max_tokens: cfg.maxTokens || 2000,
-      stream: true,
+      // Pollinations 的 OpenAI 兼容端点对 stream:true 支持不稳定，使用一次性 JSON 响应。
+      stream: spec.provider === 'pollinations' ? false : true,
     }),
   });
   return { response, provider };
