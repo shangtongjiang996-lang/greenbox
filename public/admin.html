@@ -954,11 +954,29 @@
             <option value="unmute">解除禁言</option>
             <option value="unban">解除封禁</option>
           </select>
-          <input id="modHours" type="number" min="1" max="8760" value="24" title="时长（小时）" style="width:80px;padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
-          <input id="modReason" placeholder="原因（可选）" maxlength="500" style="flex:1;min-width:180px;padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
+          <select id="modTimeMode" onchange="toggleModTimeMode()" style="padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
+            <option value="days">按天数</option>
+            <option value="range">按日期范围</option>
+          </select>
+          <span id="modDaysBox"><input id="modDays" type="number" min="1" max="365" value="1" title="执行天数" style="width:70px;padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;"> 天</span>
+          <span id="modRangeBox" style="display:none;">
+            <input id="modStartDate" type="date" title="开始日期" style="padding:0.4rem;border:1px solid #cbd5e1;border-radius:7px;">
+            至
+            <input id="modEndDate" type="date" title="结束日期" style="padding:0.4rem;border:1px solid #cbd5e1;border-radius:7px;">
+          </span>
+          <input id="modReason" placeholder="处罚理由（禁言/封禁必填）" maxlength="500" style="flex:1;min-width:200px;padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
           <button class="btn btn-primary" type="button" onclick="moderateUser()">执行</button>
         </div>
         <div id="modStatus" style="color:#64748b;font-size:0.82rem;margin-top:0.5rem;"></div>
+      </div>
+      <div class="card">
+        <h2>处罚记录与撤销</h2>
+        <p style="color:#64748b;font-size:0.88rem;line-height:1.7;margin-bottom:0.8rem;">查询用户的历史处罚。撤销后立即解除对应的禁言或封禁，并写入审计日志。</p>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.8rem;">
+          <input id="modRecordsUsername" placeholder="用户名" style="padding:0.45rem;border:1px solid #cbd5e1;border-radius:7px;">
+          <button class="btn btn-outline" type="button" onclick="loadModerationRecords()">查询记录</button>
+        </div>
+        <div id="moderationRecords" style="color:#94a3b8;font-size:0.84rem;">输入用户名查询处罚记录</div>
       </div>
       <div class="card">
         <h2>举报队列 <span id="report-count" style="font-size:0.8rem;font-weight:400;color:#94a3b8;"></span></h2>
@@ -2114,7 +2132,7 @@ async function loadAdminReports() {
              </select>
              <input id="report-hours-${x.id}" type="number" min="1" max="8760" value="24" title="时长（小时）" style="width:75px;padding:0.35rem;border:1px solid #cbd5e1;border-radius:7px;">
              <span style="color:#94a3b8;font-size:0.78rem;">小时</span>
-             <input id="report-note-${x.id}" placeholder="处理备注（可选）" maxlength="500" style="flex:1;min-width:180px;padding:0.35rem;border:1px solid #cbd5e1;border-radius:7px;">
+             <input id="report-note-${x.id}" placeholder="处罚理由（禁言/封禁必填）" maxlength="500" style="flex:1;min-width:180px;padding:0.35rem;border:1px solid #cbd5e1;border-radius:7px;">
            </div>
            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
              <button class="btn btn-primary btn-sm" onclick="reviewReport('${x.id}','resolved')">处理并通知</button>
@@ -2138,28 +2156,114 @@ async function loadAdminReports() {
   }
 }
 
+function toggleModTimeMode() {
+  const mode = document.getElementById('modTimeMode').value;
+  document.getElementById('modDaysBox').style.display = mode === 'days' ? 'inline' : 'none';
+  document.getElementById('modRangeBox').style.display = mode === 'range' ? 'inline' : 'none';
+}
+
 async function moderateUser() {
   const username = document.getElementById('modUsername').value.trim();
   const action = document.getElementById('modAction').value;
-  const durationHours = Number(document.getElementById('modHours').value) || 24;
+  const timeMode = document.getElementById('modTimeMode').value;
+  const durationDays = Number(document.getElementById('modDays').value) || 1;
+  const startDate = document.getElementById('modStartDate').value;
+  const endDate = document.getElementById('modEndDate').value;
   const reason = document.getElementById('modReason').value.trim();
   const status = document.getElementById('modStatus');
   if (!username) { status.textContent = '请输入用户名'; return; }
-  if (!(await gbConfirm(`确定对 ${username} 执行 ${action}？`, { title: '账号处罚', danger: true, okText: '执行' }))) return;
+  if ((action === 'mute' || action === 'ban') && !reason) {
+    status.textContent = '禁言或封禁必须填写理由';
+    return;
+  }
+  if ((action === 'mute' || action === 'ban') && timeMode === 'range') {
+    if (!startDate || !endDate) { status.textContent = '请选择开始和结束日期'; return; }
+    if (endDate < startDate) { status.textContent = '结束日期不能早于开始日期'; return; }
+  }
+  const actionLabels = { warn: '警告', mute: '禁言', ban: '封禁', unmute: '解除禁言', unban: '解除封禁' };
+  if (!(await gbConfirm(`确定对 ${username} 执行${actionLabels[action] || action}？`, { title: '账号处罚', danger: action === 'ban' || action === 'mute', okText: '执行' }))) return;
   status.textContent = '正在执行...';
   try {
+    const payload = { action, reason };
+    if (action === 'mute' || action === 'ban') {
+      payload.timeMode = timeMode;
+      if (timeMode === 'range') { payload.startDate = startDate; payload.endDate = endDate; }
+      else payload.durationDays = durationDays;
+    }
     const res = await fetch('/api/admin/users/' + encodeURIComponent(username) + '/moderate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ action, durationHours, reason })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '操作失败');
     status.textContent = '已执行，并已通知用户。';
     showToast('处罚已执行', 'success');
+    document.getElementById('modRecordsUsername').value = username;
+    loadModerationRecords();
     loadAuditLogs();
   } catch (e) {
     status.textContent = '操作失败：' + e.message;
+  }
+}
+
+async function loadModerationRecords() {
+  const username = document.getElementById('modRecordsUsername').value.trim();
+  const box = document.getElementById('moderationRecords');
+  if (!username) { box.textContent = '请输入用户名'; return; }
+  box.textContent = '加载中...';
+  try {
+    const res = await fetch('/api/admin/users/' + encodeURIComponent(username) + '/moderation', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '查询失败');
+    const records = Array.isArray(data.records) ? data.records.slice().reverse() : [];
+    if (!records.length) { box.innerHTML = '<p style="color:#94a3b8;">暂无处罚记录</p>'; return; }
+    const typeLabels = { warn: '警告', mute: '禁言', ban: '封禁' };
+    box.innerHTML = records.map(r => {
+      const start = new Date(r.startAt).toLocaleString('zh-CN', { hour12: false });
+      const end = r.endAt ? new Date(r.endAt).toLocaleString('zh-CN', { hour12: false }) : '—';
+      const revoked = !!r.revokedAt;
+      const active = !revoked && (r.type === 'mute' ? data.activeMute : r.type === 'ban' ? data.activeBan : true);
+      const badgeColor = revoked ? '#94a3b8' : (r.type === 'ban' ? '#dc2626' : r.type === 'mute' ? '#d97706' : '#2563eb');
+      return `<div style="border:1px solid #e2e8f0;border-radius:9px;padding:0.75rem;margin-bottom:0.6rem;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <b style="color:${badgeColor};">${typeLabels[r.type] || r.type}</b>
+          <span style="font-size:12px;color:#64748b;">${start} 至 ${end}</span>
+          <span style="font-size:12px;color:${revoked ? '#94a3b8' : (active ? '#16a34a' : '#64748b')};">${revoked ? '已撤销' : (active ? '生效中' : '已结束')}</span>
+          ${r.actor ? `<span style="font-size:12px;color:#94a3b8;">操作人：${escapeHtmlAdmin(r.actor)}</span>` : ''}
+          ${!revoked && r.type !== 'warn' ? `<button class="btn btn-outline btn-sm" type="button" data-revoke-record="${escapeHtmlAdmin(r.id)}" data-revoke-user="${escapeHtmlAdmin(username)}">撤销处罚</button>` : ''}
+        </div>
+        <div style="font-size:13px;color:#334155;margin-top:6px;">理由：${escapeHtmlAdmin(r.reason || '未填写')}</div>
+        ${revoked ? `<div style="font-size:12px;color:#94a3b8;margin-top:4px;">撤销人：${escapeHtmlAdmin(r.revokedBy || '')}${r.revokeReason ? '，说明：' + escapeHtmlAdmin(r.revokeReason) : ''}</div>` : ''}
+      </div>`;
+    }).join('');
+    box.querySelectorAll('[data-revoke-record]').forEach(btn => {
+      btn.addEventListener('click', () => revokeModerationRecord(btn.dataset.revokeUser, btn.dataset.revokeRecord));
+    });
+  } catch (e) {
+    box.innerHTML = `<p style="color:#ef4444;">${escapeHtmlAdmin(e.message || '查询失败')}</p>`;
+  }
+}
+
+async function revokeModerationRecord(username, recordId) {
+  if (!(await gbConfirm('确定撤销这条处罚吗？撤销后立即解除对应的禁言或封禁。', { title: '撤销处罚', danger: true, okText: '撤销' }))) return;
+  const reason = await gbPrompt('撤销说明（可选）', '', { title: '撤销处罚' });
+  if (reason === null) return;
+  try {
+    const res = await fetch('/api/admin/users/' + encodeURIComponent(username) + '/moderation/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ recordId, reason })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '撤销失败');
+    showToast('处罚已撤销', 'success');
+    loadModerationRecords();
+    loadAuditLogs();
+  } catch (e) {
+    showToast(e.message || '撤销失败', 'error');
   }
 }
 
@@ -2170,6 +2274,10 @@ async function reviewReport(id, status) {
   const action = actionEl ? actionEl.value : 'none';
   const durationHours = hoursEl ? Number(hoursEl.value) || 24 : 24;
   const note = noteEl ? noteEl.value.trim() : '';
+  if (status === 'resolved' && (action === 'mute' || action === 'ban') && !note) {
+    showToast('禁言或封禁必须填写理由', 'error');
+    return;
+  }
   if (status === 'dismissed' && !(await gbConfirm('确定忽略这条举报？', { title: '忽略举报', okText: '忽略' }))) return;
   if (status === 'resolved' && !(await gbConfirm('确定处理这条举报并通知双方？', { title: '处理举报', okText: '处理' }))) return;
   try {

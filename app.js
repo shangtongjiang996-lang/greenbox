@@ -11,7 +11,7 @@ const {
   kvGet, kvGetRaw, kvPut, kvPutRaw, kvDelete, kvScan, kvList, kvIncr,
   kvWithLock, kvUpdate, kvAppend
 } = require('./redis');
-const { getModerationState, checkModeration, applyModeration } = require('./moderation');
+const { getModerationState, checkModeration, applyModeration, revokeModeration } = require('./moderation');
 const { writeAudit } = require('./audit');
 const { appBaseUrl, layout: emailLayout, sendEmail, isEmailConfigured } = require('./email');
 
@@ -4477,6 +4477,9 @@ app.post('/api/admin/reports/:id', async (req, res) => {
   const note = String((req.body && req.body.note) || '').replace(/[<>]/g, '').trim().slice(0, 500);
   if (!['resolved', 'dismissed'].includes(status)) return res.status(400).json({ error: '状态无效' });
   if (!['none', 'warn', 'mute', 'ban'].includes(action)) return res.status(400).json({ error: '处罚动作无效' });
+  if (status === 'resolved' && (action === 'mute' || action === 'ban') && !note) {
+    return res.status(400).json({ error: '禁言或封禁必须填写理由' });
+  }
 
   let report = null;
   await kvUpdate('reports', list => {
@@ -4496,7 +4499,11 @@ app.post('/api/admin/reports/:id', async (req, res) => {
   let moderation = null;
   if (status === 'resolved' && action !== 'none' && report.targetUser) {
     if (report.targetUser === 'admin') return res.status(400).json({ error: '不能处罚管理员账号' });
-    moderation = await applyModeration(report.targetUser, action, durationHours, note, session ? session.username : 'admin');
+    try {
+      moderation = await applyModeration(report.targetUser, action, durationHours, note, session ? session.username : 'admin');
+    } catch (e) {
+      return res.status(400).json({ error: e.message || '处罚失败' });
+    }
     await pushSystemNotification(report.targetUser, '账号处罚通知',
       `你的账号收到处理：${action === 'warn' ? '警告' : (action === 'mute' ? `禁言 ${durationHours} 小时` : `封禁 ${durationHours} 小时`)}。${note ? '原因：' + note : ''}`,
       'warning', 'system', '/notifications.html');
@@ -4535,14 +4542,89 @@ app.post('/api/admin/users/:username/moderate', async (req, res) => {
   if (!['warn', 'mute', 'ban', 'unmute', 'unban'].includes(action)) {
     return res.status(400).json({ error: '处罚动作无效' });
   }
-  const durationHours = Number((req.body && req.body.durationHours) || 24);
   const reason = String((req.body && req.body.reason) || '').replace(/[<>]/g, '').trim().slice(0, 500);
-  const state = await applyModeration(username, action, durationHours, reason, session ? session.username : 'admin');
+  if ((action === 'mute' || action === 'ban') && !reason) {
+    return res.status(400).json({ error: '禁言或封禁必须填写理由' });
+  }
+
+  let options = {};
+  if (action === 'mute' || action === 'ban') {
+    const timeMode = String((req.body && req.body.timeMode) || 'days');
+    if (timeMode === 'range' && req.body.startDate && req.body.endDate) {
+      const startAt = parseModerationDate(req.body.startDate, false);
+      const endAt = parseModerationDate(req.body.endDate, true);
+      if (!startAt || !endAt || endAt <= startAt) {
+        return res.status(400).json({ error: '请选择有效的开始和结束日期' });
+      }
+      options = { startAt, endAt };
+    } else {
+      const durationDays = Number((req.body && req.body.durationDays) || 0)
+        || Math.max(1, Number((req.body && req.body.durationHours) || 24) / 24);
+      if (!Number.isFinite(durationDays) || durationDays <= 0 || durationDays > 365) {
+        return res.status(400).json({ error: '执行天数需在 1-365 天之间' });
+      }
+      options = { durationDays };
+    }
+  }
+
+  let state;
+  try {
+    state = await applyModeration(username, action, options, reason, session ? session.username : 'admin');
+  } catch (e) {
+    return res.status(400).json({ error: e.message || '处罚失败' });
+  }
+  const labels = { warn: '警告', mute: '禁言', ban: '封禁', unmute: '解除禁言', unban: '解除封禁' };
+  const until = action === 'ban' || action === 'mute'
+    ? `执行时间：${new Date(state.bannedFrom || state.mutedFrom).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })} 至 ${new Date(state.bannedUntil || state.mutedUntil).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}。`
+    : '';
   await pushSystemNotification(username, '账号处罚更新',
-    `你的账号状态已更新：${action}。${reason ? '原因：' + reason : ''}`,
+    `你的账号状态已更新：${labels[action]}。${until}${reason ? '原因：' + reason : ''}`,
     'warning', 'system', '/notifications.html');
   res.json({ success: true, moderation: state });
 });
+
+app.get('/api/admin/users/:username/moderation', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const username = String(req.params.username || '');
+  if (!username || username === 'admin') return res.status(400).json({ error: '不能查询这个账号' });
+  const users = (await kvGet('users')) || {};
+  if (!users[username]) return res.status(404).json({ error: '用户不存在' });
+  res.json(await getModerationState(username));
+});
+
+app.post('/api/admin/users/:username/moderation/revoke', async (req, res) => {
+  if (!(await checkAdmin(req))) return res.status(403).json({ error: '需要管理员权限' });
+  const session = await getSession(getBearerToken(req));
+  const username = String(req.params.username || '');
+  if (!username || username === 'admin') return res.status(400).json({ error: '不能处理这个账号' });
+  const users = (await kvGet('users')) || {};
+  if (!users[username]) return res.status(404).json({ error: '用户不存在' });
+  const recordId = String((req.body && req.body.recordId) || '').trim();
+  if (!recordId) return res.status(400).json({ error: '缺少处罚记录 ID' });
+  const reason = String((req.body && req.body.reason) || '').replace(/[<>]/g, '').trim().slice(0, 500);
+  let state;
+  try {
+    state = await revokeModeration(username, recordId, session ? session.username : 'admin', reason);
+  } catch (e) {
+    return res.status(400).json({ error: e.message || '撤销失败' });
+  }
+  await pushSystemNotification(username, '账号处罚已撤销',
+    `管理员撤销了一条处罚记录。${reason ? '说明：' + reason : ''}`,
+    'success', 'system', '/notifications.html');
+  res.json({ success: true, moderation: state });
+});
+
+function parseModerationDate(value, endOfDay) {
+  const text = String(value || '').trim();
+  if (!text) return 0;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const suffix = endOfDay ? 'T23:59:59+08:00' : 'T00:00:00+08:00';
+    const ts = Date.parse(text + suffix);
+    return Number.isFinite(ts) ? ts : 0;
+  }
+  const ts = Date.parse(text);
+  return Number.isFinite(ts) ? ts : 0;
+}
 
 app.get('/api/user/moderation', async (req, res) => {
   const session = await getSession(getBearerToken(req));

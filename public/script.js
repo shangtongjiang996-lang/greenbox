@@ -477,6 +477,57 @@ const THEME_ICON = {
     });
   }
 
+  function setupModerationBanner() {
+    if (!getToken()) return;
+    var timer = null;
+    function renderBanner(state) {
+      var old = document.getElementById('gb-moderation-banner');
+      if (old) old.remove();
+      if (!state) return;
+      var kind = '';
+      var title = '';
+      var endText = '';
+      var reason = state.banReason || state.muteReason || state.reason || '';
+      if (state.activeBan) {
+        kind = 'ban';
+        title = '账号已被封禁';
+        endText = state.banText ? '解除时间：' + state.banText : '';
+      } else if (state.upcomingBan) {
+        kind = 'upcoming';
+        title = '账号将于 ' + new Date(state.bannedFrom).toLocaleString('zh-CN', { hour12: false }) + ' 被封禁';
+        endText = state.banText ? '封禁至：' + state.banText : '';
+      } else if (state.activeMute) {
+        kind = 'mute';
+        title = '账号已被禁言';
+        endText = state.muteText ? '解除时间：' + state.muteText : '';
+      } else if (state.upcomingMute) {
+        kind = 'upcoming';
+        title = '账号将于 ' + new Date(state.mutedFrom).toLocaleString('zh-CN', { hour12: false }) + ' 被禁言';
+        endText = state.muteText ? '禁言至：' + state.muteText : '';
+      }
+      if (!title) return;
+      var banner = document.createElement('div');
+      banner.id = 'gb-moderation-banner';
+      banner.className = 'gb-moderation-banner ' + kind;
+      banner.setAttribute('role', 'alert');
+      banner.innerHTML = '<b>' + escHtml(title) + '</b>' +
+        (endText ? '<span>' + escHtml(endText) + '</span>' : '') +
+        (reason ? '<span class="reason">原因：' + escHtml(reason) + '</span>' : '') +
+        '<a href="/notifications.html">查看通知</a>';
+      document.body.insertBefore(banner, document.body.firstChild);
+    }
+    function refresh() {
+      fetch('/api/user/moderation', { headers: { Authorization: 'Bearer ' + getToken() } })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(renderBanner)
+        .catch(function () {});
+    }
+    setTimeout(refresh, 900);
+    timer = setInterval(refresh, 60000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+    window.__gbModerationTimer = timer;
+  }
+
   function setupEmailPrompt() {
     if (!getToken()) return;
     if (/\/profile\.html$/i.test(location.pathname)) return;
@@ -789,6 +840,7 @@ const THEME_ICON = {
     setupNav();
     setupTour();
     setupMajorNotices();
+    setupModerationBanner();
     setupEmailPrompt();
     setTimeout(checkFriendRequests, 4200);
     setupPresence();
