@@ -328,6 +328,13 @@ async function getSession(token) {
   return session;
 }
 
+async function isAdminSession(session) {
+  if (!session) return false;
+  if (session.role === 'admin' || session.username === 'admin') return true;
+  const users = (await kvGet('users')) || {};
+  return !!(users[session.username] && users[session.username].role === 'admin');
+}
+
 function requestMeta(req) {
   const ua = String((req.headers && req.headers['user-agent']) || '').slice(0, 300);
   const ip = String(clientIp(req) || '').slice(0, 80);
@@ -3408,7 +3415,7 @@ app.get('/api/chat/quota', async (req, res) => {
   const token = getBearerToken(req);
   const session = await getSession(token);
   if (!session) return res.status(401).json({ error: '请先登录' });
-  if (session.role === 'admin') {
+  if (await isAdminSession(session)) {
     return res.json({ limit: -1, used: 0, remaining: -1, unlimited: true });
   }
   const limit = await getUserChatLimit(session.username);
@@ -3536,7 +3543,7 @@ app.post('/api/chat/stream', async (req, res) => {
     if (!session) return res.status(401).json({ error: '请先登录后使用' });
 
     const username = session.username;
-    const isAdmin = session.role === 'admin';
+    const isAdmin = await isAdminSession(session);
     const cfg = await getChatConfig();
     const limit = isAdmin ? -1 : await getUserChatLimit(username);
     const used = isAdmin ? 0 : await getUsedToday(username);

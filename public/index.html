@@ -1979,8 +1979,18 @@
           });
 
           if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            contentEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(errData.error || '请求失败')}</span>`;
+            const rawError = await res.text().catch(() => '');
+            let errData = {};
+            try { errData = JSON.parse(rawError); } catch (e) {}
+            let errMsg = errData.error || '';
+            if (!errMsg && res.status === 403) {
+              errMsg = res.headers.get('cf-ray')
+                ? '请求被 Cloudflare 拦截（403），请检查 WAF 安全规则'
+                : '请求被拒绝（403），请重新登录或联系管理员';
+            }
+            if (!errMsg) errMsg = '请求失败（HTTP ' + res.status + '）';
+            console.error('AI 请求失败', res.status, rawError.slice(0, 300));
+            contentEl.innerHTML = `<span style="color:#ef4444;">${escapeHtml(errMsg)}</span>`;
             sending = false;
             sendBtn.disabled = false;
             if (res.status === 429) { remaining = 0; updateQuotaText(0, 0); }
