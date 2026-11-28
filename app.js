@@ -3214,7 +3214,6 @@ const AI_MODELS = [
   { id: 'openrouter-qwen-72b-free', label: 'Qwen 2.5 72B · OpenRouter', provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', free: true, note: '免费模型' },
   { id: 'groq-llama-3.3', label: 'Llama 3.3 70B · Groq', provider: 'groq', model: 'llama-3.3-70b-versatile', free: true, note: '免费额度' },
   { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'gemini', model: 'gemini-2.0-flash', free: true, note: '免费额度' },
-  { id: 'pollinations-free', label: 'Pollinations 公共模型', provider: 'pollinations', model: 'openai', free: true, noKey: true, note: '免密钥' },
 ];
 
 function modelAvailable(spec) {
