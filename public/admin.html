@@ -806,7 +806,7 @@
         </div>
         <div class="cfg-field" style="margin-top:1rem;">
           <label>各模型每日调用上限</label>
-          <div class="hint">0 = 不限制；用于控制免费模型和付费模型的每日总量。</div>
+          <div class="hint">左框：每日调用上限，0 = 不限制；右框：单次输出 Token 上限，0 = 使用全局设置。管理员不受调用和输出限制。</div>
           <div id="cfg-model-limits" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-top:8px;"></div>
         </div>
         <div class="cfg-checks">
@@ -1782,18 +1782,22 @@ async function loadChatConfig() {
     document.getElementById('cfg-enableDeepThink').checked = !!cfg.enableDeepThink;
     document.getElementById('cfg-enableHistory').checked = !!cfg.enableHistory;
     document.getElementById('cfg-enableBrowserInfo').checked = !!cfg.enableBrowserInfo;
-    renderModelLimits(cfg.models || [], cfg.modelLimits || {});
+    renderModelLimits(cfg.models || [], cfg.modelLimits || {}, cfg.modelMaxTokens || {});
   } catch (e) { showToast('加载 AI 配置失败：' + e.message, 'error'); }
 }
 
-function renderModelLimits(models, limits) {
+function renderModelLimits(models, limits, maxTokens) {
   const box = document.getElementById('cfg-model-limits');
   if (!box) return;
   box.innerHTML = (models || []).map(function (m) {
     const value = Number(limits && limits[m.id]) || 0;
+    const maxValue = Number(maxTokens && maxTokens[m.id]) || 0;
     return `<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px;font-size:12px;">
       <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.label}${m.available === false ? '（' + (m.unavailableReason || '未配置') + '）' : ''}</span>
-      <input type="number" min="0" max="100000" value="${value}" data-model-limit="${m.id}" title="每日上限，0 = 不限制" style="width:82px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;">
+      <span style="display:flex;gap:4px;flex-shrink:0;">
+        <input type="number" min="0" max="100000" value="${value}" data-model-limit="${m.id}" title="每日调用上限，0 = 不限制" placeholder="调用" style="width:64px;padding:4px 5px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;">
+        <input type="number" min="0" max="32000" value="${maxValue}" data-model-max-tokens="${m.id}" title="单次输出 Token 上限，0 = 使用全局设置" placeholder="输出" style="width:64px;padding:4px 5px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;">
+      </span>
     </label>`;
   }).join('') || '<span style="color:#94a3b8;font-size:12px;">暂无模型配置</span>';
 }
@@ -1819,6 +1823,11 @@ window.saveChatConfig = async function() {
   document.querySelectorAll('[data-model-limit]').forEach(function (input) {
     const n = Number(input.value);
     if (Number.isFinite(n) && n >= 0) payload.modelLimits[input.dataset.modelLimit] = Math.floor(n);
+  });
+  payload.modelMaxTokens = {};
+  document.querySelectorAll('[data-model-max-tokens]').forEach(function (input) {
+    const n = Number(input.value);
+    if (Number.isFinite(n) && n >= 0) payload.modelMaxTokens[input.dataset.modelMaxTokens] = Math.floor(n);
   });
   try {
     const res = await fetch('/api/admin/chat/config', {

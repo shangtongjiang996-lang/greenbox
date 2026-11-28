@@ -3262,7 +3262,7 @@ function chatFallbackModels(primary) {
     .forEach(m => list.push(m));
   return list;
 }
-async function fetchChatProvider(spec, messages, cfg) {
+async function fetchChatProvider(spec, messages, cfg, maxTokens) {
   const provider = AI_PROVIDERS[spec.provider];
   if (!provider) throw new Error('未知 AI 服务商');
   const key = provider.keyEnv ? String(process.env[provider.keyEnv] || '').trim() : '';
@@ -3274,17 +3274,18 @@ async function fetchChatProvider(spec, messages, cfg) {
   const headers = { 'Content-Type': 'application/json' };
   if (key) headers.Authorization = `Bearer ${key}`;
   if (provider.headers) Object.assign(headers, provider.headers());
+  const body = {
+    model: spec.model,
+    messages,
+    temperature: typeof cfg.temperature === 'number' ? cfg.temperature : 0.7,
+    // Pollinations 的 OpenAI 兼容端点对 stream:true 支持不稳定，使用一次性 JSON 响应。
+    stream: spec.provider === 'pollinations' ? false : true,
+  };
+  if (maxTokens && maxTokens > 0) body.max_tokens = maxTokens;
   const response = await fetch(provider.url, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      model: spec.model,
-      messages,
-      temperature: typeof cfg.temperature === 'number' ? cfg.temperature : 0.7,
-      max_tokens: cfg.maxTokens || 2000,
-      // Pollinations 的 OpenAI 兼容端点对 stream:true 支持不稳定，使用一次性 JSON 响应。
-      stream: spec.provider === 'pollinations' ? false : true,
-    }),
+    body: JSON.stringify(body),
   });
   return { response, provider };
 }
@@ -3292,6 +3293,7 @@ async function fetchChatProvider(spec, messages, cfg) {
 const DEFAULT_CHAT_CONFIG = {
   model: 'glm-4-flash',
   modelLimits: {},
+  modelMaxTokens: {},
   temperature: 0.7,
   maxTokens: 2000,
   systemPrompt: '你是 GreenBox 网站的 AI 助手，回答简洁、友好、准确。涉及本站工具（如五子棋、PDF合并器）时可主动介绍。',
@@ -3361,6 +3363,14 @@ async function consumeModelUsage(modelId) {
   const next = used + 1;
   await kvPut(key, next, { expirationTtl: 60 * 60 * 48 });
   return next;
+}
+
+function getModelOutputLimit(cfg, modelId, isAdmin) {
+  if (isAdmin) return null;
+  const perModel = Number((cfg.modelMaxTokens && cfg.modelMaxTokens[modelId]) || 0);
+  if (perModel > 0) return Math.min(32000, Math.floor(perModel));
+  const globalLimit = Number(cfg.maxTokens || 2000);
+  return Math.max(100, Math.min(32000, globalLimit));
 }
 
 async function getUserSessions(username) {
@@ -3558,7 +3568,7 @@ app.post('/api/chat/stream', async (req, res) => {
       return res.status(503).json({ error: `模型“${primaryModel.label}”${reason}` });
     }
     const modelLimit = Number((cfg.modelLimits && cfg.modelLimits[primaryModel.id]) || 0);
-    if (modelLimit > 0 && (await getModelUsage(primaryModel.id)) >= modelLimit) {
+    if (!isAdmin && modelLimit > 0 && (await getModelUsage(primaryModel.id)) >= modelLimit) {
       return res.status(429).json({ error: `模型“${primaryModel.label}”今日调用次数已达上限（${modelLimit} 次）` });
     }
     const modelCandidates = explicitModel
@@ -3592,7 +3602,7 @@ app.post('/api/chat/stream', async (req, res) => {
     let lastProviderError = '';
     for (const candidate of modelCandidates) {
       try {
-        const attempt = await fetchChatProvider(candidate, messages, cfg);
+        const attempt = await fetchChatProvider(candidate, messages, cfg, getModelOutputLimit(cfg, candidate.id, isAdmin));
         if (attempt.response.ok) {
           providerRes = attempt.response;
           usedModel = candidate;
@@ -3672,7 +3682,7 @@ app.post('/api/chat/stream', async (req, res) => {
     if (!isAdmin) {
       newUsed = await consumeQuota(username);
     }
-    if (usedModel) {
+    if (!isAdmin && usedModel) {
       await consumeModelUsage(usedModel.id);
     }
 
@@ -3776,6 +3786,15 @@ app.put('/api/admin/chat/config', async (req, res) => {
       const value = Number(body.modelLimits[m.id]);
       if (Number.isFinite(value) && value >= 0) {
         newCfg.modelLimits[m.id] = Math.min(100000, Math.floor(value));
+      }
+    }
+  }
+  if (body.modelMaxTokens && typeof body.modelMaxTokens === 'object' && !Array.isArray(body.modelMaxTokens)) {
+    newCfg.modelMaxTokens = {};
+    for (const m of AI_MODELS) {
+      const value = Number(body.modelMaxTokens[m.id]);
+      if (Number.isFinite(value) && value >= 0) {
+        newCfg.modelMaxTokens[m.id] = Math.min(32000, Math.floor(value));
       }
     }
   }
