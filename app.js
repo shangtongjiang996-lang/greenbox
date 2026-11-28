@@ -3281,6 +3281,7 @@ async function fetchChatProvider(spec, messages, cfg) {
 
 const DEFAULT_CHAT_CONFIG = {
   model: 'glm-4-flash',
+  modelLimits: {},
   temperature: 0.7,
   maxTokens: 2000,
   systemPrompt: '你是 GreenBox 网站的 AI 助手，回答简洁、友好、准确。涉及本站工具（如五子棋、PDF合并器）时可主动介绍。',
@@ -3338,6 +3339,18 @@ async function consumeQuota(username) {
   const newUsed = used + 1;
   await kvPut(key, newUsed, { expirationTtl: 60 * 60 * 48 });
   return newUsed;
+}
+
+async function getModelUsage(modelId) {
+  const raw = await kvGet(`chat_model_quota:${modelId}:${todayKey()}`);
+  return raw ? parseInt(raw, 10) || 0 : 0;
+}
+async function consumeModelUsage(modelId) {
+  const key = `chat_model_quota:${modelId}:${todayKey()}`;
+  const used = await getModelUsage(modelId);
+  const next = used + 1;
+  await kvPut(key, next, { expirationTtl: 60 * 60 * 48 });
+  return next;
 }
 
 async function getUserSessions(username) {
@@ -3521,8 +3534,18 @@ app.post('/api/chat/stream', async (req, res) => {
     if (messages.length === 0) return res.status(400).json({ error: '消息内容为空' });
 
     const requestedModelId = String((req.body && req.body.model) || '').trim();
+    const explicitModel = !!requestedModelId;
     const primaryModel = resolveChatModel(requestedModelId || cfg.model);
-    const modelCandidates = chatFallbackModels(primaryModel);
+    if (explicitModel && !modelAvailable(primaryModel)) {
+      return res.status(503).json({ error: `模型“${primaryModel.label}”暂未配置，请联系管理员` });
+    }
+    const modelLimit = Number((cfg.modelLimits && cfg.modelLimits[primaryModel.id]) || 0);
+    if (modelLimit > 0 && (await getModelUsage(primaryModel.id)) >= modelLimit) {
+      return res.status(429).json({ error: `模型“${primaryModel.label}”今日调用次数已达上限（${modelLimit} 次）` });
+    }
+    const modelCandidates = explicitModel
+      ? (modelAvailable(primaryModel) ? [primaryModel] : [])
+      : chatFallbackModels(primaryModel);
     if (!modelCandidates.length) {
       return res.status(503).json({ error: 'AI 服务暂未配置，请联系管理员' });
     }
@@ -3566,7 +3589,8 @@ app.post('/api/chat/stream', async (req, res) => {
       }
     }
     if (!providerRes || !usedModel) {
-      return res.status(503).json({ error: 'AI 服务暂时不可用，请稍后再试' + (lastProviderError ? '（' + lastProviderError + '）' : '') });
+      const prefix = explicitModel ? `模型“${primaryModel.label}”请求失败` : 'AI 服务暂时不可用';
+      return res.status(503).json({ error: prefix + (lastProviderError ? '：' + lastProviderError : '，请稍后再试') });
     }
 
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -3629,6 +3653,9 @@ app.post('/api/chat/stream', async (req, res) => {
     let newUsed = 0;
     if (!isAdmin) {
       newUsed = await consumeQuota(username);
+    }
+    if (usedModel) {
+      await consumeModelUsage(usedModel.id);
     }
 
     if (sessionId && cfg.enableHistory) {
@@ -3721,6 +3748,15 @@ app.put('/api/admin/chat/config', async (req, res) => {
       return res.status(400).json({ error: 'AI 模型无效' });
     }
     newCfg.model = body.model;
+  }
+  if (body.modelLimits && typeof body.modelLimits === 'object' && !Array.isArray(body.modelLimits)) {
+    newCfg.modelLimits = {};
+    for (const m of AI_MODELS) {
+      const value = Number(body.modelLimits[m.id]);
+      if (Number.isFinite(value) && value >= 0) {
+        newCfg.modelLimits[m.id] = Math.min(100000, Math.floor(value));
+      }
+    }
   }
   if (typeof body.temperature === 'number' && body.temperature >= 0 && body.temperature <= 1) {
     newCfg.temperature = body.temperature;

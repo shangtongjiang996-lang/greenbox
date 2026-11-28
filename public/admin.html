@@ -804,6 +804,11 @@
             <div class="hint">单次回复的最大长度</div>
           </div>
         </div>
+        <div class="cfg-field" style="margin-top:1rem;">
+          <label>各模型每日调用上限</label>
+          <div class="hint">0 = 不限制；用于控制免费模型和付费模型的每日总量。</div>
+          <div id="cfg-model-limits" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-top:8px;"></div>
+        </div>
         <div class="cfg-checks">
           <label><input type="checkbox" id="cfg-enableDeepThink"> 允许深度思考</label>
           <label><input type="checkbox" id="cfg-enableHistory"> 保存聊天记录</label>
@@ -1777,7 +1782,20 @@ async function loadChatConfig() {
     document.getElementById('cfg-enableDeepThink').checked = !!cfg.enableDeepThink;
     document.getElementById('cfg-enableHistory').checked = !!cfg.enableHistory;
     document.getElementById('cfg-enableBrowserInfo').checked = !!cfg.enableBrowserInfo;
+    renderModelLimits(cfg.models || [], cfg.modelLimits || {});
   } catch (e) { showToast('加载 AI 配置失败：' + e.message, 'error'); }
+}
+
+function renderModelLimits(models, limits) {
+  const box = document.getElementById('cfg-model-limits');
+  if (!box) return;
+  box.innerHTML = (models || []).map(function (m) {
+    const value = Number(limits && limits[m.id]) || 0;
+    return `<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px;font-size:12px;">
+      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.label}${m.available === false ? '（未配置）' : ''}</span>
+      <input type="number" min="0" max="100000" value="${value}" data-model-limit="${m.id}" title="每日上限，0 = 不限制" style="width:82px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;">
+    </label>`;
+  }).join('') || '<span style="color:#94a3b8;font-size:12px;">暂无模型配置</span>';
 }
 
 window.saveChatConfig = async function() {
@@ -1797,6 +1815,11 @@ window.saveChatConfig = async function() {
     enableHistory: document.getElementById('cfg-enableHistory').checked,
     enableBrowserInfo: document.getElementById('cfg-enableBrowserInfo').checked,
   };
+  payload.modelLimits = {};
+  document.querySelectorAll('[data-model-limit]').forEach(function (input) {
+    const n = Number(input.value);
+    if (Number.isFinite(n) && n >= 0) payload.modelLimits[input.dataset.modelLimit] = Math.floor(n);
+  });
   try {
     const res = await fetch('/api/admin/chat/config', {
       method: 'PUT',

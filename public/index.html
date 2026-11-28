@@ -381,19 +381,20 @@
       display: flex; justify-content: space-between; align-items: center;
       flex-shrink: 0;
     }
-    .ai-chat-header .title-row { display: flex; align-items: center; gap: 10px; }
-    .ai-chat-header .title-block { line-height: 1.25; }
+    .ai-chat-header .title-row { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; }
+    .ai-chat-header .title-block { line-height: 1.25; min-width: 0; max-width: 230px; }
     .ai-chat-header .title { font-weight: 700; font-size: 15px; }
     .ai-chat-header .quota { font-size: 11px; opacity: .9; display: block; font-weight: 400; }
     .ai-model-select {
-      max-width: 170px; min-width: 105px; height: 32px;
+      display: block; width: 170px; max-width: 100%; height: 30px;
+      margin-top: 3px;
       border: 1px solid rgba(255,255,255,.35); border-radius: 8px;
       background: rgba(255,255,255,.18); color: inherit;
       font-family: inherit; font-size: 11px; padding: 0 7px;
       outline: none; cursor: pointer;
     }
     .ai-model-select option { color: #0f172a; background: #fff; }
-    @media (max-width: 640px) { .ai-model-select { max-width: 132px; font-size: 10px; } }
+    @media (max-width: 640px) { .ai-model-select { width: 145px; font-size: 10px; } .ai-chat-header .title-block { max-width: 180px; } }
     .ai-chat-header .actions {
       display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
       justify-content: flex-end; flex-shrink: 0;
