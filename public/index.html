@@ -1526,6 +1526,13 @@
         return found ? found.label : modelId;
       }
 
+      function encodeChatPayload(value) {
+        const bytes = new TextEncoder().encode(JSON.stringify(value));
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        return btoa(binary);
+      }
+
       function populateModels(models, defaultModel) {
         if (!modelSelect || !Array.isArray(models)) return;
         modelSelect.innerHTML = '';
@@ -1963,6 +1970,13 @@
             content: m.content,
           }));
 
+          const chatPayload = {
+            messages: messagesForApi,
+            sessionId: currentSessionId,
+            deepThink: deepThinkEnabled,
+            browserInfo: collectBrowserInfo(),
+            model: selectedModelId || undefined,
+          };
           const res = await fetch('/api/chat/stream', {
             method: 'POST',
             headers: {
@@ -1970,11 +1984,8 @@
               'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-              messages: messagesForApi,
-              sessionId: currentSessionId,
-              deepThink: deepThinkEnabled,
-              browserInfo: collectBrowserInfo(),
-              model: selectedModelId || undefined,
+              encoded: true,
+              data: encodeChatPayload(chatPayload),
             })
           });
 
@@ -1985,7 +1996,7 @@
             let errMsg = errData.error || '';
             if (!errMsg && res.status === 403) {
               errMsg = res.headers.get('cf-ray')
-                ? '请求被 Cloudflare 拦截（403），请检查 WAF 安全规则'
+                ? '请求被网站防火墙（WAF）拦截（403），请稍后再试'
                 : '请求被拒绝（403），请重新登录或联系管理员';
             }
             if (!errMsg) errMsg = '请求失败（HTTP ' + res.status + '）';

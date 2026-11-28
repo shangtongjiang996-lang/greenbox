@@ -3555,7 +3555,16 @@ app.post('/api/chat/stream', async (req, res) => {
       }
     }
 
-    let { messages, sessionId, deepThink, browserInfo } = req.body || {};
+    let body = req.body || {};
+    if (body.encoded && typeof body.data === 'string') {
+      if (body.data.length > 220000) return res.status(413).json({ error: '请求体过大' });
+      try {
+        body = JSON.parse(Buffer.from(body.data, 'base64').toString('utf8'));
+      } catch (e) {
+        return res.status(400).json({ error: '请求数据格式错误' });
+      }
+    }
+    let { messages, sessionId, deepThink, browserInfo } = body;
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: '消息不能为空' });
     }
@@ -3567,7 +3576,7 @@ app.post('/api/chat/stream', async (req, res) => {
 
     if (messages.length === 0) return res.status(400).json({ error: '消息内容为空' });
 
-    const requestedModelId = String((req.body && req.body.model) || '').trim();
+    const requestedModelId = String((body && body.model) || '').trim();
     const explicitModel = !!requestedModelId;
     const primaryModel = resolveChatModel(requestedModelId || cfg.model);
     if (explicitModel && !modelAvailable(primaryModel)) {
