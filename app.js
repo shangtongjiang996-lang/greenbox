@@ -3210,11 +3210,20 @@ const AI_MODELS = [
   { id: 'glm-4.7-flash', label: 'GLM-4.7-Flash', provider: 'zhipu', model: 'glm-4.7-flash', free: true, note: '智谱免费模型' },
   { id: 'glm-4-air', label: 'GLM-4-Air', provider: 'zhipu', model: 'glm-4-air', free: false, note: '智谱付费模型' },
   { id: 'glm-4-plus', label: 'GLM-4-Plus', provider: 'zhipu', model: 'glm-4-plus', free: false, note: '智谱付费模型' },
-  { id: 'openrouter-llama-3.3-free', label: 'Llama 3.3 70B · OpenRouter', provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free', free: true, note: '免费模型' },
-  { id: 'openrouter-qwen-72b-free', label: 'Qwen 2.5 72B · OpenRouter', provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free', free: true, note: '免费模型' },
-  { id: 'groq-llama-3.3', label: 'Llama 3.3 70B · Groq', provider: 'groq', model: 'llama-3.3-70b-versatile', free: true, note: '免费额度' },
-  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', provider: 'gemini', model: 'gemini-2.0-flash', free: true, note: '免费额度' },
+  { id: 'openrouter-gemma-4-31b-free', label: 'Gemma 4 31B · OpenRouter', provider: 'openrouter', model: 'google/gemma-4-31b-it:free', free: true, note: '免费模型' },
+  { id: 'openrouter-ernie-5.5-free', label: 'ERNIE 5.5 Flash · OpenRouter', provider: 'openrouter', model: 'baidu/ernie-5.5-flash-preview:free', free: true, note: '免费模型' },
+  { id: 'openrouter-nemotron-3-ultra-free', label: 'Nemotron 3 Ultra · OpenRouter', provider: 'openrouter', model: 'nvidia/nemotron-3-ultra-550b-a55b:free', free: true, note: '免费模型' },
+  { id: 'groq-gpt-oss-120b', label: 'GPT-OSS 120B · Groq', provider: 'groq', model: 'openai/gpt-oss-120b', free: true, note: '免费额度' },
+  { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', provider: 'gemini', model: 'gemini-3.6-flash', free: true, note: '免费额度' },
 ];
+
+const AI_MODEL_ALIASES = {
+  'openrouter-llama-3.3-free': 'openrouter-gemma-4-31b-free',
+  'openrouter-qwen-72b-free': 'openrouter-ernie-5.5-free',
+  'groq-llama-3.3': 'groq-gpt-oss-120b',
+  'gemini-2.0-flash': 'gemini-3.6-flash',
+  'pollinations-free': 'glm-4-flash',
+};
 
 function modelAvailable(spec) {
   if (!spec) return false;
@@ -3234,7 +3243,8 @@ function publicChatModels() {
   }));
 }
 function resolveChatModel(id) {
-  const key = String(id || '').trim();
+  const rawKey = String(id || '').trim();
+  const key = AI_MODEL_ALIASES[rawKey] || rawKey;
   const exact = AI_MODELS.find(m => m.id === key || m.model === key);
   if (exact) return exact;
   const configured = AI_MODELS.find(m => m.id === DEFAULT_CHAT_CONFIG.model);
@@ -3743,10 +3753,11 @@ app.put('/api/admin/chat/config', async (req, res) => {
     newCfg.quickPhrases = body.quickPhrases.slice(0, 10).map(s => String(s).slice(0, 50));
   }
   if (typeof body.model === 'string') {
-    if (!AI_MODELS.some(m => m.id === body.model)) {
+    const normalizedModel = AI_MODEL_ALIASES[body.model] || body.model;
+    if (!AI_MODELS.some(m => m.id === normalizedModel)) {
       return res.status(400).json({ error: 'AI 模型无效' });
     }
-    newCfg.model = body.model;
+    newCfg.model = normalizedModel;
   }
   if (body.modelLimits && typeof body.modelLimits === 'object' && !Array.isArray(body.modelLimits)) {
     newCfg.modelLimits = {};
