@@ -366,6 +366,7 @@
     .ai-session-item.active { background: var(--ai-primary-light); color: var(--ai-primary-dark); font-weight: 600; }
     [data-theme="dark"] .ai-session-item.active { background: rgba(34,197,94,0.15); color: #4ade80; }
     .ai-session-item .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ai-session-item .model-tag { display: block; font-size: 9px; font-weight: 400; opacity: .65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
     .ai-session-item .del {
       background: none; border: none; color: var(--ai-muted);
       cursor: pointer; padding: 2px 4px; font-size: 14px; opacity: 0;
@@ -1506,9 +1507,23 @@
       let sending = false;
       let deepThinkEnabled = false;
       let sessions = [];
+      let stickToBottom = true;
+
+      function scrollIfSticky() {
+        if (stickToBottom) msgsEl.scrollTop = msgsEl.scrollHeight;
+      }
+      msgsEl.addEventListener('scroll', function () {
+        stickToBottom = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 80;
+      }, { passive: true });
 
       function isMobile() {
         return window.innerWidth <= 640;
+      }
+
+      function modelLabel(modelId) {
+        if (!modelId) return '';
+        const found = (cfg.models || []).find(m => m.id === modelId);
+        return found ? found.label : modelId;
       }
 
       function populateModels(models, defaultModel) {
@@ -1518,7 +1533,7 @@
         models.forEach(function (m) {
           const option = document.createElement('option');
           option.value = m.id;
-          option.textContent = m.label + (m.note ? ' · ' + m.note : '') + (m.available === false ? '（未配置）' : '');
+          option.textContent = m.label + (m.note ? ' · ' + m.note : '') + (m.unavailableReason ? '（' + m.unavailableReason + '）' : (m.available === false ? '（未配置）' : ''));
           option.disabled = m.available === false;
           modelSelect.appendChild(option);
         });
@@ -1647,7 +1662,7 @@
           };
         });
 
-        msgsEl.scrollTop = msgsEl.scrollHeight;
+        scrollIfSticky();
         return row;
       }
 
@@ -1731,7 +1746,7 @@
         sessions.forEach(s => {
           const item = document.createElement('div');
           item.className = 'ai-session-item' + (s.id === currentSessionId ? ' active' : '');
-          item.innerHTML = `<span class="title">${escapeHtml(s.title || '新对话')}</span><button class="del" title="删除会话">✕</button>`;
+          item.innerHTML = `<span class="title">${escapeHtml(s.title || '新对话')}${s.model ? `<small class="model-tag">${escapeHtml(modelLabel(s.model))}</small>` : ''}</span><button class="del" title="删除会话">✕</button>`;
           item.onclick = (e) => {
             if (e.target.classList.contains('del')) return;
             if (s.id !== currentSessionId) switchSession(s.id);
@@ -1760,7 +1775,8 @@
         try {
           const res = await fetch('/api/chat/sessions', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ model: selectedModelId || undefined })
           });
           const data = await res.json();
           if (data.success) {
@@ -1778,7 +1794,8 @@
         try {
           const res = await fetch('/api/chat/sessions', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ model: selectedModelId || undefined })
           });
           const data = await res.json();
           if (data.success) {
@@ -1812,6 +1829,11 @@
           const data = await res.json();
           currentSessionId = id;
           currentMessages = data.messages || [];
+          if (data.model && modelSelect) {
+            selectedModelId = data.model;
+            modelSelect.value = data.model;
+          }
+          stickToBottom = true;
           renderSessionList();
           renderMessages();
         } catch (e) {}
@@ -1825,7 +1847,7 @@
           const res = await fetch(`/api/chat/sessions/${currentSessionId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ messages: currentMessages })
+            body: JSON.stringify({ messages: currentMessages, model: selectedModelId || undefined })
           });
           if (res.status === 404) {
             sessions = sessions.filter(x => x.id !== currentSessionId);
@@ -1843,6 +1865,7 @@
               sessions[idx].title = firstUser.content.slice(0, 20);
             }
             sessions[idx].count = currentMessages.length;
+            sessions[idx].model = selectedModelId || sessions[idx].model;
             sessions[idx].updatedAt = Date.now();
           }
           renderSessionList();
@@ -1919,7 +1942,7 @@
           </div></div>
         `;
         msgsEl.appendChild(row);
-        msgsEl.scrollTop = msgsEl.scrollHeight;
+        scrollIfSticky();
 
         const thoughtDetails = row.querySelector('.ai-thought');
         const thoughtContentEl = row.querySelector('.ai-thought-content');
@@ -2021,7 +2044,7 @@
                       contentEl._raf = requestAnimationFrame(() => {
                         contentEl.innerHTML = renderMarkdown(finalAnswer);
                         attachCodeCopy(contentEl);
-                        msgsEl.scrollTop = msgsEl.scrollHeight;
+                        scrollIfSticky();
                         contentEl._raf = null;
                       });
                     }
@@ -2032,7 +2055,7 @@
                   contentEl.innerHTML = renderMarkdown(fullText);
                   attachCodeCopy(contentEl);
                 }
-                msgsEl.scrollTop = msgsEl.scrollHeight;
+                scrollIfSticky();
               }
 
               if (json.done) {

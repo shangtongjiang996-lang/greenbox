@@ -3210,8 +3210,8 @@ const AI_MODELS = [
   { id: 'glm-4.7-flash', label: 'GLM-4.7-Flash', provider: 'zhipu', model: 'glm-4.7-flash', free: true, note: '智谱免费模型' },
   { id: 'glm-4-air', label: 'GLM-4-Air', provider: 'zhipu', model: 'glm-4-air', free: false, note: '智谱付费模型' },
   { id: 'glm-4-plus', label: 'GLM-4-Plus', provider: 'zhipu', model: 'glm-4-plus', free: false, note: '智谱付费模型' },
-  { id: 'openrouter-gemma-4-31b-free', label: 'Gemma 4 31B · OpenRouter', provider: 'openrouter', model: 'google/gemma-4-31b-it:free', free: true, note: '免费模型' },
-  { id: 'openrouter-ernie-5.5-free', label: 'ERNIE 5.5 Flash · OpenRouter', provider: 'openrouter', model: 'baidu/ernie-5.5-flash-preview:free', free: true, note: '免费模型' },
+  { id: 'openrouter-gemma-4-31b-free', label: 'Gemma 4 31B · OpenRouter', provider: 'openrouter', model: 'google/gemma-4-31b-it:free', free: true, disabled: true, unavailableReason: '暂不可用', note: '免费模型' },
+  { id: 'openrouter-ernie-5.5-free', label: 'ERNIE 5.5 Flash · OpenRouter', provider: 'openrouter', model: 'baidu/ernie-5.5-flash-preview:free', free: true, disabled: true, unavailableReason: '暂不可用', note: '免费模型' },
   { id: 'openrouter-nemotron-3-ultra-free', label: 'Nemotron 3 Ultra · OpenRouter', provider: 'openrouter', model: 'nvidia/nemotron-3-ultra-550b-a55b:free', free: true, note: '免费模型' },
   { id: 'groq-gpt-oss-120b', label: 'GPT-OSS 120B · Groq', provider: 'groq', model: 'openai/gpt-oss-120b', free: true, note: '免费额度' },
   { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash', provider: 'gemini', model: 'gemini-3.6-flash', free: true, note: '免费额度' },
@@ -3226,7 +3226,7 @@ const AI_MODEL_ALIASES = {
 };
 
 function modelAvailable(spec) {
-  if (!spec) return false;
+  if (!spec || spec.disabled) return false;
   const provider = AI_PROVIDERS[spec.provider];
   if (!provider) return false;
   if (provider.noKey || spec.noKey) return true;
@@ -3240,6 +3240,7 @@ function publicChatModels() {
     free: !!m.free,
     note: m.note || '',
     available: modelAvailable(m),
+    unavailableReason: m.disabled ? (m.unavailableReason || '暂不可用') : '',
   }));
 }
 function resolveChatModel(id) {
@@ -3434,16 +3435,19 @@ app.post('/api/chat/sessions', async (req, res) => {
 
   const sid = genSessionId();
   const now = Date.now();
+  const requestedModel = String((req.body && req.body.model) || '').trim();
+  const requestedSpec = AI_MODELS.find(m => m.id === requestedModel);
   const newSession = {
     id: sid,
     title: '新对话',
+    model: requestedSpec && modelAvailable(requestedSpec) ? requestedSpec.id : null,
     createdAt: now,
     updatedAt: now,
     messages: [],
   };
 
   const list = await getUserSessions(session.username);
-  list.unshift({ id: sid, title: newSession.title, createdAt: now, updatedAt: now, count: 0 });
+  list.unshift({ id: sid, title: newSession.title, model: newSession.model, createdAt: now, updatedAt: now, count: 0 });
   await saveUserSessions(session.username, list);
   await kvPut(`chat_session:${session.username}:${sid}`, newSession, { expirationTtl: 30 * 24 * 3600 });
 
@@ -3473,8 +3477,11 @@ app.put('/api/chat/sessions/:id', async (req, res) => {
   const data = await kvGet(`chat_session:${session.username}:${sid}`);
   if (!data) return res.status(404).json({ error: '会话不存在' });
 
-  const { title, messages } = req.body || {};
+  const { title, messages, model } = req.body || {};
   if (typeof title === 'string' && title.trim()) data.title = title.trim().slice(0, 50);
+  if (typeof model === 'string' && AI_MODELS.some(m => m.id === model)) {
+    data.model = model;
+  }
   if (Array.isArray(messages)) {
     data.messages = messages.slice(-100).map(m => ({
       role: ['user', 'assistant', 'system'].includes(m.role) ? m.role : 'user',
@@ -3490,6 +3497,7 @@ app.put('/api/chat/sessions/:id', async (req, res) => {
   const idx = list.findIndex(s => s.id === sid);
   if (idx >= 0) {
     list[idx].title = data.title;
+    list[idx].model = data.model || list[idx].model || null;
     list[idx].updatedAt = data.updatedAt;
     list[idx].count = data.messages.length;
     const [item] = list.splice(idx, 1);
@@ -3546,7 +3554,8 @@ app.post('/api/chat/stream', async (req, res) => {
     const explicitModel = !!requestedModelId;
     const primaryModel = resolveChatModel(requestedModelId || cfg.model);
     if (explicitModel && !modelAvailable(primaryModel)) {
-      return res.status(503).json({ error: `模型“${primaryModel.label}”暂未配置，请联系管理员` });
+      const reason = primaryModel.disabled ? (primaryModel.unavailableReason || '暂不可用') : '暂未配置，请联系管理员';
+      return res.status(503).json({ error: `模型“${primaryModel.label}”${reason}` });
     }
     const modelLimit = Number((cfg.modelLimits && cfg.modelLimits[primaryModel.id]) || 0);
     if (modelLimit > 0 && (await getModelUsage(primaryModel.id)) >= modelLimit) {
@@ -3693,6 +3702,7 @@ app.post('/api/chat/stream', async (req, res) => {
             if (data.title === '新对话' && data.messages.length <= 2) {
               data.title = genTitle(userMsg.content);
             }
+            if (usedModel) data.model = usedModel.id;
             data.updatedAt = Date.now();
             await kvPut(`chat_session:${username}:${sessionId}`, data, { expirationTtl: 30 * 24 * 3600 });
 
@@ -3700,6 +3710,7 @@ app.post('/api/chat/stream', async (req, res) => {
             const idx = list.findIndex(s => s.id === sessionId);
             if (idx >= 0) {
               list[idx].title = data.title;
+              list[idx].model = data.model || list[idx].model || null;
               list[idx].updatedAt = data.updatedAt;
               list[idx].count = data.messages.length;
               const [item] = list.splice(idx, 1);

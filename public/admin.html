@@ -786,8 +786,8 @@
               <option value="glm-4.7-flash">GLM-4.7-Flash（智谱免费）</option>
               <option value="glm-4-air">GLM-4-Air（智谱付费）</option>
               <option value="glm-4-plus">GLM-4-Plus（智谱付费）</option>
-              <option value="openrouter-gemma-4-31b-free">Gemma 4 31B · OpenRouter（免费）</option>
-              <option value="openrouter-ernie-5.5-free">ERNIE 5.5 Flash · OpenRouter（免费）</option>
+              <option value="openrouter-gemma-4-31b-free" disabled>Gemma 4 31B · OpenRouter（暂不可用）</option>
+              <option value="openrouter-ernie-5.5-free" disabled>ERNIE 5.5 Flash · OpenRouter（暂不可用）</option>
               <option value="openrouter-nemotron-3-ultra-free">Nemotron 3 Ultra · OpenRouter（免费）</option>
               <option value="groq-gpt-oss-120b">GPT-OSS 120B · Groq（免费额度）</option>
               <option value="gemini-3.6-flash">Gemini 3.6 Flash（免费额度）</option>
@@ -1792,7 +1792,7 @@ function renderModelLimits(models, limits) {
   box.innerHTML = (models || []).map(function (m) {
     const value = Number(limits && limits[m.id]) || 0;
     return `<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px;font-size:12px;">
-      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.label}${m.available === false ? '（未配置）' : ''}</span>
+      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.label}${m.available === false ? '（' + (m.unavailableReason || '未配置') + '）' : ''}</span>
       <input type="number" min="0" max="100000" value="${value}" data-model-limit="${m.id}" title="每日上限，0 = 不限制" style="width:82px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;">
     </label>`;
   }).join('') || '<span style="color:#94a3b8;font-size:12px;">暂无模型配置</span>';
